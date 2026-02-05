@@ -1,4 +1,4 @@
-# 引き継ぎメモ（M0→M1完了時点）
+# 引き継ぎメモ（M0→M2完了時点）
 
 このリポジトリ（`vikokoro`）は **Tauri v2 + React + TS** の右方向ツリーエディタです。
 
@@ -30,6 +30,12 @@
   - タブ名は root ノード text（空なら `Untitled`）
 - Undo/Redo は **ドキュメント単位で独立**（他タブに影響しない）
 
+### M2（`docs/milestones/M2.md`）
+- 永続化の堅牢性改善
+  - 保存呼び出しの直列化（古い状態で上書きされない）
+  - `workspace.json` は pretty print + 改行で保存
+  - JSONが壊れている場合は退避して起動継続
+
 ## 追加で入れた改善（仕様外だが便利）
 - Insert中 `Enter` で編集確定→Normal（IME composing中は確定しない）
 - タブ閉じは確認モーダル（`y`で閉じる / `n` or `Esc`でキャンセル）
@@ -55,11 +61,12 @@
   - `load_workspace(app) -> Option<Workspace>`
   - `save_workspace(app, workspace) -> ()`
   - 保存先は `BaseDirectory::AppData` に `workspace.json`
+  - パース失敗時は `workspace.json.broken-<timestamp>` に退避
 
 ### フロント
 - `src/App.tsx`
   - 起動時 `invoke("load_workspace")` → `finishHydration`
-  - `saveRevision` を見て `invoke("save_workspace")`（250ms debounce）
+  - `saveRevision` を見て `invoke("save_workspace")`（250ms debounce + 直列化）
 - `src/editor/state.ts`
   - `hydrated: boolean`
   - `saveRevision: number`（変更のたびにインクリメント）
@@ -114,7 +121,7 @@
 
 次を決めると仕様に落とし込みやすいです（ここは推測せず要件化が必要）。
 
-- ノード削除（`dd`）は今後も正式仕様にするか（M0/M1には無いが実装済み）
-- タブを閉じたときに「閉じたタブ復元」が必要か
+- ノード削除（`dd`）は正式仕様（M2で明文化）
+- タブを閉じたときの「閉じたタブ復元」は不要
 - テキスト編集を複数行にするか（M0はinput overlay前提で単一行）
 - レイアウト改善の範囲（自動整列の精度、折り返し、ズーム、ミニマップ等）

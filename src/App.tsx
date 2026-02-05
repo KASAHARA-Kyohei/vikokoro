@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useReducer, useRef } from "react";
+import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import "./App.css";
 import { EditorView } from "./editor/EditorView";
@@ -6,11 +6,29 @@ import { TabBar } from "./editor/TabBar";
 import { createInitialAppState, editorReducer } from "./editor/state";
 import type { Workspace } from "./editor/types";
 
+type ThemeName = "dark" | "light" | "tokyoNight";
+
+function cycleTheme(theme: ThemeName): ThemeName {
+  if (theme === "dark") return "light";
+  if (theme === "light") return "tokyoNight";
+  return "dark";
+}
+
+function loadThemeFromStorage(): ThemeName {
+  const raw = localStorage.getItem("vikokoro.theme");
+  if (raw === "dark" || raw === "light" || raw === "tokyoNight") return raw;
+  return "dark";
+}
+
 function App() {
   const [state, dispatch] = useReducer(editorReducer, undefined, createInitialAppState);
+  const [theme, setTheme] = useState<ThemeName>(() => loadThemeFromStorage());
+  const [helpOpen, setHelpOpen] = useState(false);
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const lastSavedRevisionRef = useRef(0);
   const saveTimerRef = useRef<number | null>(null);
+  const savingRef = useRef(false);
+  const queuedSaveRef = useRef<{ revision: number; workspace: Workspace } | null>(null);
   const pendingDRef = useRef(false);
   const pendingDTimerRef = useRef<number | null>(null);
 
@@ -20,6 +38,8 @@ function App() {
       (tab) => tab.docId === state.workspace.activeDocId,
     );
   }, [state.workspace.activeDocId, state.workspace.tabs]);
+
+  const modeLabel = state.mode === "insert" ? "INSERT" : "NORMAL";
 
   useEffect(() => {
     if (state.mode === "normal") {
@@ -46,6 +66,11 @@ function App() {
   }, []);
 
   useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    localStorage.setItem("vikokoro.theme", theme);
+  }, [theme]);
+
+  useEffect(() => {
     return () => {
       if (saveTimerRef.current !== null) {
         window.clearTimeout(saveTimerRef.current);
@@ -67,21 +92,45 @@ function App() {
     const revision = state.saveRevision;
     const workspace = state.workspace;
     saveTimerRef.current = window.setTimeout(() => {
-      const run = async () => {
+      saveTimerRef.current = null;
+      queuedSaveRef.current = { revision, workspace };
+
+      const flushSaveQueue = async () => {
+        if (savingRef.current) return;
+        const queued = queuedSaveRef.current;
+        if (!queued) return;
+        queuedSaveRef.current = null;
+
+        savingRef.current = true;
         try {
-          await invoke("save_workspace", { workspace });
-          lastSavedRevisionRef.current = revision;
+          await invoke("save_workspace", { workspace: queued.workspace });
+          lastSavedRevisionRef.current = Math.max(lastSavedRevisionRef.current, queued.revision);
         } catch {
           // no-op (e.g. running in browser mode)
+        } finally {
+          savingRef.current = false;
         }
+
+        void flushSaveQueue();
       };
-      void run();
+
+      void flushSaveQueue();
     }, 250);
   }, [state.hydrated, state.saveRevision, state.workspace]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (!state.hydrated) return;
+
+      if (helpOpen) {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          setHelpOpen(false);
+          return;
+        }
+        event.preventDefault();
+        return;
+      }
 
       if (state.closeConfirmDocId) {
         const key = event.key;
@@ -96,6 +145,12 @@ function App() {
           return;
         }
         event.preventDefault();
+        return;
+      }
+
+      if (state.mode === "normal" && (event.key === "?" || (event.key === "/" && event.shiftKey))) {
+        event.preventDefault();
+        setHelpOpen(true);
         return;
       }
 
@@ -240,7 +295,7 @@ function App() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [state.closeConfirmDocId, state.hydrated, state.mode]);
+  }, [helpOpen, state.closeConfirmDocId, state.hydrated, state.mode]);
 
   if (!state.hydrated) {
     return (
@@ -260,6 +315,8 @@ function App() {
         disabled={state.closeConfirmDocId !== null}
         onSelect={(docId) => dispatch({ type: "setActiveDoc", docId })}
         onNew={() => dispatch({ type: "createDoc" })}
+        theme={theme}
+        onCycleTheme={() => setTheme((t) => cycleTheme(t))}
       />
       <div
         className="editorViewport"
@@ -305,13 +362,131 @@ function App() {
             </div>
           </div>
         ) : null}
+
+        {helpOpen ? (
+          <div
+            className="modalOverlay"
+            onMouseDown={(e) => {
+              e.preventDefault();
+              setHelpOpen(false);
+            }}
+          >
+            <div
+              className="modal helpModal"
+              onMouseDown={(e) => {
+                e.preventDefault();
+              }}
+            >
+              <div className="modalTitle">Help</div>
+              <div className="modalBody">
+                <div className="helpGrid">
+                  <div className="helpRow">
+                    <div className="helpKeys">
+                      <kbd>Tab</kbd>
+                    </div>
+                    <div className="helpDesc">Add child (and edit)</div>
+                  </div>
+                  <div className="helpRow">
+                    <div className="helpKeys">
+                      <kbd>Enter</kbd>
+                    </div>
+                    <div className="helpDesc">Add sibling (and edit)</div>
+                  </div>
+                  <div className="helpRow">
+                    <div className="helpKeys">
+                      <kbd>i</kbd> / <kbd>Esc</kbd>
+                    </div>
+                    <div className="helpDesc">Insert / Commit (back to Normal)</div>
+                  </div>
+                  <div className="helpRow">
+                    <div className="helpKeys">
+                      <kbd>h</kbd>
+                      <kbd>j</kbd>
+                      <kbd>k</kbd>
+                      <kbd>l</kbd>
+                    </div>
+                    <div className="helpDesc">Move (parent / next / prev / child)</div>
+                  </div>
+                  <div className="helpRow">
+                    <div className="helpKeys">
+                      <kbd>J</kbd> / <kbd>K</kbd>
+                    </div>
+                    <div className="helpDesc">Swap siblings (down / up)</div>
+                  </div>
+                  <div className="helpRow">
+                    <div className="helpKeys">
+                      <kbd>dd</kbd>
+                    </div>
+                    <div className="helpDesc">Delete (root is protected)</div>
+                  </div>
+                  <div className="helpRow">
+                    <div className="helpKeys">
+                      <kbd>u</kbd> / <kbd>Ctrl</kbd>+<kbd>r</kbd>
+                    </div>
+                    <div className="helpDesc">Undo / Redo</div>
+                  </div>
+                  <div className="helpRow">
+                    <div className="helpKeys">
+                      <kbd>Ctrl</kbd>+<kbd>T</kbd> / <kbd>Ctrl</kbd>+<kbd>W</kbd>
+                    </div>
+                    <div className="helpDesc">New tab / Close tab</div>
+                  </div>
+                  <div className="helpRow">
+                    <div className="helpKeys">
+                      <kbd>Ctrl</kbd>+<kbd>Tab</kbd> / <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Tab</kbd>
+                    </div>
+                    <div className="helpDesc">Switch tab (next / prev)</div>
+                  </div>
+                  <div className="helpRow">
+                    <div className="helpKeys">Theme</div>
+                    <div className="helpDesc">Cycle on the top right (Dark/Light/Tokyo Night)</div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="modalActions">
+                <button
+                  type="button"
+                  className="modalButton"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    setHelpOpen(false);
+                  }}
+                >
+                  Close (Esc)
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </div>
       <div className="statusBar">
         <div className="statusLeft">
-          Mode: {state.mode} / Doc: {activeTabIndex + 1}
+          <span className="statusLabel">Mode</span>
+          <span
+            className={
+              "statusPill " + (state.mode === "insert" ? "statusPillInsert" : "statusPillNormal")
+            }
+          >
+            {modeLabel}
+          </span>
+          <span className="statusDot">•</span>
+          <span className="statusLabel">Doc</span>
+          <span className="statusValue">
+            {activeTabIndex + 1}/{state.workspace.tabs.length}
+          </span>
         </div>
         <div className="statusRight">
-          Tab/Enter: add+insert, i/Esc/Enter, hjkl/jk, J/K, dd, u/Ctrl+r, Ctrl+T/W
+          <button
+            type="button"
+            className="statusHelpButton"
+            onMouseDown={(e) => {
+              e.preventDefault();
+              setHelpOpen(true);
+            }}
+          >
+            ? Help
+          </button>
         </div>
       </div>
     </div>

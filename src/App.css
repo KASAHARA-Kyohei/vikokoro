@@ -1,4 +1,11 @@
 :root {
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+:root,
+:root[data-theme="dark"] {
   --bg: #0b0d12;
   --panel: #121622;
   --panel2: #0f1320;
@@ -6,12 +13,101 @@
   --muted: #a8afc2;
   --accent: #6ea8fe;
   --edge: rgba(180, 200, 255, 0.35);
+  --edgeSelected: rgba(110, 168, 254, 0.85);
 
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  font-size: 14px;
-  line-height: 1.4;
-  color: var(--text);
-  background: var(--bg);
+  --border: rgba(255, 255, 255, 0.12);
+  --divider: rgba(255, 255, 255, 0.08);
+  --surface: rgba(255, 255, 255, 0.04);
+  --surfaceHover: rgba(255, 255, 255, 0.06);
+  --accentBorder: rgba(110, 168, 254, 0.6);
+  --accentBg: rgba(110, 168, 254, 0.14);
+  --accentGlow: rgba(110, 168, 254, 0.18);
+  --modalBg: rgba(15, 19, 32, 0.92);
+  --inputBg: rgba(0, 0, 0, 0.55);
+  --statusBg: rgba(0, 0, 0, 0.35);
+  --modalOverlay: rgba(0, 0, 0, 0.55);
+
+  --dangerBorder: rgba(255, 120, 120, 0.35);
+  --dangerBg: rgba(255, 80, 80, 0.12);
+  --dangerBgHover: rgba(255, 80, 80, 0.18);
+
+  --shadowPanel: 0 10px 40px rgba(0, 0, 0, 0.45);
+  --shadowNodeSelected: 0 0 0 2px var(--accentGlow);
+  --focusRing: 0 0 0 2px rgba(110, 168, 254, 0.35);
+
+  --insertBorder: rgba(52, 211, 153, 0.45);
+  --insertBg: rgba(52, 211, 153, 0.14);
+  --insertText: #a7f3d0;
+}
+
+:root[data-theme="light"] {
+  --bg: #f7f8fb;
+  --panel: #ffffff;
+  --panel2: #f1f3f8;
+  --text: #101320;
+  --muted: #5a6477;
+  --accent: #2563eb;
+  --edge: rgba(37, 99, 235, 0.35);
+  --edgeSelected: rgba(37, 99, 235, 0.85);
+
+  --border: rgba(16, 19, 32, 0.14);
+  --divider: rgba(16, 19, 32, 0.1);
+  --surface: rgba(16, 19, 32, 0.04);
+  --surfaceHover: rgba(16, 19, 32, 0.06);
+  --accentBorder: rgba(37, 99, 235, 0.55);
+  --accentBg: rgba(37, 99, 235, 0.12);
+  --accentGlow: rgba(37, 99, 235, 0.18);
+  --modalBg: rgba(255, 255, 255, 0.96);
+  --inputBg: rgba(255, 255, 255, 0.95);
+  --statusBg: rgba(16, 19, 32, 0.05);
+  --modalOverlay: rgba(16, 19, 32, 0.32);
+
+  --dangerBorder: rgba(220, 38, 38, 0.35);
+  --dangerBg: rgba(220, 38, 38, 0.1);
+  --dangerBgHover: rgba(220, 38, 38, 0.14);
+
+  --shadowPanel: 0 10px 40px rgba(16, 19, 32, 0.18);
+  --shadowNodeSelected: 0 0 0 2px var(--accentGlow);
+  --focusRing: 0 0 0 2px rgba(37, 99, 235, 0.28);
+
+  --insertBorder: rgba(5, 150, 105, 0.35);
+  --insertBg: rgba(5, 150, 105, 0.12);
+  --insertText: #065f46;
+}
+
+:root[data-theme="tokyoNight"] {
+  --bg: #1a1b26;
+  --panel: #1f2335;
+  --panel2: #1b1f30;
+  --text: #c0caf5;
+  --muted: #9aa5ce;
+  --accent: #7aa2f7;
+  --edge: rgba(122, 162, 247, 0.42);
+  --edgeSelected: rgba(122, 162, 247, 0.92);
+
+  --border: rgba(192, 202, 245, 0.14);
+  --divider: rgba(192, 202, 245, 0.1);
+  --surface: rgba(192, 202, 245, 0.05);
+  --surfaceHover: rgba(192, 202, 245, 0.08);
+  --accentBorder: rgba(122, 162, 247, 0.65);
+  --accentBg: rgba(122, 162, 247, 0.16);
+  --accentGlow: rgba(122, 162, 247, 0.22);
+  --modalBg: rgba(31, 35, 53, 0.96);
+  --inputBg: rgba(26, 27, 38, 0.72);
+  --statusBg: rgba(26, 27, 38, 0.55);
+  --modalOverlay: rgba(26, 27, 38, 0.55);
+
+  --dangerBorder: rgba(255, 117, 127, 0.4);
+  --dangerBg: rgba(255, 117, 127, 0.12);
+  --dangerBgHover: rgba(255, 117, 127, 0.18);
+
+  --shadowPanel: 0 10px 40px rgba(0, 0, 0, 0.55);
+  --shadowNodeSelected: 0 0 0 2px var(--accentGlow);
+  --focusRing: 0 0 0 2px rgba(122, 162, 247, 0.3);
+
+  --insertBorder: rgba(158, 206, 106, 0.5);
+  --insertBg: rgba(158, 206, 106, 0.14);
+  --insertText: #c3e88d;
 }
 
 html,
@@ -19,6 +115,18 @@ body,
 #root {
   height: 100%;
   margin: 0;
+}
+
+body {
+  color: var(--text);
+  background: var(--bg);
+  transition: background 220ms ease, color 220ms ease;
+}
+
+button:focus-visible,
+input:focus-visible {
+  outline: none;
+  box-shadow: var(--focusRing);
 }
 
 button,
@@ -43,7 +151,7 @@ input {
   gap: 8px;
   padding: 8px;
   background: linear-gradient(180deg, var(--panel), var(--panel2));
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid var(--divider);
 }
 
 .tabList {
@@ -54,41 +162,82 @@ input {
 }
 
 .tab {
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.04);
+  animation: tabIn 160ms ease both;
+  border: 1px solid var(--border);
+  background: var(--surface);
   color: var(--text);
   border-radius: 8px;
   padding: 6px 10px;
   cursor: pointer;
   white-space: nowrap;
-  transition: background 120ms ease, border-color 120ms ease;
+  transition: background 120ms ease, border-color 120ms ease, transform 90ms ease;
 }
 
 .tab:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--surfaceHover);
+}
+
+.tab:active {
+  transform: translateY(0.5px);
 }
 
 .tabActive {
-  border-color: rgba(110, 168, 254, 0.6);
-  background: rgba(110, 168, 254, 0.14);
+  border-color: var(--accentBorder);
+  background: var(--accentBg);
+  box-shadow: 0 0 0 1px var(--accentGlow);
 }
 
 .tabActions {
   display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .tabNew {
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border);
+  background: var(--surface);
   color: var(--text);
   border-radius: 8px;
   padding: 6px 10px;
   cursor: pointer;
-  transition: background 120ms ease, border-color 120ms ease;
+  transition: background 120ms ease, border-color 120ms ease, transform 90ms ease;
 }
 
 .tabNew:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--surfaceHover);
+}
+
+.tabNew:active {
+  transform: translateY(0.5px);
+}
+
+.tabTheme {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease, transform 90ms ease;
+}
+
+.tabTheme:hover {
+  background: var(--surfaceHover);
+}
+
+.tabTheme:active {
+  transform: translateY(0.5px);
+}
+
+@keyframes tabIn {
+  from {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .editorViewport {
@@ -101,20 +250,42 @@ input {
 .modalOverlay {
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.55);
+  background: var(--modalOverlay);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 10;
+  animation: overlayIn 140ms ease both;
 }
 
 .modal {
   width: min(420px, calc(100% - 32px));
   border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(15, 19, 32, 0.92);
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.45);
+  border: 1px solid var(--border);
+  background: var(--modalBg);
+  box-shadow: var(--shadowPanel);
   padding: 14px 16px;
+  animation: modalIn 180ms cubic-bezier(0.2, 0.9, 0.2, 1) both;
+}
+
+@keyframes overlayIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes modalIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .modalTitle {
@@ -134,25 +305,26 @@ input {
 }
 
 .modalButton {
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border);
+  background: var(--surfaceHover);
   color: var(--text);
   border-radius: 10px;
   padding: 8px 12px;
   cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
 }
 
 .modalButton:hover {
-  background: rgba(255, 255, 255, 0.09);
+  background: var(--surface);
 }
 
 .modalButtonDanger {
-  border-color: rgba(255, 120, 120, 0.35);
-  background: rgba(255, 80, 80, 0.12);
+  border-color: var(--dangerBorder);
+  background: var(--dangerBg);
 }
 
 .modalButtonDanger:hover {
-  background: rgba(255, 80, 80, 0.18);
+  background: var(--dangerBgHover);
 }
 
 .editorCanvas {
@@ -173,7 +345,7 @@ input {
 }
 
 .edgePathSelected {
-  stroke: rgba(110, 168, 254, 0.85);
+  stroke: var(--edgeSelected);
   stroke-width: 2;
 }
 
@@ -181,19 +353,24 @@ input {
   position: absolute;
   z-index: 1;
   border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border);
+  background: var(--surface);
   display: flex;
   align-items: center;
   padding: 0 10px;
   box-sizing: border-box;
   user-select: none;
   cursor: default;
-  transition: background 120ms ease, border-color 120ms ease;
+  transition:
+    left 140ms ease,
+    top 140ms ease,
+    background 120ms ease,
+    border-color 120ms ease,
+    box-shadow 120ms ease;
 }
 
 .node:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--surfaceHover);
 }
 
 .nodeText {
@@ -206,7 +383,7 @@ input {
 
 .nodeSelected {
   border: 2px solid var(--accent);
-  box-shadow: 0 0 0 2px rgba(110, 168, 254, 0.18);
+  box-shadow: var(--shadowNodeSelected);
 }
 
 .nodeEditing {
@@ -219,26 +396,163 @@ input {
   box-sizing: border-box;
   border-radius: 8px;
   border: 2px solid var(--accent);
-  background: rgba(0, 0, 0, 0.55);
+  background: var(--inputBg);
   color: var(--text);
   padding: 0 10px;
   outline: none;
+  transition: left 140ms ease, top 140ms ease, background 120ms ease;
 }
 
 .statusBar {
   display: flex;
   justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
   padding: 6px 10px;
-  background: rgba(0, 0, 0, 0.35);
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--statusBg);
+  border-top: 1px solid var(--divider);
   color: var(--muted);
   font-size: 12px;
+  line-height: 1.35;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body {
+    transition: none;
+  }
+
+  .modalOverlay {
+    animation: none;
+  }
+
+  .tab,
+  .tabNew,
+  .tabTheme,
+  .modal,
+  .modalButton,
+  .node,
+  .nodeInput {
+    transition: none;
+    animation: none;
+  }
 }
 
 .statusLeft,
 .statusRight {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.statusLeft {
+  min-width: 220px;
+}
+
+.statusRight {
+  flex: 1;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+}
+
+.statusLabel {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.statusValue {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.statusDot {
+  opacity: 0.7;
+}
+
+.statusPill {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+}
+
+.statusPillNormal {
+  border-color: var(--accentBorder);
+  background: var(--accentBg);
+}
+
+.statusPillInsert {
+  border-color: var(--insertBorder);
+  background: var(--insertBg);
+  color: var(--insertText);
+}
+
+.statusHelpButton {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 4px 10px;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease, transform 90ms ease;
+}
+
+.statusHelpButton:hover {
+  background: var(--surfaceHover);
+}
+
+.statusHelpButton:active {
+  transform: translateY(0.5px);
+}
+
+.helpModal {
+  width: min(520px, calc(100% - 32px));
+}
+
+.helpGrid {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.helpRow {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 12px;
+  align-items: center;
+}
+
+.helpKeys {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  color: var(--text);
+}
+
+.helpDesc {
+  color: var(--muted);
+}
+
+kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 18px;
+  padding: 0 6px;
+  border-radius: 7px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 11px;
+  line-height: 1;
+}
+
+kbd + kbd {
+  margin-left: 2px;
 }

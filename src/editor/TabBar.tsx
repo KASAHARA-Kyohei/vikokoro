@@ -1,5 +1,7 @@
 import type { DocId, Document, Mode, Tab } from "./types";
 
+type ThemeName = "dark" | "light" | "tokyoNight";
+
 type Props = {
   tabs: Tab[];
   activeDocId: DocId;
@@ -8,6 +10,8 @@ type Props = {
   disabled: boolean;
   onSelect: (docId: DocId) => void;
   onNew: () => void;
+  theme: ThemeName;
+  onCycleTheme: () => void;
 };
 
 function getTabTitle(doc: Document | undefined): string {
@@ -17,7 +21,23 @@ function getTabTitle(doc: Document | undefined): string {
   return text.trim() === "" ? "Untitled" : text;
 }
 
-export function TabBar({ tabs, activeDocId, documents, mode, disabled, onSelect, onNew }: Props) {
+function getThemeLabel(theme: ThemeName): string {
+  if (theme === "dark") return "Dark";
+  if (theme === "light") return "Light";
+  return "Tokyo Night";
+}
+
+export function TabBar({
+  tabs,
+  activeDocId,
+  documents,
+  mode,
+  disabled,
+  onSelect,
+  onNew,
+  theme,
+  onCycleTheme,
+}: Props) {
   return (
     <div className="tabBar">
       <div className="tabList">
@@ -41,6 +61,17 @@ export function TabBar({ tabs, activeDocId, documents, mode, disabled, onSelect,
         })}
       </div>
       <div className="tabActions">
+        <button
+          className="tabTheme"
+          onMouseDown={(e) => {
+            e.preventDefault();
+            if (disabled || mode === "insert") return;
+            onCycleTheme();
+          }}
+          type="button"
+        >
+          Theme: {getThemeLabel(theme)}
+        </button>
         <button
           className="tabNew"
           onMouseDown={(e) => {
