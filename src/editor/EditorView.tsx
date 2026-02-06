@@ -18,6 +18,8 @@ type Props = {
   activeHighlightedNodeId: NodeId | null;
   onSelectNode: (nodeId: NodeId) => void;
   onChangeText: (text: string) => void;
+  onEnterContinue: () => void;
+  onEnterCommit: () => void;
   onEsc: () => void;
 };
 
@@ -33,12 +35,15 @@ export function EditorView({
   activeHighlightedNodeId,
   onSelectNode,
   onChangeText,
+  onEnterContinue,
+  onEnterCommit,
   onEsc,
 }: Props) {
   const layout = useMemo(() => computeLayout(doc), [doc]);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const canvasRef = useRef<HTMLDivElement | null>(null);
   const isComposingRef = useRef(false);
+  const didUseCompositionRef = useRef(false);
   const prevNodesRef = useRef<Record<NodeId, Node> | null>(null);
   const prevPositionsRef = useRef<Record<NodeId, NodePosition> | null>(null);
   const [exitingNodes, setExitingNodes] = useState<Record<NodeId, ExitingNode>>({});
@@ -246,9 +251,14 @@ export function EditorView({
             onChange={(e) => onChangeText(e.currentTarget.value)}
             onCompositionStart={() => {
               isComposingRef.current = true;
+              didUseCompositionRef.current = true;
             }}
             onCompositionEnd={() => {
               isComposingRef.current = false;
+            }}
+            onBlur={() => {
+              isComposingRef.current = false;
+              didUseCompositionRef.current = false;
             }}
             onKeyDown={(e) => {
               if (e.key === "Escape") {
@@ -257,15 +267,24 @@ export function EditorView({
                 onEsc();
                 return;
               }
+
               if (e.key === "Enter") {
-                if (isComposingRef.current || e.nativeEvent.isComposing) {
+                if (isComposingRef.current) {
                   return;
                 }
+
+                const didUseComposition = didUseCompositionRef.current;
+                didUseCompositionRef.current = false;
                 e.preventDefault();
                 e.stopPropagation();
-                onEsc();
+                if (didUseComposition) {
+                  onEnterContinue();
+                } else {
+                  onEnterCommit();
+                }
                 return;
               }
+
               if (e.key === "Tab") {
                 e.preventDefault();
                 e.stopPropagation();

@@ -29,6 +29,7 @@ export type EditorAction =
   | { type: "addChildAndInsert" }
   | { type: "addSiblingAndInsert" }
   | { type: "setCursorText"; text: string }
+  | { type: "commitInsertAndContinue" }
   | { type: "commitInsert" }
   | { type: "undo" }
   | { type: "redo" };
@@ -537,6 +538,36 @@ export function editorReducer(state: EditorAppState, action: EditorAction): Edit
       );
 
       return bumpSaveRevision(next);
+    }
+    case "commitInsertAndContinue": {
+      if (state.mode !== "insert") return state;
+      const docId = state.workspace.activeDocId;
+      const currentDoc = state.workspace.documents[docId];
+
+      const origin = state.insertOrigin;
+      if (!origin || origin.docId !== docId) {
+        return {
+          ...state,
+          insertOrigin: { docId, snapshot: cloneDocumentState(currentDoc) },
+        };
+      }
+
+      if (documentStateEquals(origin.snapshot, currentDoc)) {
+        return { ...state, mode: "normal", insertOrigin: null };
+      }
+
+      const next = updateActiveDoc(state, (doc) => ({
+        ...doc,
+        undoStack: [...doc.undoStack, origin.snapshot],
+        redoStack: [],
+      }));
+
+      const nextDoc = next.workspace.documents[docId];
+      return bumpSaveRevision({
+        ...next,
+        mode: "insert",
+        insertOrigin: { docId, snapshot: cloneDocumentState(nextDoc) },
+      });
     }
     case "undo": {
       if (state.mode === "insert") return state;

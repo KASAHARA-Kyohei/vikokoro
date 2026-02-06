@@ -1,6 +1,5 @@
 import type { DocId, Document, Mode, Tab } from "./types";
-
-type ThemeName = "dark" | "light" | "tokyoNight";
+import type { ThemeName } from "../hooks/useTheme";
 
 type Props = {
   tabs: Tab[];

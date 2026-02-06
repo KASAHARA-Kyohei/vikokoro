@@ -262,13 +262,13 @@ input {
 }
 
 .modalOverlay {
-  position: absolute;
+  position: fixed;
   inset: 0;
   background: var(--modalOverlay);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 10;
+  z-index: 1000;
   animation: overlayIn 140ms ease both;
 }
 
@@ -713,7 +713,17 @@ input {
 }
 
 .helpModal {
-  width: min(520px, calc(100% - 32px));
+  width: min(480px, calc(100% - 40px));
+  max-height: min(620px, calc(100vh - 96px));
+  display: flex;
+  flex-direction: column;
+}
+
+.helpModal .modalBody {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 6px;
 }
 
 .helpGrid {
@@ -727,6 +737,13 @@ input {
   grid-template-columns: 220px 1fr;
   gap: 12px;
   align-items: center;
+}
+
+@media (max-width: 560px) {
+  .helpRow {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
 }
 
 .helpKeys {
