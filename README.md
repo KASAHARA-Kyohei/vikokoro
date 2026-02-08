@@ -15,11 +15,13 @@ Vimライクな **Normal / Insert** モードでノードの追加・移動・�
 
 - Normal / Insert のモード切り替えで編集
 - `Tab` で子ノード追加、`Enter` で兄弟ノード追加（どちらも即編集）
-- `hjkl` + `j/k` でカーソル移動、`J/K` で兄弟の並び替え
+- `h/j/k/l` でカーソル移動、`J/K` で兄弟の並び替え
+- `H/L` でノードの階層移動（左/右 = outdent/indent、サブツリーごと移動）
 - `dd` で削除（ルートは保護、子は繰り上げ）
 - Undo / Redo
 - タブ（複数ドキュメント）
 - 検索（`Ctrl+F`） / コマンドパレット（`Ctrl+P`） / ヘルプ（`?`）
+- テーマ切替（Dark / Light / Ivory / Tokyo Night）
 - ズーム（`Ctrl + Wheel`） / パン（`Space + Drag`）
 - ローカル永続化（Tauri起動時のみ）
 
@@ -37,6 +39,8 @@ Vimライクな **Normal / Insert** モードでノードの追加・移動・�
 - `Tab`: 子を追加して編集
 - `Enter`: 兄弟を追加して編集
 - `h/j/k/l`: 親/次/前/子へ移動
+- `J/K`: 兄弟を下/上へ並び替え
+- `H/L`: ノードを左/右へ階層移動（outdent / indent）
 - `dd`: 削除
 - `u` / `Ctrl+r`: Undo / Redo
 

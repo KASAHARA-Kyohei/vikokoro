@@ -91,6 +91,18 @@ function App() {
         },
       },
       {
+        id: "move-node-left",
+        title: "Move node left",
+        subtitle: "Shift+H (outdent)",
+        run: () => dispatch({ type: "reparentNode", direction: "left" }),
+      },
+      {
+        id: "move-node-right",
+        title: "Move node right",
+        subtitle: "Shift+L (indent)",
+        run: () => dispatch({ type: "reparentNode", direction: "right" }),
+      },
+      {
         id: "cycle-theme",
         title: "Cycle theme",
         subtitle: "Theme button",
@@ -386,6 +398,16 @@ function App() {
       if (event.key === "K") {
         event.preventDefault();
         dispatch({ type: "swapSibling", direction: "up" });
+        return;
+      }
+      if (event.key === "H") {
+        event.preventDefault();
+        dispatch({ type: "reparentNode", direction: "left" });
+        return;
+      }
+      if (event.key === "L") {
+        event.preventDefault();
+        dispatch({ type: "reparentNode", direction: "right" });
         return;
       }
 
