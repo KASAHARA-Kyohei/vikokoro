@@ -58,6 +58,12 @@ export function HelpModal({ open, onClose }: Props) {
             </div>
             <div className="helpRow">
               <div className="helpKeys">
+                <kbd>H</kbd> / <kbd>L</kbd>
+              </div>
+              <div className="helpDesc">Move node left/right (outdent / indent)</div>
+            </div>
+            <div className="helpRow">
+              <div className="helpKeys">
                 <kbd>dd</kbd>
               </div>
               <div className="helpDesc">Delete (root is protected)</div>

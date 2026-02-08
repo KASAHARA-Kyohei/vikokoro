@@ -15,6 +15,7 @@
   - `Enter` 兄弟追加 → 即Insert
   - `hjkl` + `j/k` 移動
   - `J/K` 兄弟swap
+  - `H/L` ノードの左/右階層移動（outdent / indent）
   - `u` Undo / `Ctrl+r` Redo
   - `Ctrl+Tab` / `Ctrl+Shift+Tab` でタブ切替
 - Undo/Redo は snapshot（Document単位）
@@ -38,7 +39,7 @@
 
 ### M3（`docs/milestones/M3.md` / 途中）
 - UI/UX polish
-  - Theme切替（Dark/Light/Tokyo Night、localStorage保存）
+  - Theme切替（Dark/Light/Ivory/Tokyo Night、localStorage保存）
   - Help（`?` で表示、`Esc`で閉じる）
   - タブ/モーダル/ノードのアニメ（出現/追加/削除）
   - Zoom（`Ctrl + wheel`、マウス位置中心）
@@ -112,6 +113,7 @@
 - Search / Palette の確認
   - `Ctrl+F` で検索 → `Enter`/`Shift+Enter`
   - `Ctrl+P` でパレット → `Enter`で実行
+  - パレットの `Move node left/right` で `H/L` と同等操作が実行できる
 - `Ctrl+T` で2枚以上にする
 - 適当に編集/移動してからアプリ終了→再起動
   - タブ構成が復元される

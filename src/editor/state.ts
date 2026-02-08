@@ -25,6 +25,7 @@ export type EditorAction =
       direction: "parent" | "child" | "nextSibling" | "prevSibling";
     }
   | { type: "swapSibling"; direction: "up" | "down" }
+  | { type: "reparentNode"; direction: "left" | "right" }
   | { type: "enterInsert" }
   | { type: "addChildAndInsert" }
   | { type: "addSiblingAndInsert" }
@@ -226,6 +227,59 @@ function swapSibling(doc: Document, direction: "up" | "down"): Document {
     nodes: {
       ...doc.nodes,
       [parent.id]: { ...parent, childrenIds: nextChildren },
+    },
+  };
+}
+
+function reparentNode(doc: Document, direction: "left" | "right"): Document {
+  const cursor = doc.nodes[doc.cursorId];
+  if (!cursor || !cursor.parentId) return doc;
+
+  const parent = doc.nodes[cursor.parentId];
+  if (!parent) return doc;
+  const cursorIndex = parent.childrenIds.indexOf(cursor.id);
+  if (cursorIndex === -1) return doc;
+
+  if (direction === "right") {
+    if (cursorIndex === 0) return doc;
+    const prevSiblingId = parent.childrenIds[cursorIndex - 1];
+    const prevSibling = doc.nodes[prevSiblingId];
+    if (!prevSibling) return doc;
+
+    const nextParentChildren = [...parent.childrenIds];
+    nextParentChildren.splice(cursorIndex, 1);
+    const nextPrevSiblingChildren = [...prevSibling.childrenIds, cursor.id];
+
+    return {
+      ...doc,
+      nodes: {
+        ...doc.nodes,
+        [cursor.id]: { ...cursor, parentId: prevSibling.id },
+        [parent.id]: { ...parent, childrenIds: nextParentChildren },
+        [prevSibling.id]: { ...prevSibling, childrenIds: nextPrevSiblingChildren },
+      },
+    };
+  }
+
+  if (!parent.parentId) return doc;
+  const grandParent = doc.nodes[parent.parentId];
+  if (!grandParent) return doc;
+  const parentIndex = grandParent.childrenIds.indexOf(parent.id);
+  if (parentIndex === -1) return doc;
+
+  const nextParentChildren = [...parent.childrenIds];
+  nextParentChildren.splice(cursorIndex, 1);
+
+  const nextGrandParentChildren = [...grandParent.childrenIds];
+  nextGrandParentChildren.splice(parentIndex + 1, 0, cursor.id);
+
+  return {
+    ...doc,
+    nodes: {
+      ...doc.nodes,
+      [cursor.id]: { ...cursor, parentId: grandParent.id },
+      [parent.id]: { ...parent, childrenIds: nextParentChildren },
+      [grandParent.id]: { ...grandParent, childrenIds: nextGrandParentChildren },
     },
   };
 }
@@ -469,6 +523,12 @@ export function editorReducer(state: EditorAppState, action: EditorAction): Edit
     case "swapSibling": {
       if (state.mode === "insert") return state;
       const next = updateActiveDoc(state, (doc) => swapSibling(doc, action.direction));
+      if (next === state) return state;
+      return bumpSaveRevision(next);
+    }
+    case "reparentNode": {
+      if (state.mode === "insert") return state;
+      const next = updateActiveDoc(state, (doc) => reparentNode(doc, action.direction));
       if (next === state) return state;
       return bumpSaveRevision(next);
     }
