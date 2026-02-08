@@ -112,7 +112,7 @@ export function HelpModal({ open, onClose }: Props) {
             </div>
             <div className="helpRow">
               <div className="helpKeys">Theme</div>
-              <div className="helpDesc">Cycle on the top right (Dark/Light/Tokyo Night)</div>
+              <div className="helpDesc">Cycle on the top right (Dark/Light/Ivory/Tokyo Night)</div>
             </div>
           </div>
         </div>

@@ -75,6 +75,41 @@
   --insertText: #065f46;
 }
 
+:root[data-theme="ivory"] {
+  --bg: #fcfaf5;
+  --panel: #fffdf8;
+  --panel2: #f7f2e9;
+  --text: #1f2530;
+  --muted: #6a7180;
+  --accent: #0f766e;
+  --edge: rgba(15, 118, 110, 0.3);
+  --edgeSelected: rgba(15, 118, 110, 0.82);
+
+  --border: rgba(31, 37, 48, 0.14);
+  --divider: rgba(31, 37, 48, 0.1);
+  --surface: rgba(31, 37, 48, 0.035);
+  --surfaceHover: rgba(31, 37, 48, 0.055);
+  --accentBorder: rgba(15, 118, 110, 0.5);
+  --accentBg: rgba(15, 118, 110, 0.12);
+  --accentGlow: rgba(15, 118, 110, 0.18);
+  --modalBg: rgba(255, 253, 248, 0.96);
+  --inputBg: rgba(255, 255, 255, 0.98);
+  --statusBg: rgba(31, 37, 48, 0.045);
+  --modalOverlay: rgba(31, 37, 48, 0.28);
+
+  --dangerBorder: rgba(190, 24, 93, 0.34);
+  --dangerBg: rgba(190, 24, 93, 0.1);
+  --dangerBgHover: rgba(190, 24, 93, 0.14);
+
+  --shadowPanel: 0 10px 34px rgba(31, 37, 48, 0.14);
+  --shadowNodeSelected: 0 0 0 2px var(--accentGlow);
+  --focusRing: 0 0 0 2px rgba(15, 118, 110, 0.28);
+
+  --insertBorder: rgba(21, 128, 61, 0.35);
+  --insertBg: rgba(21, 128, 61, 0.11);
+  --insertText: #166534;
+}
+
 :root[data-theme="tokyoNight"] {
   --bg: #1a1b26;
   --panel: #1f2335;

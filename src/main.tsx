@@ -4,7 +4,7 @@ import App from "./App";
 
 (() => {
   const raw = localStorage.getItem("vikokoro.theme");
-  if (raw === "dark" || raw === "light" || raw === "tokyoNight") {
+  if (raw === "dark" || raw === "light" || raw === "ivory" || raw === "tokyoNight") {
     document.documentElement.dataset.theme = raw;
   } else {
     document.documentElement.dataset.theme = "dark";

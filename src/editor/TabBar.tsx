@@ -23,6 +23,7 @@ function getTabTitle(doc: Document | undefined): string {
 function getThemeLabel(theme: ThemeName): string {
   if (theme === "dark") return "Dark";
   if (theme === "light") return "Light";
+  if (theme === "ivory") return "Ivory";
   return "Tokyo Night";
 }
 
