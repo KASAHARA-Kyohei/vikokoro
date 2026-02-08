@@ -1,16 +1,17 @@
 import { useEffect, useState } from "react";
 
-export type ThemeName = "dark" | "light" | "tokyoNight";
+export type ThemeName = "dark" | "light" | "ivory" | "tokyoNight";
 
 function cycleTheme(theme: ThemeName): ThemeName {
   if (theme === "dark") return "light";
-  if (theme === "light") return "tokyoNight";
+  if (theme === "light") return "ivory";
+  if (theme === "ivory") return "tokyoNight";
   return "dark";
 }
 
 function loadThemeFromStorage(): ThemeName {
   const raw = localStorage.getItem("vikokoro.theme");
-  if (raw === "dark" || raw === "light" || raw === "tokyoNight") return raw;
+  if (raw === "dark" || raw === "light" || raw === "ivory" || raw === "tokyoNight") return raw;
   return "dark";
 }
 
@@ -28,4 +29,3 @@ export function useTheme() {
     cycleTheme: () => setTheme((t) => cycleTheme(t)),
   };
 }
-
