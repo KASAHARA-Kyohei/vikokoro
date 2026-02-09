@@ -1,153 +1,147 @@
 # vikokoro
 
-Tauri v2 + React + TypeScript で作った、キーボード中心のツリー/マインドマップ風エディタです。
-Vimライクな **Normal / Insert** モードでノードの追加・移動・編集ができます。
+Japanese version: [README.ja.md](README.ja.md)
+
+A keyboard-first tree/mind-map style editor built with Tauri v2 + React + TypeScript.
+You can add, move, and edit nodes using Vim-like **Normal / Insert** modes.
 
 <img src="./out2.gif" alt="vikokoro demo" width="840" />
 
-このデモでは、ノード追加（`Tab` / `Enter`）→編集（Insert）→移動（`hjkl` + `j/k`）の基本操作をしています。
+This demo shows the basic flow: add nodes (`Tab` / `Enter`) -> edit (Insert) -> move (`hjkl` + `J/K`).
 
-※ 現状は個人開発のため、仕様は変わる可能性があります。
+Note: This is currently a personal project, so specs and behavior may change.
 
----
 
-## できること
+## Features
 
-- Normal / Insert のモード切り替えで編集
-- `Tab` で子ノード追加、`Enter` で兄弟ノード追加（どちらも即編集）
-- `h/j/k/l` でカーソル移動、`J/K` で兄弟の並び替え
-- `H/L` でノードの階層移動（左/右 = outdent/indent、サブツリーごと移動）
-- `dd` で削除（ルートは保護、子は繰り上げ）
+- Edit with Normal / Insert mode switching
+- `Tab` adds a child node, `Enter` adds a sibling node (both start editing immediately)
+- Move the cursor with `h/j/k/l`, reorder siblings with `J/K`
+- Move node hierarchy with `H/L` (left/right = outdent/indent, subtree included)
+- Delete with `dd` (root is protected, children are promoted)
 - Undo / Redo
-- タブ（複数ドキュメント）
-- 検索（`Ctrl+F`） / コマンドパレット（`Ctrl+P`） / ヘルプ（`?`）
-- テーマ切替（Dark / Light / Ivory / Tokyo Night）
-- ズーム（`Ctrl + Wheel`） / パン（`Space + Drag`）
-- ローカル永続化（Tauri起動時のみ）
+- Tabs (multiple documents)
+- Search (`Ctrl+F`) / Command palette (`Ctrl+P`) / Help (`?`)
+- Theme switcher (Dark / Light / Ivory / Tokyo Night)
+- Zoom (`Ctrl + Wheel`) / Pan (`Space + Drag`)
+- Local persistence (Tauri runtime only)
 
----
 
-## 使い方（操作）
+## Usage
 
-ショートカット一覧はアプリ内のヘルプが最新です。
+The in-app help is the most up-to-date shortcut reference.
 
-- ヘルプ: `?`
-- 閉じる: `Esc`
+- Help: `?`
+- Close: `Esc`
 
-よく使うキー（Normal）:
+Common keys (Normal mode):
 
-- `Tab`: 子を追加して編集
-- `Enter`: 兄弟を追加して編集
-- `h/j/k/l`: 親/次/前/子へ移動
-- `J/K`: 兄弟を下/上へ並び替え
-- `H/L`: ノードを左/右へ階層移動（outdent / indent）
-- `dd`: 削除
+- `Tab`: Add a child and start editing
+- `Enter`: Add a sibling and start editing
+- `h/j/k/l`: Move to parent/next/previous/child
+- `J/K`: Reorder sibling down/up
+- `H/L`: Move node left/right in hierarchy (outdent / indent)
+- `dd`: Delete
 - `u` / `Ctrl+r`: Undo / Redo
 
-編集（Insert）:
+Editing (Insert mode):
 
-- `i`: Insertに入る
-- `Esc`: 確定してNormalへ
-- `Enter`: 確定
-  - 日本語IMEで変換を使った入力の場合は、変換確定の都合で「Enterが2段階」になることがあります
-    （英数入力では1回で確定する想定です）
+- `i`: Enter Insert mode
+- `Esc`: Confirm and return to Normal mode
+- `Enter`: Confirm
+  - When using Japanese IME conversion, confirmation can behave like a two-step Enter because of composition handling.
+    (With direct alphanumeric input, one Enter is typically enough.)
 
----
 
-## データ保存について
+## Data Persistence
 
-Tauri起動時（`npm run tauri dev` / `npm run tauri build` で起動したアプリ）では、ワークスペースをローカルに保存します。
+When running in Tauri (`npm run tauri dev` / `npm run tauri build`), the workspace is stored locally.
 
-- 保存先: OSごとの AppData 配下の `workspace.json`
-  - Tauri側で `BaseDirectory::AppData` を使用
-- ブラウザ起動（`npm run dev`）では `invoke` が使えないため、永続化は無効（UIは `Local` 表示）
+- Save location: `workspace.json` under OS-specific AppData
+  - Uses `BaseDirectory::AppData` on the Tauri side
+- In browser mode (`npm run dev`), `invoke` is unavailable, so persistence is disabled (UI shows `Local`)
 
----
 
-## セットアップ（開発者向け）
+## Setup (for Developers)
 
-### 必要なもの
+### Requirements
 
-- Node.js（Vite要件の都合で **20.19+ または 22.12+ 推奨**）
-- Rust（stable）
+- Node.js (because of Vite requirements, **20.19+ or 22.12+ is recommended**)
+- Rust (stable)
 
-IDEは VS Code + rust-analyzer + Tauri拡張が便利です。
+VS Code + rust-analyzer + Tauri extension is a convenient setup.
 
-### インストール
+### Install
 
 ```sh
 npm ci
 ```
 
-### 起動
+### Run
 
-ブラウザで起動（永続化なし）:
+Run in browser (no persistence):
 
 ```sh
 npm run dev
 ```
 
-Tauriで起動（永続化あり）:
+Run in Tauri (with persistence):
 
 ```sh
 npm run tauri dev
 ```
 
-### ビルド
+### Build
 
 ```sh
 npm run tauri build
 ```
 
-生成物は概ね `src-tauri/target/release/bundle/` 配下に出ます。
+Build artifacts are generally generated under `src-tauri/target/release/bundle/`.
 
----
 
-## GitHub Actions（macOS/Windowsビルド）
+## GitHub Actions (macOS/Windows build)
 
-手元にビルド環境が無い端末向けに、GitHub Actionsで実行ファイルを生成できます。
+For machines without a local build environment, you can generate executables with GitHub Actions.
 
 - Workflow: `.github/workflows/tauri-build.yml`
-- 実行方法: GitHub の `Actions` タブ → `tauri-build` → `Run workflow`
-- 生成物: Actions の `Artifacts` に `vikokoro-macos-latest` / `vikokoro-windows-latest` が出ます
+- How to run: GitHub `Actions` tab -> `tauri-build` -> `Run workflow`
+- Artifacts: `vikokoro-macos-latest` / `vikokoro-windows-latest`
 
----
 
-## トラブルシューティング
+## Troubleshooting
 
-### macOSで「壊れているため開けません」と出る
+### macOS shows "App is damaged and can't be opened"
 
-未署名アプリをダウンロードした際に、Gatekeeper（quarantine属性）で弾かれることがあります。
-自分の端末で動かすだけなら、次で回避できる場合があります。
+When downloading an unsigned app, Gatekeeper (quarantine attribute) may block it.
+If you only need to run it on your own machine, this may help:
 
 ```sh
 xattr -dr com.apple.quarantine "/Applications/vikokoro.app"
 ```
 
-（必要なら）状況確認:
+Optional status check:
 
 ```sh
 spctl --assess --verbose=4 "/Applications/vikokoro.app"
 ```
 
-### Node.js のバージョン警告が出る
+### Node.js version warning appears
 
-Viteの要件により Node.js のバージョンが古いと警告が出ます。
-`node -v` を確認し、必要なら `22.12+` または `20.19+` に上げてください。
+Because of Vite requirements, older Node.js versions can show warnings.
+Check `node -v` and upgrade to `22.12+` or `20.19+` if needed.
 
----
 
-## 主要ディレクトリ
+## Main Directories
 
-- `src/`: フロントエンド（React/TS）
-- `src/editor/`: エディタ本体（状態管理・レイアウト・ビュー）
-- `src/hooks/`: 永続化などのhooks
-- `src/ui/modals/`: Help/Search/Paletteなどのモーダル
-- `src-tauri/`: Tauri（Rust）側
-- `docs/`: マイルストーンや引き継ぎメモ
+- `src/`: Frontend (React/TS)
+- `src/editor/`: Core editor (state, layout, view)
+- `src/hooks/`: Hooks including persistence
+- `src/ui/modals/`: Modals such as Help/Search/Palette
+- `src-tauri/`: Tauri (Rust) side
+- `docs/`: Milestones and handover notes
 
----
 
-## ライセンス
+## License
 
-MIT（`LICENSE`）
+MIT (`LICENSE`)
