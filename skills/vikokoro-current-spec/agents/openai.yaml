@@ -1,0 +1,4 @@
+interface:
+  display_name: "Vikokoro Current Spec"
+  short_description: "Read and enforce current app spec before implementation"
+  default_prompt: "Read docs/CURRENT_SPEC.md first, then implement changes consistent with it."
