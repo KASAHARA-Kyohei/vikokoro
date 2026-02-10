@@ -3,11 +3,14 @@ export type DocId = string;
 
 export type Mode = "normal" | "insert";
 
+export type NodeColor = "blue" | "green" | "yellow" | "pink" | "gray";
+
 export type Node = {
   id: NodeId;
   text: string;
   parentId: NodeId | null;
   childrenIds: NodeId[];
+  color?: NodeColor;
 };
 
 export type DocumentState = {
