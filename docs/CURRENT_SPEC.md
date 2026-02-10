@@ -20,6 +20,10 @@
   - `H`: 親の次位置へ移動（親の親配下へ）
   - いずれもノードはサブツリーごと移動
 - `dd`: ノード削除（rootは削除不可、子は繰り上げ）
+- `c`: ノード色メニューを開く
+  - `1-5`: 色適用（`5` は完了向けグレー）
+  - `0`: 色解除
+  - `Esc`: メニューを閉じる
 - `u` / `Ctrl+r`: Undo / Redo
 - `Ctrl+T` / `Ctrl+W`: タブ作成 / タブ閉じ（確認あり）
 - `Ctrl+Tab` / `Ctrl+Shift+Tab`: タブ切替
@@ -40,6 +44,7 @@
 - Zoom: `Ctrl + Wheel`（マウス位置中心）
 - Pan: `Space + Drag`
 - Save status 表示: `Saving... / Saved / Local`
+- Node color: `Blue / Green / Yellow / Pink / Gray`
 - Search: 部分一致、Path表示、結果ハイライト、`Enter/Shift+Enter` で巡回
 - Command Palette: 主要操作を実行可能
   - `Move node left`
@@ -58,6 +63,7 @@
 - Undo/Redo は Document 単位で独立
 - root ノードは削除不可
 - ノード削除時は子を親直下へ繰り上げ
+- ノード色の変更/解除は Undo/Redo 対象
 - `H/L` 階層移動は「できない場合は no-op」
   - `L`: 先頭兄弟は不可
   - `H`: 親が root の場合は不可
