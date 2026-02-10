@@ -8,39 +8,25 @@ body:
       value: |
         Thank you for the idea.
         提案ありがとうございます。
+        A rough idea is welcome.
+        ラフなアイデアでも歓迎です。
 
   - type: textarea
-    id: problem
+    id: idea
     attributes:
-      label: "Problem to solve / 解決したい課題"
-      description: "What pain point are you facing? / どんな課題がありますか？"
+      label: "Idea / アイデア"
+      placeholder: "What would you like to add or improve? / 追加・改善したいこと"
     validations:
       required: true
 
   - type: textarea
-    id: proposal
+    id: reason
     attributes:
-      label: "Proposed solution / 提案内容"
-      description: "Describe your idea. / 提案する仕様を記載してください。"
-    validations:
-      required: true
-
-  - type: textarea
-    id: alternatives
-    attributes:
-      label: "Alternatives considered / 検討した代替案"
-      description: "Optional / 任意"
+      label: "Why (optional) / 期待効果（任意）"
+      placeholder: "Why is this useful? / なぜ便利か"
 
   - type: textarea
     id: context
     attributes:
-      label: "Additional context / 補足情報"
-      description: "Mockups, references, or examples / モック、参考資料、例など"
-
-  - type: checkboxes
-    id: checks
-    attributes:
-      label: "Checklist / 確認事項"
-      options:
-        - label: "I searched existing issues and discussions. / 既存 Issue と議論を確認しました"
-          required: true
+      label: "Notes (optional) / 補足（任意）"
+      placeholder: "Examples, mockups, references, etc. / 例、モック、参考資料など"

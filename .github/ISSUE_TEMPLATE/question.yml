@@ -6,33 +6,19 @@ body:
   - type: markdown
     attributes:
       value: |
-        Please provide enough context so maintainers can help quickly.
-        迅速に回答できるよう、状況をできるだけ詳しく記載してください。
+        Simple questions are welcome.
+        気軽な質問でも歓迎です。
 
   - type: textarea
     id: question
     attributes:
       label: "Your question / 質問内容"
-      description: "What do you want to know? / 何を知りたいですか？"
+      placeholder: "What do you want to know? / 何を知りたいか"
     validations:
       required: true
 
   - type: textarea
     id: context
     attributes:
-      label: "Context / 背景"
-      description: "What have you tried? / 試したことや前提を記載してください。"
-
-  - type: input
-    id: environment
-    attributes:
-      label: "Environment / 環境"
-      placeholder: "macOS + npm run tauri dev, etc."
-
-  - type: checkboxes
-    id: checks
-    attributes:
-      label: "Checklist / 確認事項"
-      options:
-        - label: "I read README and CONTRIBUTING first. / README と CONTRIBUTING を先に確認しました"
-          required: true
+      label: "Context (optional) / 背景（任意）"
+      placeholder: "What you tried, environment, screenshots, etc. / 試したこと、環境、スクショなど"
