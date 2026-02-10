@@ -3,6 +3,7 @@ import "./App.css";
 import { EditorView } from "./editor/EditorView";
 import { TabBar } from "./editor/TabBar";
 import { createInitialAppState, editorReducer } from "./editor/state";
+import type { NodeColor } from "./editor/types";
 import { filterPaletteCommands, type PaletteCommand } from "./features/palette/model";
 import { buildSearchResults } from "./features/search/model";
 import { useTheme } from "./hooks/useTheme";
@@ -11,9 +12,18 @@ import { useZoomPan } from "./hooks/useZoomPan";
 import { CloseConfirmModal } from "./ui/modals/CloseConfirmModal";
 import { CommandPaletteModal } from "./ui/modals/CommandPaletteModal";
 import { HelpModal } from "./ui/modals/HelpModal";
+import { NodeColorModal } from "./ui/modals/NodeColorModal";
 import { SearchModal } from "./ui/modals/SearchModal";
 
 import { clamp } from "./utils/number";
+
+const COLOR_SHORTCUTS: Record<string, NodeColor> = {
+  "1": "blue",
+  "2": "green",
+  "3": "yellow",
+  "4": "pink",
+  "5": "gray",
+};
 
 function App() {
   const [state, dispatch] = useReducer(editorReducer, undefined, createInitialAppState);
@@ -25,6 +35,7 @@ function App() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [paletteQuery, setPaletteQuery] = useState("");
   const [paletteIndex, setPaletteIndex] = useState(0);
+  const [nodeColorOpen, setNodeColorOpen] = useState(false);
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const pendingDRef = useRef(false);
   const pendingDTimerRef = useRef<number | null>(null);
@@ -34,7 +45,12 @@ function App() {
   const zoomPan = useZoomPan({
     activeDocId: state.workspace.activeDocId,
     mode: state.mode,
-    disabled: helpOpen || searchOpen || paletteOpen || state.closeConfirmDocId !== null,
+    disabled:
+      helpOpen ||
+      searchOpen ||
+      paletteOpen ||
+      nodeColorOpen ||
+      state.closeConfirmDocId !== null,
     viewportRef,
   });
   const activeTabIndex = useMemo(() => {
@@ -148,6 +164,7 @@ function App() {
     if (state.mode === "insert") {
       setSearchOpen(false);
       setPaletteOpen(false);
+      setNodeColorOpen(false);
     }
   }, [state.mode]);
 
@@ -233,6 +250,32 @@ function App() {
         if (event.ctrlKey && (event.key === "w" || event.key === "t" || event.key === "Tab")) {
           event.preventDefault();
         }
+        return;
+      }
+
+      if (nodeColorOpen) {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          setNodeColorOpen(false);
+          return;
+        }
+
+        if (event.key === "0") {
+          event.preventDefault();
+          dispatch({ type: "setCursorColor", color: null });
+          setNodeColorOpen(false);
+          return;
+        }
+
+        const color = COLOR_SHORTCUTS[event.key];
+        if (color) {
+          event.preventDefault();
+          dispatch({ type: "setCursorColor", color });
+          setNodeColorOpen(false);
+          return;
+        }
+
+        event.preventDefault();
         return;
       }
 
@@ -322,6 +365,12 @@ function App() {
           pendingDRef.current = false;
           pendingDTimerRef.current = null;
         }, 600);
+        return;
+      }
+
+      if (!event.ctrlKey && !event.metaKey && !event.altKey && event.key === "c") {
+        event.preventDefault();
+        setNodeColorOpen(true);
         return;
       }
 
@@ -427,7 +476,15 @@ function App() {
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [helpOpen, paletteOpen, searchOpen, state.closeConfirmDocId, state.hydrated, state.mode]);
+  }, [
+    helpOpen,
+    nodeColorOpen,
+    paletteOpen,
+    searchOpen,
+    state.closeConfirmDocId,
+    state.hydrated,
+    state.mode,
+  ]);
 
   if (!state.hydrated) {
     return (
@@ -508,6 +565,19 @@ function App() {
             item.run();
           }}
           onClose={() => setPaletteOpen(false)}
+        />
+        <NodeColorModal
+          open={nodeColorOpen}
+          activeColor={activeDoc.nodes[activeDoc.cursorId]?.color ?? null}
+          onApplyColor={(color) => {
+            dispatch({ type: "setCursorColor", color });
+            setNodeColorOpen(false);
+          }}
+          onClear={() => {
+            dispatch({ type: "setCursorColor", color: null });
+            setNodeColorOpen(false);
+          }}
+          onClose={() => setNodeColorOpen(false)}
         />
         <HelpModal open={helpOpen} onClose={() => setHelpOpen(false)} />
       </div>

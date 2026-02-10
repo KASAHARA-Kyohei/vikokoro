@@ -492,6 +492,99 @@ input {
   font-size: 12px;
 }
 
+.nodeColorModal {
+  width: min(420px, calc(100% - 32px));
+}
+
+.nodeColorHint {
+  color: var(--muted);
+}
+
+.nodeColorList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.nodeColorItem {
+  text-align: left;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 10px 10px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+
+.nodeColorItem:hover {
+  background: var(--surfaceHover);
+}
+
+.nodeColorItemActive {
+  border-color: var(--accentBorder);
+  background: var(--accentBg);
+}
+
+.nodeColorItemMain {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.nodeColorSwatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  flex: none;
+}
+
+.nodeColorSwatch-blue {
+  background: #3b82f6;
+}
+
+.nodeColorSwatch-green {
+  background: #22c55e;
+}
+
+.nodeColorSwatch-yellow {
+  background: #f59e0b;
+}
+
+.nodeColorSwatch-pink {
+  background: #ec4899;
+}
+
+.nodeColorSwatch-gray {
+  background: #94a3b8;
+}
+
+.nodeColorName {
+  font-weight: 600;
+}
+
+.nodeColorHintPill {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 1px 7px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.nodeColorKey {
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+  min-width: 20px;
+  text-align: right;
+}
+
 .modalButton {
   border: 1px solid var(--border);
   background: var(--surfaceHover);
@@ -593,6 +686,58 @@ input {
   background: var(--surfaceHover);
 }
 
+.nodeColor-blue {
+  border-color: color-mix(in srgb, #3b82f6 56%, var(--border));
+  background: color-mix(in srgb, #3b82f6 14%, var(--surface));
+}
+
+.nodeColor-blue:hover {
+  background: color-mix(in srgb, #3b82f6 18%, var(--surfaceHover));
+}
+
+.nodeColor-green {
+  border-color: color-mix(in srgb, #22c55e 56%, var(--border));
+  background: color-mix(in srgb, #22c55e 14%, var(--surface));
+}
+
+.nodeColor-green:hover {
+  background: color-mix(in srgb, #22c55e 18%, var(--surfaceHover));
+}
+
+.nodeColor-yellow {
+  border-color: color-mix(in srgb, #f59e0b 56%, var(--border));
+  background: color-mix(in srgb, #f59e0b 16%, var(--surface));
+}
+
+.nodeColor-yellow:hover {
+  background: color-mix(in srgb, #f59e0b 21%, var(--surfaceHover));
+}
+
+.nodeColor-pink {
+  border-color: color-mix(in srgb, #ec4899 56%, var(--border));
+  background: color-mix(in srgb, #ec4899 14%, var(--surface));
+}
+
+.nodeColor-pink:hover {
+  background: color-mix(in srgb, #ec4899 18%, var(--surfaceHover));
+}
+
+.nodeColor-gray {
+  border-color: color-mix(in srgb, #94a3b8 60%, var(--border));
+  background: color-mix(in srgb, #94a3b8 20%, var(--surface));
+}
+
+.nodeColor-gray:hover {
+  background: color-mix(in srgb, #94a3b8 25%, var(--surfaceHover));
+}
+
+.nodeColor-gray .nodeText {
+  color: color-mix(in srgb, var(--muted), var(--text) 35%);
+  text-decoration: line-through;
+  text-decoration-thickness: 1.5px;
+  text-decoration-color: color-mix(in srgb, var(--muted), transparent 20%);
+}
+
 .nodeMatch {
   border-color: color-mix(in srgb, var(--accentBorder), var(--border) 60%);
 }
@@ -662,6 +807,7 @@ input {
   .modalButton,
   .searchItem,
   .paletteItem,
+  .nodeColorItem,
   .statusHelpButton,
   .node,
   .nodeExiting,

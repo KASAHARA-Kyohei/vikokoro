@@ -1,4 +1,13 @@
-import type { DocId, Document, DocumentState, Mode, Node, NodeId, Workspace } from "./types";
+import type {
+  DocId,
+  Document,
+  DocumentState,
+  Mode,
+  Node,
+  NodeColor,
+  NodeId,
+  Workspace,
+} from "./types";
 
 export type EditorAppState = {
   workspace: Workspace;
@@ -30,6 +39,7 @@ export type EditorAction =
   | { type: "addChildAndInsert" }
   | { type: "addSiblingAndInsert" }
   | { type: "setCursorText"; text: string }
+  | { type: "setCursorColor"; color: NodeColor | null }
   | { type: "commitInsertAndContinue" }
   | { type: "commitInsert" }
   | { type: "undo" }
@@ -50,6 +60,7 @@ function cloneDocumentState(doc: DocumentState): DocumentState {
       text: node.text,
       parentId: node.parentId,
       childrenIds: [...node.childrenIds],
+      color: node.color,
     };
   }
   return {
@@ -72,6 +83,7 @@ function documentStateEquals(a: DocumentState, b: DocumentState): boolean {
     if (an.id !== bn.id) return false;
     if (an.text !== bn.text) return false;
     if (an.parentId !== bn.parentId) return false;
+    if (an.color !== bn.color) return false;
     if (an.childrenIds.length !== bn.childrenIds.length) return false;
     for (let i = 0; i < an.childrenIds.length; i += 1) {
       if (an.childrenIds[i] !== bn.childrenIds[i]) return false;
@@ -574,6 +586,30 @@ export function editorReducer(state: EditorAppState, action: EditorAction): Edit
           },
         };
       });
+    }
+    case "setCursorColor": {
+      if (state.mode === "insert") return state;
+      const next = updateActiveDoc(state, (doc) => {
+        const cursor = doc.nodes[doc.cursorId];
+        if (!cursor) return doc;
+        const nextColor = action.color ?? undefined;
+        if (cursor.color === nextColor) return doc;
+        const snapshot = cloneDocumentState(doc);
+        return {
+          ...doc,
+          nodes: {
+            ...doc.nodes,
+            [cursor.id]: {
+              ...cursor,
+              color: nextColor,
+            },
+          },
+          undoStack: [...doc.undoStack, snapshot],
+          redoStack: [],
+        };
+      });
+      if (next === state) return state;
+      return bumpSaveRevision(next);
     }
     case "commitInsert": {
       if (state.mode !== "insert") return state;

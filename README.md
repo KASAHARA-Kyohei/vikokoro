@@ -19,6 +19,7 @@ Note: This is currently a personal project, so specs and behavior may change.
 - Move the cursor with `h/j/k/l`, reorder siblings with `J/K`
 - Move node hierarchy with `H/L` (left/right = outdent/indent, subtree included)
 - Delete with `dd` (root is protected, children are promoted)
+- Node colors (`c` to open, `1-5` to apply, `0` to clear; `5` = gray for done/history)
 - Undo / Redo
 - Tabs (multiple documents)
 - Search (`Ctrl+F`) / Command palette (`Ctrl+P`) / Help (`?`)
@@ -42,6 +43,7 @@ Common keys (Normal mode):
 - `J/K`: Reorder sibling down/up
 - `H/L`: Move node left/right in hierarchy (outdent / indent)
 - `dd`: Delete
+- `c`: Open node color menu (`1-5` apply, `0` clear, `Esc` close)
 - `u` / `Ctrl+r`: Undo / Redo
 
 Editing (Insert mode):

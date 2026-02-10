@@ -70,6 +70,12 @@ export function HelpModal({ open, onClose }: Props) {
             </div>
             <div className="helpRow">
               <div className="helpKeys">
+                <kbd>c</kbd>
+              </div>
+              <div className="helpDesc">Node color menu (1-5 apply / 0 clear)</div>
+            </div>
+            <div className="helpRow">
+              <div className="helpKeys">
                 <kbd>u</kbd> / <kbd>Ctrl</kbd>+<kbd>r</kbd>
               </div>
               <div className="helpDesc">Undo / Redo</div>
