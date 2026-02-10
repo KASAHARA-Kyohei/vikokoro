@@ -208,6 +208,7 @@ export function EditorView({
               title={node.text}
               className={
                 "node" +
+                (node.color ? ` nodeColor-${node.color}` : "") +
                 (isCursor ? " nodeSelected" : "") +
                 (mode === "insert" && isCursor ? " nodeEditing" : "") +
                 (isMatch ? " nodeMatch" : "") +
@@ -233,6 +234,7 @@ export function EditorView({
               title={node.text}
               className={
                 "node nodeExiting" +
+                (node.color ? ` nodeColor-${node.color}` : "") +
                 (isCursor ? " nodeSelected" : "") +
                 (mode === "insert" && isCursor ? " nodeEditing" : "")
               }
