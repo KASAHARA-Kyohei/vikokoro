@@ -141,6 +141,11 @@ Viteの要件により Node.js のバージョンが古いと警告が出ます�
 - `src-tauri/`: Tauri（Rust）側
 - `docs/`: マイルストーンや引き継ぎメモ
 
+## コントリビューション
+
+Issue / PR 作成前に、以下のガイドを確認してください。  
+[`CONTRIBUTING.md`](CONTRIBUTING.md)
+
 
 ## ライセンス
 

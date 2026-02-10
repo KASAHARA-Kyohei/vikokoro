@@ -1,0 +1,38 @@
+name: "Question / 質問"
+description: "Ask a usage or design question / 使い方や設計について質問"
+title: "[Question] "
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please provide enough context so maintainers can help quickly.
+        迅速に回答できるよう、状況をできるだけ詳しく記載してください。
+
+  - type: textarea
+    id: question
+    attributes:
+      label: "Your question / 質問内容"
+      description: "What do you want to know? / 何を知りたいですか？"
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: "Context / 背景"
+      description: "What have you tried? / 試したことや前提を記載してください。"
+
+  - type: input
+    id: environment
+    attributes:
+      label: "Environment / 環境"
+      placeholder: "macOS + npm run tauri dev, etc."
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: "Checklist / 確認事項"
+      options:
+        - label: "I read README and CONTRIBUTING first. / README と CONTRIBUTING を先に確認しました"
+          required: true
