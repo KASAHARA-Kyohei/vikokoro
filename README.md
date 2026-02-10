@@ -141,6 +141,11 @@ Check `node -v` and upgrade to `22.12+` or `20.19+` if needed.
 - `src-tauri/`: Tauri (Rust) side
 - `docs/`: Milestones and handover notes
 
+## Contributing
+
+Please read the contribution guide before opening Issues or PRs:
+[`CONTRIBUTING.md`](CONTRIBUTING.md)
+
 
 ## License
 
