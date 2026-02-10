@@ -733,6 +733,9 @@ input {
 
 .nodeColor-gray .nodeText {
   color: color-mix(in srgb, var(--muted), var(--text) 35%);
+  text-decoration: line-through;
+  text-decoration-thickness: 1.5px;
+  text-decoration-color: color-mix(in srgb, var(--muted), transparent 20%);
 }
 
 .nodeMatch {
