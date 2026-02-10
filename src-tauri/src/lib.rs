@@ -47,6 +47,7 @@ struct Node {
     text: String,
     parent_id: Option<String>,
     children_ids: Vec<String>,
+    color: Option<String>,
 }
 
 fn workspace_json_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
