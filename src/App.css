@@ -755,6 +755,38 @@ input {
   color: var(--text);
 }
 
+.nodeJumpDimmed {
+  opacity: 0.35;
+}
+
+.nodeJumpHint {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  min-height: 18px;
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--accentBorder), var(--border) 45%);
+  background: color-mix(in srgb, var(--accentBg), var(--surface) 35%);
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 10px;
+  line-height: 1;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
+}
+
+.nodeJumpHintMatched {
+  border-color: var(--accentBorder);
+  background: color-mix(in srgb, var(--accentBg), var(--surface) 18%);
+}
+
 .nodeSelected {
   border: 2px solid var(--accent);
   box-shadow: var(--shadowNodeSelected);
@@ -873,6 +905,12 @@ input {
   border-color: var(--insertBorder);
   background: var(--insertBg);
   color: var(--insertText);
+}
+
+.statusPillJump {
+  border-color: var(--accentBorder);
+  background: color-mix(in srgb, var(--accentBg), var(--surface) 40%);
+  color: var(--text);
 }
 
 .statusHelpButton {

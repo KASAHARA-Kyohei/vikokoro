@@ -18,6 +18,7 @@ Note: This is currently a personal project, so specs and behavior may change.
 - `Tab` adds a child node, `Enter` adds a sibling node (both start editing immediately)
 - Move the cursor with `h/j/k/l`, reorder siblings with `J/K`
 - Move node hierarchy with `H/L` (left/right = outdent/indent, subtree included)
+- Jump to any node with hint keys (`f` then displayed key sequence)
 - Delete with `dd` (root is protected, children are promoted)
 - Node colors (`c` to open, `1-5` to apply, `0` to clear; `5` = gray for done/history)
 - Undo / Redo
@@ -42,6 +43,7 @@ Common keys (Normal mode):
 - `h/j/k/l`: Move to parent/next/previous/child
 - `J/K`: Reorder sibling down/up
 - `H/L`: Move node left/right in hierarchy (outdent / indent)
+- `f` + hint key(s): Jump to any node
 - `dd`: Delete
 - `c`: Open node color menu (`1-5` apply, `0` clear, `Esc` close)
 - `u` / `Ctrl+r`: Undo / Redo
