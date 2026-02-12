@@ -64,6 +64,12 @@ export function HelpModal({ open, onClose }: Props) {
             </div>
             <div className="helpRow">
               <div className="helpKeys">
+                <kbd>f</kbd> + hint key(s)
+              </div>
+              <div className="helpDesc">Jump to any node (nearest nodes get easier hints)</div>
+            </div>
+            <div className="helpRow">
+              <div className="helpKeys">
                 <kbd>dd</kbd>
               </div>
               <div className="helpDesc">Delete (root is protected)</div>
