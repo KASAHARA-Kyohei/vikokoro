@@ -67,6 +67,7 @@ export function EditorView({
   const canvasRef = useRef<HTMLDivElement | null>(null);
   const isComposingRef = useRef(false);
   const didUseCompositionRef = useRef(false);
+  const compositionConfirmConsumedRef = useRef(false);
   const prevNodesRef = useRef<Record<NodeId, Node> | null>(null);
   const prevPositionsRef = useRef<Record<NodeId, NodePosition> | null>(null);
   const [exitingNodes, setExitingNodes] = useState<Record<NodeId, ExitingNode>>({});
@@ -284,6 +285,7 @@ export function EditorView({
             onCompositionStart={() => {
               isComposingRef.current = true;
               didUseCompositionRef.current = true;
+              compositionConfirmConsumedRef.current = false;
             }}
             onCompositionEnd={() => {
               isComposingRef.current = false;
@@ -291,6 +293,7 @@ export function EditorView({
             onBlur={() => {
               isComposingRef.current = false;
               didUseCompositionRef.current = false;
+              compositionConfirmConsumedRef.current = false;
             }}
             onKeyDown={(e) => {
               if (e.key === "Escape") {
@@ -301,15 +304,22 @@ export function EditorView({
               }
 
               if (e.key === "Enter") {
-                if (isComposingRef.current) {
+                const native = e.nativeEvent;
+                const imeComposing =
+                  isComposingRef.current || native.isComposing || native.keyCode === 229;
+                if (imeComposing) {
+                  // Windows IME can consume the first Enter for conversion commit.
+                  compositionConfirmConsumedRef.current = true;
                   return;
                 }
 
                 const didUseComposition = didUseCompositionRef.current;
+                const consumedByImeConfirm = compositionConfirmConsumedRef.current;
                 didUseCompositionRef.current = false;
+                compositionConfirmConsumedRef.current = false;
                 e.preventDefault();
                 e.stopPropagation();
-                if (didUseComposition) {
+                if (didUseComposition && !consumedByImeConfirm) {
                   onEnterContinue();
                 } else {
                   onEnterCommit();
