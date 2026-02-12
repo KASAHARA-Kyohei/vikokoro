@@ -16,6 +16,8 @@ type Props = {
   panGestureActive: boolean;
   highlightedNodeIds: Set<NodeId> | null;
   activeHighlightedNodeId: NodeId | null;
+  jumpHints: Record<NodeId, string> | null;
+  jumpPrefix: string;
   onSelectNode: (nodeId: NodeId) => void;
   onChangeText: (text: string) => void;
   onEnterContinue: () => void;
@@ -25,6 +27,25 @@ type Props = {
 
 type ExitingNode = { node: Node; pos: NodePosition };
 
+type JumpHintState = {
+  hint: string | null;
+  isDimmed: boolean;
+  isMatched: boolean;
+};
+
+function getJumpHintState(
+  jumpHints: Record<NodeId, string> | null,
+  nodeId: NodeId,
+  jumpPrefix: string,
+): JumpHintState {
+  const hint = jumpHints?.[nodeId] ?? null;
+  if (!hint) return { hint: null, isDimmed: false, isMatched: false };
+  if (jumpPrefix.length === 0) return { hint, isDimmed: false, isMatched: false };
+
+  const isMatched = hint.startsWith(jumpPrefix);
+  return { hint, isDimmed: !isMatched, isMatched };
+}
+
 export function EditorView({
   doc,
   mode,
@@ -33,6 +54,8 @@ export function EditorView({
   panGestureActive,
   highlightedNodeIds,
   activeHighlightedNodeId,
+  jumpHints,
+  jumpPrefix,
   onSelectNode,
   onChangeText,
   onEnterContinue,
@@ -201,6 +224,7 @@ export function EditorView({
           const isCursor = node.id === doc.cursorId;
           const isMatch = highlightedNodeIds?.has(node.id) ?? false;
           const isActiveMatch = activeHighlightedNodeId === node.id;
+          const jump = getJumpHintState(jumpHints, node.id, jumpPrefix);
           return (
             <div
               key={node.id}
@@ -212,7 +236,8 @@ export function EditorView({
                 (isCursor ? " nodeSelected" : "") +
                 (mode === "insert" && isCursor ? " nodeEditing" : "") +
                 (isMatch ? " nodeMatch" : "") +
-                (isActiveMatch ? " nodeMatchActive" : "")
+                (isActiveMatch ? " nodeMatchActive" : "") +
+                (jump.isDimmed ? " nodeJumpDimmed" : "")
               }
               style={{ left: pos.x, top: pos.y, width: NODE_WIDTH, height: NODE_HEIGHT }}
               onMouseDown={(e) => {
@@ -221,6 +246,11 @@ export function EditorView({
                 onSelectNode(node.id);
               }}
             >
+              {jump.hint ? (
+                <div className={"nodeJumpHint" + (jump.isMatched ? " nodeJumpHintMatched" : "")}>
+                  {jump.hint}
+                </div>
+              ) : null}
               <div className="nodeText">{node.text || " "}</div>
             </div>
           );

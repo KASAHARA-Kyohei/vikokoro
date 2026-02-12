@@ -1,9 +1,14 @@
-import { useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import "./App.css";
 import { EditorView } from "./editor/EditorView";
 import { TabBar } from "./editor/TabBar";
 import { createInitialAppState, editorReducer } from "./editor/state";
 import type { NodeColor } from "./editor/types";
+import {
+  buildJumpSession,
+  resolveJumpKey,
+  type JumpSession,
+} from "./features/jump/model";
 import { filterPaletteCommands, type PaletteCommand } from "./features/palette/model";
 import { buildSearchResults } from "./features/search/model";
 import { useTheme } from "./hooks/useTheme";
@@ -39,8 +44,59 @@ function App() {
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const pendingDRef = useRef(false);
   const pendingDTimerRef = useRef<number | null>(null);
+  const [jumpSession, setJumpSession] = useState<JumpSession | null>(null);
+  const [jumpPrefix, setJumpPrefix] = useState("");
 
   const activeDoc = state.workspace.documents[state.workspace.activeDocId];
+  const jumpActive = jumpSession !== null;
+
+  const closeJump = useCallback(() => {
+    setJumpSession(null);
+    setJumpPrefix("");
+  }, []);
+
+  const openJump = useCallback(() => {
+    const session = buildJumpSession(activeDoc);
+    if (Object.keys(session.hintToNode).length === 0) return;
+    setJumpSession(session);
+    setJumpPrefix("");
+  }, [activeDoc]);
+
+  const handleJumpKey = useCallback(
+    (event: KeyboardEvent): boolean => {
+      if (!jumpSession) return false;
+
+      const resolution = resolveJumpKey({
+        session: jumpSession,
+        prefix: jumpPrefix,
+        key: event.key,
+        ctrlKey: event.ctrlKey,
+        metaKey: event.metaKey,
+        altKey: event.altKey,
+      });
+
+      event.preventDefault();
+
+      if (resolution.type === "keep") {
+        return true;
+      }
+
+      if (resolution.type === "cancel") {
+        closeJump();
+        return true;
+      }
+
+      if (resolution.type === "setPrefix") {
+        setJumpPrefix(resolution.prefix);
+        return true;
+      }
+
+      closeJump();
+      dispatch({ type: "selectNode", nodeId: resolution.nodeId });
+      return true;
+    },
+    [closeJump, dispatch, jumpPrefix, jumpSession],
+  );
 
   const zoomPan = useZoomPan({
     activeDocId: state.workspace.activeDocId,
@@ -50,7 +106,8 @@ function App() {
       searchOpen ||
       paletteOpen ||
       nodeColorOpen ||
-      state.closeConfirmDocId !== null,
+      state.closeConfirmDocId !== null ||
+      jumpActive,
     viewportRef,
   });
   const activeTabIndex = useMemo(() => {
@@ -165,8 +222,36 @@ function App() {
       setSearchOpen(false);
       setPaletteOpen(false);
       setNodeColorOpen(false);
+      closeJump();
     }
-  }, [state.mode]);
+  }, [closeJump, state.mode]);
+
+  useEffect(() => {
+    closeJump();
+  }, [closeJump, state.workspace.activeDocId]);
+
+  useEffect(() => {
+    if (!jumpSession) return;
+    if (
+      state.mode !== "normal" ||
+      helpOpen ||
+      searchOpen ||
+      paletteOpen ||
+      nodeColorOpen ||
+      state.closeConfirmDocId !== null
+    ) {
+      closeJump();
+    }
+  }, [
+    closeJump,
+    helpOpen,
+    jumpSession,
+    nodeColorOpen,
+    paletteOpen,
+    searchOpen,
+    state.closeConfirmDocId,
+    state.mode,
+  ]);
 
   const { saveLabel, saveStatus } = useWorkspacePersistence({
     hydrated: state.hydrated,
@@ -295,6 +380,10 @@ function App() {
         return;
       }
 
+      if (handleJumpKey(event)) {
+        return;
+      }
+
       if (state.mode === "normal" && (event.key === "?" || (event.key === "/" && event.shiftKey))) {
         event.preventDefault();
         setHelpOpen(true);
@@ -413,6 +502,12 @@ function App() {
         return;
       }
 
+      if (!event.ctrlKey && !event.metaKey && !event.altKey && event.key.toLowerCase() === "f") {
+        event.preventDefault();
+        openJump();
+        return;
+      }
+
       if (event.key === "i") {
         event.preventDefault();
         dispatch({ type: "enterInsert" });
@@ -477,8 +572,11 @@ function App() {
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, [
+    handleJumpKey,
+    closeJump,
     helpOpen,
     nodeColorOpen,
+    openJump,
     paletteOpen,
     searchOpen,
     state.closeConfirmDocId,
@@ -517,11 +615,13 @@ function App() {
         <EditorView
           doc={activeDoc}
           mode={state.mode}
-          disabled={state.closeConfirmDocId !== null}
+          disabled={state.closeConfirmDocId !== null || jumpActive}
           zoom={zoomPan.zoom}
           panGestureActive={zoomPan.panGestureActive}
           highlightedNodeIds={highlightedNodeIds}
           activeHighlightedNodeId={activeSearchNodeId}
+          jumpHints={jumpSession?.nodeToHint ?? null}
+          jumpPrefix={jumpPrefix}
           onSelectNode={(nodeId) => dispatch({ type: "selectNode", nodeId })}
           onChangeText={(text) => dispatch({ type: "setCursorText", text })}
           onEnterContinue={() => dispatch({ type: "commitInsertAndContinue" })}
@@ -601,6 +701,13 @@ function App() {
           <span className={"statusValue " + (saveStatus === "saving" ? "statusValueSaving" : "")}>
             {saveLabel}
           </span>
+          {jumpActive ? (
+            <>
+              <span className="statusDot">•</span>
+              <span className="statusLabel">Jump</span>
+              <span className="statusPill statusPillJump">{jumpPrefix || "..."}</span>
+            </>
+          ) : null}
         </div>
         <div className="statusRight">
           <button
