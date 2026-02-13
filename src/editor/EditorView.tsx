@@ -1,12 +1,13 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import type { Document, Mode, Node, NodeId } from "./types";
+import { useEffect, useMemo, useRef } from "react";
+import type { Document, Mode, NodeId } from "./types";
 import {
   computeLayout,
   NODE_HEIGHT,
   NODE_WIDTH,
   svgPathForEdge,
 } from "./layout";
-import type { NodePosition } from "./layout";
+import { useExitingNodes } from "./hooks/useExitingNodes";
+import { buildEdges, buildHighlightedEdgeKeys, buildNodeEntries } from "./selectors";
 
 type Props = {
   doc: Document;
@@ -25,7 +26,6 @@ type Props = {
   onEsc: () => void;
 };
 
-type ExitingNode = { node: Node; pos: NodePosition };
 
 type JumpHintState = {
   hint: string | null;
@@ -68,9 +68,7 @@ export function EditorView({
   const isComposingRef = useRef(false);
   const didUseCompositionRef = useRef(false);
   const compositionConfirmConsumedRef = useRef(false);
-  const prevNodesRef = useRef<Record<NodeId, Node> | null>(null);
-  const prevPositionsRef = useRef<Record<NodeId, NodePosition> | null>(null);
-  const [exitingNodes, setExitingNodes] = useState<Record<NodeId, ExitingNode>>({});
+  const exitingNodes = useExitingNodes(doc.nodes, layout.positions);
 
   const cursorPos = layout.positions[doc.cursorId];
   const cursorNode = doc.nodes[doc.cursorId];
@@ -92,93 +90,11 @@ export function EditorView({
     el?.scrollIntoView({ block: "nearest", inline: "nearest" });
   }, [doc.cursorId]);
 
-  useEffect(() => {
-    const prevNodes = prevNodesRef.current;
-    const prevPositions = prevPositionsRef.current;
-    if (prevNodes && prevPositions) {
-      const currentIds = new Set(Object.keys(doc.nodes));
-      const removed: NodeId[] = [];
-      for (const id of Object.keys(prevNodes)) {
-        if (!currentIds.has(id)) removed.push(id);
-      }
+  const nodeEntries = useMemo(() => buildNodeEntries(doc, layout.positions), [doc, layout.positions]);
 
-      if (removed.length > 0) {
-        setExitingNodes((current) => {
-          const next: Record<NodeId, ExitingNode> = { ...current };
-          for (const id of removed) {
-            const node = prevNodes[id];
-            const pos = prevPositions[id];
-            if (!node || !pos) continue;
-            next[id] = { node, pos };
-            window.setTimeout(() => {
-              setExitingNodes((latest) => {
-                if (!latest[id]) return latest;
-                const { [id]: _, ...rest } = latest;
-                return rest;
-              });
-            }, 180);
-          }
-          return next;
-        });
-      }
-    }
+  const edges = useMemo(() => buildEdges(doc), [doc]);
 
-    prevNodesRef.current = doc.nodes;
-    prevPositionsRef.current = layout.positions;
-
-    setExitingNodes((current) => {
-      const next: Record<NodeId, ExitingNode> = {};
-      for (const [id, entry] of Object.entries(current)) {
-        if (!doc.nodes[id]) next[id] = entry;
-      }
-      return next;
-    });
-  }, [doc.nodes, layout.positions]);
-
-  const nodeEntries = useMemo(() => {
-    const entries: { node: Node; pos: NodePosition | undefined }[] = Object.values(doc.nodes).map(
-      (node) => ({ node, pos: layout.positions[node.id] }),
-    );
-    return entries
-      .filter((entry): entry is { node: Node; pos: NodePosition } => entry.pos !== undefined)
-      .sort((a, b) => {
-        if (a.pos.depth !== b.pos.depth) return a.pos.depth - b.pos.depth;
-        return a.pos.y - b.pos.y;
-      });
-  }, [doc.nodes, layout.positions]);
-
-  const edges = useMemo(() => {
-    const list: { fromId: NodeId; toId: NodeId }[] = [];
-    for (const node of Object.values(doc.nodes)) {
-      for (const childId of node.childrenIds) {
-        list.push({ fromId: node.id, toId: childId });
-      }
-    }
-    return list;
-  }, [doc.nodes]);
-
-  const highlightedEdgeKeys = useMemo(() => {
-    const set = new Set<string>();
-
-    const cursor = doc.nodes[doc.cursorId];
-    if (!cursor) return set;
-
-    const chainEdges: string[] = [];
-    let current: Node | undefined = cursor;
-    while (current?.parentId) {
-      chainEdges.push(`${current.parentId}-${current.id}`);
-      current = doc.nodes[current.parentId];
-    }
-    for (const key of chainEdges) set.add(key);
-
-    for (const edge of edges) {
-      if (edge.fromId === doc.cursorId || edge.toId === doc.cursorId) {
-        set.add(`${edge.fromId}-${edge.toId}`);
-      }
-    }
-
-    return set;
-  }, [doc.cursorId, edges]);
+  const highlightedEdgeKeys = useMemo(() => buildHighlightedEdgeKeys(doc, edges), [doc, edges]);
 
   return (
     <div
