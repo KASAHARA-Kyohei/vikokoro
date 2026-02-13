@@ -1,0 +1,63 @@
+.helpModal {
+  width: min(480px, calc(100% - 40px));
+  max-height: min(620px, calc(100vh - 96px));
+  display: flex;
+  flex-direction: column;
+}
+
+.helpModal .modalBody {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 6px;
+}
+
+.helpGrid {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.helpRow {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 12px;
+  align-items: center;
+}
+
+@media (max-width: 560px) {
+  .helpRow {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+}
+
+.helpKeys {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  color: var(--text);
+}
+
+.helpDesc {
+  color: var(--muted);
+}
+
+kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 18px;
+  padding: 0 6px;
+  border-radius: 7px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 11px;
+  line-height: 1;
+}
+
+kbd + kbd {
+  margin-left: 2px;
+}

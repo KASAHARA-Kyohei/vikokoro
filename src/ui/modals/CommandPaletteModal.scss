@@ -1,0 +1,65 @@
+.paletteModal {
+  width: min(560px, calc(100% - 32px));
+}
+
+.paletteBar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.paletteInput {
+  flex: 1;
+  min-width: 0;
+  height: 34px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--inputBg);
+  color: var(--text);
+  padding: 0 10px;
+  outline: none;
+}
+
+.paletteMeta {
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.paletteList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 12px;
+  max-height: min(320px, 50vh);
+  overflow: auto;
+}
+
+.paletteItem {
+  text-align: left;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 10px 10px;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+
+.paletteItem:hover {
+  background: var(--surfaceHover);
+}
+
+.paletteItemActive {
+  border-color: var(--accentBorder);
+  background: var(--accentBg);
+}
+
+.paletteItemTitle {
+  font-weight: 600;
+}
+
+.paletteItemSubtitle {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 12px;
+}

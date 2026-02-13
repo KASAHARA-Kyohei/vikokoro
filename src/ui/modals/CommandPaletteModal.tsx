@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import "./CommandPaletteModal.scss";
 
 export type PaletteItem = {
   id: string;
@@ -139,4 +140,3 @@ export function CommandPaletteModal({
     </div>
   );
 }
-

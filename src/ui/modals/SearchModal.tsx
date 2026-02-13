@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef } from "react";
 import type { NodeId } from "../../editor/types";
+import "./SearchModal.scss";
 
 export type SearchResultItem = {
   nodeId: NodeId;
@@ -157,4 +158,3 @@ export function SearchModal({
     </div>
   );
 }
-

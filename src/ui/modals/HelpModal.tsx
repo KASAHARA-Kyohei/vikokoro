@@ -1,3 +1,5 @@
+import "./HelpModal.scss";
+
 type Props = {
   open: boolean;
   onClose: () => void;

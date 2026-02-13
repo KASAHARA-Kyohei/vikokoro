@@ -1,4 +1,5 @@
 import type { NodeColor } from "../../editor/types";
+import "./NodeColorModal.scss";
 
 type ColorOption = {
   color: NodeColor;
