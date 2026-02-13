@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef } from "react";
-import type { Document, Mode, NodeId } from "./types";
+import type { Document, Mode, Node, NodeId } from "./types";
 import {
   computeLayout,
   NODE_HEIGHT,
@@ -7,7 +7,6 @@ import {
   svgPathForEdge,
 } from "./layout";
 import { useExitingNodes } from "./hooks/useExitingNodes";
-import { buildEdges, buildHighlightedEdgeKeys, buildNodeEntries } from "./selectors";
 
 type Props = {
   doc: Document;
@@ -44,6 +43,54 @@ function getJumpHintState(
 
   const isMatched = hint.startsWith(jumpPrefix);
   return { hint, isDimmed: !isMatched, isMatched };
+}
+
+function buildNodeEntries(doc: Document, positions: ReturnType<typeof computeLayout>["positions"]) {
+  const entries: { node: Node; pos: { x: number; y: number; depth: number } | undefined }[] = Object.values(doc.nodes).map((node) => ({
+    node,
+    pos: positions[node.id],
+  }));
+
+  return entries
+    .filter((entry): entry is { node: Node; pos: { x: number; y: number; depth: number } } => entry.pos !== undefined)
+    .sort((a, b) => {
+      if (a.pos.depth !== b.pos.depth) return a.pos.depth - b.pos.depth;
+      return a.pos.y - b.pos.y;
+    });
+}
+
+function buildEdges(doc: Document): { fromId: NodeId; toId: NodeId }[] {
+  const list: { fromId: NodeId; toId: NodeId }[] = [];
+  for (const node of Object.values(doc.nodes)) {
+    for (const childId of node.childrenIds) {
+      list.push({ fromId: node.id, toId: childId });
+    }
+  }
+  return list;
+}
+
+function buildHighlightedEdgeKeys(
+  doc: Document,
+  edges: { fromId: NodeId; toId: NodeId }[],
+): Set<string> {
+  const set = new Set<string>();
+
+  const cursor = doc.nodes[doc.cursorId];
+  if (!cursor) return set;
+
+  let current: typeof cursor | undefined = cursor;
+  while (current?.parentId) {
+    set.add(`${current.parentId}-${current.id}`);
+    current = doc.nodes[current.parentId];
+  }
+
+  for (const edge of edges) {
+    if (edge.fromId === doc.cursorId || edge.toId === doc.cursorId) {
+      set.add(`${edge.fromId}-${edge.toId}`);
+    }
+  }
+
+  return set;
 }
 
 export function EditorView({
