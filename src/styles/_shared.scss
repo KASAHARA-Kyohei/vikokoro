@@ -1,0 +1,106 @@
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  background: var(--modalOverlay);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: overlayIn 140ms ease both;
+}
+
+.modal {
+  width: min(420px, calc(100% - 32px));
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--modalBg);
+  box-shadow: var(--shadowPanel);
+  padding: 14px 16px;
+  animation: modalIn 180ms cubic-bezier(0.2, 0.9, 0.2, 1) both;
+}
+
+@keyframes overlayIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes modalIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.modalTitle {
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.modalBody {
+  color: var(--muted);
+}
+
+.modalActions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.modalButton {
+  border: 1px solid var(--border);
+  background: var(--surfaceHover);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+
+.modalButton:hover {
+  background: var(--surface);
+}
+
+.modalButtonDanger {
+  border-color: var(--dangerBorder);
+  background: var(--dangerBg);
+}
+
+.modalButtonDanger:hover {
+  background: var(--dangerBgHover);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body {
+    transition: none;
+  }
+
+  .modalOverlay {
+    animation: none;
+  }
+
+  .tab,
+  .tabNew,
+  .tabTheme,
+  .modal,
+  .modalButton,
+  .searchItem,
+  .paletteItem,
+  .nodeColorItem,
+  .statusHelpButton,
+  .node,
+  .nodeExiting,
+  .nodeInput {
+    transition: none;
+    animation: none;
+  }
+}

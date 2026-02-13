@@ -1,0 +1,92 @@
+.nodeColorModal {
+  width: min(420px, calc(100% - 32px));
+}
+
+.nodeColorHint {
+  color: var(--muted);
+}
+
+.nodeColorList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.nodeColorItem {
+  text-align: left;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 10px 10px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+
+.nodeColorItem:hover {
+  background: var(--surfaceHover);
+}
+
+.nodeColorItemActive {
+  border-color: var(--accentBorder);
+  background: var(--accentBg);
+}
+
+.nodeColorItemMain {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.nodeColorSwatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  flex: none;
+}
+
+.nodeColorSwatch-blue {
+  background: #3b82f6;
+}
+
+.nodeColorSwatch-green {
+  background: #22c55e;
+}
+
+.nodeColorSwatch-yellow {
+  background: #f59e0b;
+}
+
+.nodeColorSwatch-pink {
+  background: #ec4899;
+}
+
+.nodeColorSwatch-gray {
+  background: #94a3b8;
+}
+
+.nodeColorName {
+  font-weight: 600;
+}
+
+.nodeColorHintPill {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 1px 7px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.nodeColorKey {
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+  min-width: 20px;
+  text-align: right;
+}

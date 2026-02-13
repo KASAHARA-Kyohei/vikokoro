@@ -38,4 +38,3 @@ export function CloseConfirmModal({ open, onConfirm, onCancel }: Props) {
     </div>
   );
 }
-

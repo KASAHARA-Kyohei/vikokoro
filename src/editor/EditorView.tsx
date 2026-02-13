@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Document, Mode, Node, NodeId } from "./types";
+import "./EditorView.scss";
 import {
   computeLayout,
   NODE_HEIGHT,

@@ -1,5 +1,6 @@
 import type { DocId, Document, Mode, Tab } from "./types";
 import type { ThemeName } from "../hooks/useTheme";
+import "./TabBar.scss";
 
 type Props = {
   tabs: Tab[];

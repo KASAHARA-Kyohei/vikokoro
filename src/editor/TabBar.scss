@@ -1,0 +1,94 @@
+.tabBar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  background: linear-gradient(180deg, var(--panel), var(--panel2));
+  border-bottom: 1px solid var(--divider);
+}
+
+.tabList {
+  display: flex;
+  gap: 6px;
+  flex: 1;
+  overflow: auto;
+}
+
+.tab {
+  animation: tabIn 160ms ease both;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 120ms ease, border-color 120ms ease, transform 90ms ease;
+}
+
+.tab:hover {
+  background: var(--surfaceHover);
+}
+
+.tab:active {
+  transform: translateY(0.5px);
+}
+
+.tabActive {
+  border-color: var(--accentBorder);
+  background: var(--accentBg);
+  box-shadow: 0 0 0 1px var(--accentGlow);
+}
+
+.tabActions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tabNew {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease, transform 90ms ease;
+}
+
+.tabNew:hover {
+  background: var(--surfaceHover);
+}
+
+.tabNew:active {
+  transform: translateY(0.5px);
+}
+
+.tabTheme {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease, transform 90ms ease;
+}
+
+.tabTheme:hover {
+  background: var(--surfaceHover);
+}
+
+.tabTheme:active {
+  transform: translateY(0.5px);
+}
+
+@keyframes tabIn {
+  from {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
