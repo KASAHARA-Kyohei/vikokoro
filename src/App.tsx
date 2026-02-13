@@ -9,6 +9,12 @@ import {
   resolveJumpKey,
   type JumpSession,
 } from "./features/jump/model";
+import {
+  handleGlobalModeKeys,
+  handleInsertModeKeys,
+  handleModalStateKeys,
+  handleNormalModeKeys,
+} from "./features/keyboard/handlers";
 import { filterPaletteCommands, type PaletteCommand } from "./features/palette/model";
 import { buildSearchResults } from "./features/search/model";
 import { useTheme } from "./hooks/useTheme";
@@ -46,6 +52,37 @@ function App() {
   const pendingDTimerRef = useRef<number | null>(null);
   const [jumpSession, setJumpSession] = useState<JumpSession | null>(null);
   const [jumpPrefix, setJumpPrefix] = useState("");
+
+  const resetPendingDelete = useCallback(() => {
+    pendingDRef.current = false;
+    if (pendingDTimerRef.current !== null) {
+      window.clearTimeout(pendingDTimerRef.current);
+      pendingDTimerRef.current = null;
+    }
+  }, []);
+
+  const consumeDeleteChord = useCallback((event: KeyboardEvent): boolean => {
+    if (event.key !== "d") {
+      resetPendingDelete();
+      return false;
+    }
+
+    event.preventDefault();
+    if (pendingDRef.current) {
+      resetPendingDelete();
+      return true;
+    }
+
+    pendingDRef.current = true;
+    if (pendingDTimerRef.current !== null) {
+      window.clearTimeout(pendingDTimerRef.current);
+    }
+    pendingDTimerRef.current = window.setTimeout(() => {
+      pendingDRef.current = false;
+      pendingDTimerRef.current = null;
+    }, 600);
+    return false;
+  }, [resetPendingDelete]);
 
   const activeDoc = state.workspace.documents[state.workspace.activeDocId];
   const jumpActive = jumpSession !== null;
@@ -292,91 +329,30 @@ function App() {
 
   useEffect(() => {
     return () => {
-      if (pendingDTimerRef.current !== null) {
-        window.clearTimeout(pendingDTimerRef.current);
-      }
+      resetPendingDelete();
     };
-  }, []);
+  }, [resetPendingDelete]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (!state.hydrated) return;
 
-      if (helpOpen) {
-        if (event.key === "Escape") {
-          event.preventDefault();
-          setHelpOpen(false);
-          return;
-        }
-        event.preventDefault();
-        return;
-      }
-
-      if (searchOpen) {
-        if (event.key === "Escape") {
-          event.preventDefault();
-          setSearchOpen(false);
-          return;
-        }
-
-        if (event.ctrlKey && (event.key === "w" || event.key === "t" || event.key === "Tab")) {
-          event.preventDefault();
-        }
-        return;
-      }
-
-      if (paletteOpen) {
-        if (event.key === "Escape") {
-          event.preventDefault();
-          setPaletteOpen(false);
-          return;
-        }
-
-        if (event.ctrlKey && (event.key === "w" || event.key === "t" || event.key === "Tab")) {
-          event.preventDefault();
-        }
-        return;
-      }
-
-      if (nodeColorOpen) {
-        if (event.key === "Escape") {
-          event.preventDefault();
-          setNodeColorOpen(false);
-          return;
-        }
-
-        if (event.key === "0") {
-          event.preventDefault();
-          dispatch({ type: "setCursorColor", color: null });
-          setNodeColorOpen(false);
-          return;
-        }
-
-        const color = COLOR_SHORTCUTS[event.key];
-        if (color) {
-          event.preventDefault();
-          dispatch({ type: "setCursorColor", color });
-          setNodeColorOpen(false);
-          return;
-        }
-
-        event.preventDefault();
-        return;
-      }
-
-      if (state.closeConfirmDocId) {
-        const key = event.key;
-        if (key === "y" || key === "Y") {
-          event.preventDefault();
-          dispatch({ type: "closeActiveDoc" });
-          return;
-        }
-        if (key === "n" || key === "N" || key === "Escape") {
-          event.preventDefault();
-          dispatch({ type: "cancelCloseConfirm" });
-          return;
-        }
-        event.preventDefault();
+      if (
+        handleModalStateKeys({
+          event,
+          helpOpen,
+          searchOpen,
+          paletteOpen,
+          nodeColorOpen,
+          closeConfirmDocId: state.closeConfirmDocId,
+          colorShortcuts: COLOR_SHORTCUTS,
+          dispatch,
+          setHelpOpen,
+          setSearchOpen,
+          setPaletteOpen,
+          setNodeColorOpen,
+        })
+      ) {
         return;
       }
 
@@ -384,185 +360,34 @@ function App() {
         return;
       }
 
-      if (state.mode === "normal" && (event.key === "?" || (event.key === "/" && event.shiftKey))) {
-        event.preventDefault();
-        setHelpOpen(true);
-        return;
-      }
-
-      if (state.mode === "normal" && event.ctrlKey && (event.key === "f" || event.key === "F")) {
-        event.preventDefault();
-        setSearchOpen(true);
-        setPaletteOpen(false);
-        return;
-      }
-
-      if (state.mode === "normal" && event.ctrlKey && (event.key === "p" || event.key === "P")) {
-        event.preventDefault();
-        setPaletteQuery("");
-        setPaletteIndex(0);
-        setPaletteOpen(true);
-        setSearchOpen(false);
+      if (
+        handleGlobalModeKeys({
+          event,
+          mode: state.mode,
+          setHelpOpen,
+          setSearchOpen,
+          setPaletteOpen,
+          setPaletteQuery,
+          setPaletteIndex,
+        })
+      ) {
         return;
       }
 
       if (state.mode === "insert") {
-        pendingDRef.current = false;
-        if (pendingDTimerRef.current !== null) {
-          window.clearTimeout(pendingDTimerRef.current);
-          pendingDTimerRef.current = null;
-        }
-
-        if (event.key === "Escape") {
-          event.preventDefault();
-          dispatch({ type: "commitInsert" });
-        }
-        if (event.key === "Tab" || (event.ctrlKey && event.key === "Tab")) {
-          event.preventDefault();
-        }
-        if (event.ctrlKey && (event.key === "t" || event.key === "w")) {
-          event.preventDefault();
-        }
+        handleInsertModeKeys({ event, dispatch, resetPendingDelete });
         return;
       }
 
-      if (event.key !== "d") {
-        pendingDRef.current = false;
-        if (pendingDTimerRef.current !== null) {
-          window.clearTimeout(pendingDTimerRef.current);
-          pendingDTimerRef.current = null;
-        }
-      }
-
-      if (event.key === "d") {
-        event.preventDefault();
-        if (pendingDRef.current) {
-          pendingDRef.current = false;
-          if (pendingDTimerRef.current !== null) {
-            window.clearTimeout(pendingDTimerRef.current);
-            pendingDTimerRef.current = null;
-          }
-          dispatch({ type: "deleteNode" });
-          return;
-        }
-
-        pendingDRef.current = true;
-        if (pendingDTimerRef.current !== null) {
-          window.clearTimeout(pendingDTimerRef.current);
-        }
-        pendingDTimerRef.current = window.setTimeout(() => {
-          pendingDRef.current = false;
-          pendingDTimerRef.current = null;
-        }, 600);
-        return;
-      }
-
-      if (!event.ctrlKey && !event.metaKey && !event.altKey && event.key === "c") {
-        event.preventDefault();
-        setNodeColorOpen(true);
-        return;
-      }
-
-      if (event.ctrlKey && (event.key === "t" || event.key === "T")) {
-        event.preventDefault();
-        dispatch({ type: "createDoc" });
-        return;
-      }
-      if (event.ctrlKey && (event.key === "w" || event.key === "W")) {
-        event.preventDefault();
-        dispatch({ type: "requestCloseActiveDoc" });
-        return;
-      }
-
-      if (event.ctrlKey && event.key === "Tab") {
-        event.preventDefault();
-        if (event.shiftKey) {
-          dispatch({ type: "switchDocPrev" });
-        } else {
-          dispatch({ type: "switchDocNext" });
-        }
-        return;
-      }
-
-      if (event.key === "Tab") {
-        event.preventDefault();
-        dispatch({ type: "addChildAndInsert" });
-        return;
-      }
-
-      if (event.key === "Enter") {
-        event.preventDefault();
-        dispatch({ type: "addSiblingAndInsert" });
-        return;
-      }
-
-      if (event.key === "Escape") {
-        event.preventDefault();
-        dispatch({ type: "commitInsert" });
-        return;
-      }
-
-      if (!event.ctrlKey && !event.metaKey && !event.altKey && event.key.toLowerCase() === "f") {
-        event.preventDefault();
-        openJump();
-        return;
-      }
-
-      if (event.key === "i") {
-        event.preventDefault();
-        dispatch({ type: "enterInsert" });
-        return;
-      }
-
-      if (event.key === "h") {
-        event.preventDefault();
-        dispatch({ type: "moveCursor", direction: "parent" });
-        return;
-      }
-      if (event.key === "l") {
-        event.preventDefault();
-        dispatch({ type: "moveCursor", direction: "child" });
-        return;
-      }
-      if (event.key === "j") {
-        event.preventDefault();
-        dispatch({ type: "moveCursor", direction: "nextSibling" });
-        return;
-      }
-      if (event.key === "k") {
-        event.preventDefault();
-        dispatch({ type: "moveCursor", direction: "prevSibling" });
-        return;
-      }
-      if (event.key === "J") {
-        event.preventDefault();
-        dispatch({ type: "swapSibling", direction: "down" });
-        return;
-      }
-      if (event.key === "K") {
-        event.preventDefault();
-        dispatch({ type: "swapSibling", direction: "up" });
-        return;
-      }
-      if (event.key === "H") {
-        event.preventDefault();
-        dispatch({ type: "reparentNode", direction: "left" });
-        return;
-      }
-      if (event.key === "L") {
-        event.preventDefault();
-        dispatch({ type: "reparentNode", direction: "right" });
-        return;
-      }
-
-      if (event.key === "u") {
-        event.preventDefault();
-        dispatch({ type: "undo" });
-        return;
-      }
-      if (event.ctrlKey && event.key === "r") {
-        event.preventDefault();
-        dispatch({ type: "redo" });
+      if (
+        handleNormalModeKeys({
+          event,
+          dispatch,
+          openJump,
+          openNodeColor: () => setNodeColorOpen(true),
+          consumeDeleteChord,
+        })
+      ) {
         return;
       }
     };
@@ -573,11 +398,12 @@ function App() {
     };
   }, [
     handleJumpKey,
-    closeJump,
+    consumeDeleteChord,
     helpOpen,
     nodeColorOpen,
     openJump,
     paletteOpen,
+    resetPendingDelete,
     searchOpen,
     state.closeConfirmDocId,
     state.hydrated,
