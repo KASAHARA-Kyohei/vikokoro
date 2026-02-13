@@ -142,6 +142,24 @@ function bumpSaveRevision(state: EditorAppState): EditorAppState {
   return { ...state, saveRevision: state.saveRevision + 1 };
 }
 
+function applyInNormalMode(
+  state: EditorAppState,
+  updater: (state: EditorAppState) => EditorAppState,
+): EditorAppState {
+  if (state.mode === "insert") return state;
+  return updater(state);
+}
+
+function applyDocMutation(
+  state: EditorAppState,
+  updater: (doc: Document) => Document,
+): EditorAppState {
+  if (state.mode === "insert") return state;
+  const next = updateActiveDoc(state, updater);
+  if (next === state) return state;
+  return bumpSaveRevision(next);
+}
+
 function sanitizeWorkspace(workspace: Workspace): Workspace {
   const tabs = workspace.tabs.filter(
     (tab) => Boolean(tab.docId) && Boolean(workspace.documents[tab.docId]),
@@ -413,57 +431,61 @@ export function editorReducer(state: EditorAppState, action: EditorAction): Edit
       };
     }
     case "setActiveDoc": {
-      if (state.mode === "insert") return state;
-      if (!state.workspace.documents[action.docId]) return state;
-      if (action.docId === state.workspace.activeDocId) return state;
-      return bumpSaveRevision({
-        ...state,
-        workspace: {
-          ...state.workspace,
-          activeDocId: action.docId,
-        },
+      return applyInNormalMode(state, (current) => {
+        if (!current.workspace.documents[action.docId]) return current;
+        if (action.docId === current.workspace.activeDocId) return current;
+        return bumpSaveRevision({
+          ...current,
+          workspace: {
+            ...current.workspace,
+            activeDocId: action.docId,
+          },
+        });
       });
     }
     case "switchDocNext": {
-      if (state.mode === "insert") return state;
-      const index = state.workspace.tabs.findIndex(
-        (tab) => tab.docId === state.workspace.activeDocId,
-      );
-      if (index === -1) return state;
-      const next = state.workspace.tabs[(index + 1) % state.workspace.tabs.length];
-      if (next.docId === state.workspace.activeDocId) return state;
-      return bumpSaveRevision({
-        ...state,
-        workspace: { ...state.workspace, activeDocId: next.docId },
+      return applyInNormalMode(state, (current) => {
+        const index = current.workspace.tabs.findIndex(
+          (tab) => tab.docId === current.workspace.activeDocId,
+        );
+        if (index === -1) return current;
+        const next = current.workspace.tabs[(index + 1) % current.workspace.tabs.length];
+        if (next.docId === current.workspace.activeDocId) return current;
+        return bumpSaveRevision({
+          ...current,
+          workspace: { ...current.workspace, activeDocId: next.docId },
+        });
       });
     }
     case "switchDocPrev": {
-      if (state.mode === "insert") return state;
-      const index = state.workspace.tabs.findIndex(
-        (tab) => tab.docId === state.workspace.activeDocId,
-      );
-      if (index === -1) return state;
-      const nextIndex = (index - 1 + state.workspace.tabs.length) % state.workspace.tabs.length;
-      const prev = state.workspace.tabs[nextIndex];
-      if (prev.docId === state.workspace.activeDocId) return state;
-      return bumpSaveRevision({
-        ...state,
-        workspace: { ...state.workspace, activeDocId: prev.docId },
+      return applyInNormalMode(state, (current) => {
+        const index = current.workspace.tabs.findIndex(
+          (tab) => tab.docId === current.workspace.activeDocId,
+        );
+        if (index === -1) return current;
+        const nextIndex = (index - 1 + current.workspace.tabs.length) % current.workspace.tabs.length;
+        const prev = current.workspace.tabs[nextIndex];
+        if (prev.docId === current.workspace.activeDocId) return current;
+        return bumpSaveRevision({
+          ...current,
+          workspace: { ...current.workspace, activeDocId: prev.docId },
+        });
       });
     }
     case "createDoc": {
-      if (state.mode === "insert") return state;
-      const created = createInitialDocument("");
-      return bumpSaveRevision({
-        ...state,
-        workspace: {
-          tabs: [...state.workspace.tabs, { docId: created.docId }],
-          activeDocId: created.docId,
-          documents: {
-            ...state.workspace.documents,
-            [created.docId]: created.doc,
+      return applyInNormalMode(state, (current) => {
+        const created = createInitialDocument("");
+        return bumpSaveRevision({
+          ...current,
+          workspace: {
+            tabs: [...current.workspace.tabs, { docId: created.docId }],
+            activeDocId: created.docId,
+            documents: {
+              ...current.workspace.documents,
+              [created.docId]: created.doc,
+            },
           },
-        },
+        });
       });
     }
     case "requestCloseActiveDoc": {
@@ -517,32 +539,20 @@ export function editorReducer(state: EditorAppState, action: EditorAction): Edit
       return bumpSaveRevision(next);
     }
     case "selectNode": {
-      if (state.mode === "insert") return state;
-      const next = updateActiveDoc(state, (doc) => {
+      return applyDocMutation(state, (doc) => {
         if (!doc.nodes[action.nodeId]) return doc;
         if (doc.cursorId === action.nodeId) return doc;
         return { ...doc, cursorId: action.nodeId };
       });
-      if (next === state) return state;
-      return bumpSaveRevision(next);
     }
     case "moveCursor": {
-      if (state.mode === "insert") return state;
-      const next = updateActiveDoc(state, (doc) => moveCursor(doc, action.direction));
-      if (next === state) return state;
-      return bumpSaveRevision(next);
+      return applyDocMutation(state, (doc) => moveCursor(doc, action.direction));
     }
     case "swapSibling": {
-      if (state.mode === "insert") return state;
-      const next = updateActiveDoc(state, (doc) => swapSibling(doc, action.direction));
-      if (next === state) return state;
-      return bumpSaveRevision(next);
+      return applyDocMutation(state, (doc) => swapSibling(doc, action.direction));
     }
     case "reparentNode": {
-      if (state.mode === "insert") return state;
-      const next = updateActiveDoc(state, (doc) => reparentNode(doc, action.direction));
-      if (next === state) return state;
-      return bumpSaveRevision(next);
+      return applyDocMutation(state, (doc) => reparentNode(doc, action.direction));
     }
     case "enterInsert": {
       if (state.mode === "insert") return state;
