@@ -1,0 +1,200 @@
+.editorCanvas {
+  position: relative;
+}
+
+.editorCanvasOuter {
+  position: relative;
+}
+
+.editorLines {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.edgePath {
+  fill: none;
+  stroke: var(--edge);
+  stroke-width: 1.2;
+}
+
+.edgePathSelected {
+  stroke: var(--edgeSelected);
+  stroke-width: 2;
+}
+
+.node {
+  animation: nodeIn 160ms ease both;
+  position: absolute;
+  z-index: 1;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  box-sizing: border-box;
+  user-select: none;
+  cursor: default;
+  transition:
+    left 140ms ease,
+    top 140ms ease,
+    background 120ms ease,
+    border-color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.nodeExiting {
+  pointer-events: none;
+  animation: nodeOut 160ms ease both;
+}
+
+@keyframes nodeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes nodeOut {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+}
+
+.node:hover {
+  background: var(--surfaceHover);
+}
+
+.nodeColor-blue {
+  border-color: color-mix(in srgb, #3b82f6 56%, var(--border));
+  background: color-mix(in srgb, #3b82f6 14%, var(--surface));
+}
+
+.nodeColor-blue:hover {
+  background: color-mix(in srgb, #3b82f6 18%, var(--surfaceHover));
+}
+
+.nodeColor-green {
+  border-color: color-mix(in srgb, #22c55e 56%, var(--border));
+  background: color-mix(in srgb, #22c55e 14%, var(--surface));
+}
+
+.nodeColor-green:hover {
+  background: color-mix(in srgb, #22c55e 18%, var(--surfaceHover));
+}
+
+.nodeColor-yellow {
+  border-color: color-mix(in srgb, #f59e0b 56%, var(--border));
+  background: color-mix(in srgb, #f59e0b 16%, var(--surface));
+}
+
+.nodeColor-yellow:hover {
+  background: color-mix(in srgb, #f59e0b 21%, var(--surfaceHover));
+}
+
+.nodeColor-pink {
+  border-color: color-mix(in srgb, #ec4899 56%, var(--border));
+  background: color-mix(in srgb, #ec4899 14%, var(--surface));
+}
+
+.nodeColor-pink:hover {
+  background: color-mix(in srgb, #ec4899 18%, var(--surfaceHover));
+}
+
+.nodeColor-gray {
+  border-color: color-mix(in srgb, #94a3b8 60%, var(--border));
+  background: color-mix(in srgb, #94a3b8 20%, var(--surface));
+}
+
+.nodeColor-gray:hover {
+  background: color-mix(in srgb, #94a3b8 25%, var(--surfaceHover));
+}
+
+.nodeColor-gray .nodeText {
+  color: color-mix(in srgb, var(--muted), var(--text) 35%);
+  text-decoration: line-through;
+  text-decoration-thickness: 1.5px;
+  text-decoration-color: color-mix(in srgb, var(--muted), transparent 20%);
+}
+
+.nodeMatch {
+  border-color: color-mix(in srgb, var(--accentBorder), var(--border) 60%);
+}
+
+.nodeMatchActive {
+  border-color: var(--accentBorder);
+  background: color-mix(in srgb, var(--accentBg), var(--surface) 60%);
+}
+
+.nodeText {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  width: 100%;
+  color: var(--text);
+}
+
+.nodeJumpDimmed {
+  opacity: 0.35;
+}
+
+.nodeJumpHint {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  min-height: 18px;
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--accentBorder), var(--border) 45%);
+  background: color-mix(in srgb, var(--accentBg), var(--surface) 35%);
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 10px;
+  line-height: 1;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
+}
+
+.nodeJumpHintMatched {
+  border-color: var(--accentBorder);
+  background: color-mix(in srgb, var(--accentBg), var(--surface) 18%);
+}
+
+.nodeSelected {
+  border: 2px solid var(--accent);
+  box-shadow: var(--shadowNodeSelected);
+}
+
+.nodeEditing {
+  opacity: 0.35;
+}
+
+.nodeInput {
+  position: absolute;
+  z-index: 2;
+  box-sizing: border-box;
+  border-radius: 8px;
+  border: 2px solid var(--accent);
+  background: var(--inputBg);
+  color: var(--text);
+  padding: 0 10px;
+  outline: none;
+  transition: left 140ms ease, top 140ms ease, background 120ms ease;
+}

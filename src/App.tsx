@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
-import "./App.css";
+import "./App.scss";
 import { executeKeyboardCommand } from "./app/keyboard/executeKeyboardCommand";
 import { resolveKeyboardCommand } from "./app/keyboard/resolveKeyboardCommand";
 import { useDeleteChord } from "./app/keyboard/useDeleteChord";

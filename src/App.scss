@@ -1,0 +1,130 @@
+@use "./styles/tokens";
+@use "./styles/shared";
+
+.appRoot {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.loading {
+  padding: 12px;
+  color: var(--muted);
+}
+
+.editorViewport {
+  position: relative;
+  flex: 1;
+  overflow: auto;
+  outline: none;
+}
+
+.editorViewportPannable,
+.editorViewportPannable .node {
+  cursor: grab;
+}
+
+.editorViewportPanning,
+.editorViewportPanning .node {
+  cursor: grabbing;
+}
+
+.editorViewportPanning {
+  user-select: none;
+}
+
+.statusBar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--statusBg);
+  border-top: 1px solid var(--divider);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.statusLeft,
+.statusRight {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.statusLeft {
+  min-width: 220px;
+}
+
+.statusRight {
+  flex: 1;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+}
+
+.statusLabel {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.statusValue {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.statusValueSaving {
+  color: var(--muted);
+}
+
+.statusDot {
+  opacity: 0.7;
+}
+
+.statusPill {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+}
+
+.statusPillNormal {
+  border-color: var(--accentBorder);
+  background: var(--accentBg);
+}
+
+.statusPillInsert {
+  border-color: var(--insertBorder);
+  background: var(--insertBg);
+  color: var(--insertText);
+}
+
+.statusPillJump {
+  border-color: var(--accentBorder);
+  background: color-mix(in srgb, var(--accentBg), var(--surface) 40%);
+  color: var(--text);
+}
+
+.statusHelpButton {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 4px 10px;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease, transform 90ms ease;
+}
+
+.statusHelpButton:hover {
+  background: var(--surfaceHover);
+}
+
+.statusHelpButton:active {
+  transform: translateY(0.5px);
+}
