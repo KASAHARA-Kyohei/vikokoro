@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "test:offline": "tsc -p tsconfig.test.json && node -e \"require('node:fs').writeFileSync('.tmp-tests/package.json','{\\\"type\\\":\\\"commonjs\\\"}\\\\n')\" && node --test tests/offline/*.test.cjs",
     "preview": "vite preview",
     "tauri": "tauri"
   },

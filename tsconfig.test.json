@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "CommonJS",
+    "moduleResolution": "node",
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": false,
+    "outDir": ".tmp-tests",
+    "rootDir": "."
+  },
+  "include": [
+    "src/editor/types.ts",
+    "src/editor/layout.ts",
+    "src/editor/domain/**/*.ts",
+    "src/features/jump/model.ts",
+    "src/features/search/model.ts"
+  ]
+}
