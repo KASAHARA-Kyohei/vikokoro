@@ -14,6 +14,9 @@
     "src/editor/layout.ts",
     "src/editor/domain/**/*.ts",
     "src/features/jump/model.ts",
-    "src/features/search/model.ts"
+    "src/features/search/model.ts",
+    "src/features/llm/schema.ts",
+    "src/features/llm/apply.ts",
+    "src/features/llm/preview.ts"
   ]
 }
