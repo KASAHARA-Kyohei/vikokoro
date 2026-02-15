@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import "./App.scss";
 import { executeKeyboardCommand } from "./app/keyboard/executeKeyboardCommand";
 import { resolveKeyboardCommand } from "./app/keyboard/resolveKeyboardCommand";
@@ -7,7 +7,23 @@ import { useEditorUiSession } from "./app/session/useEditorUiSession";
 import { EditorView } from "./editor/EditorView";
 import { TabBar } from "./editor/TabBar";
 import { createInitialAppState, editorReducer } from "./editor/state";
+import type { DocumentState } from "./editor/types";
 import { buildJumpSession } from "./features/jump/model";
+import {
+  applyImproveOperationsToDocument,
+  buildDocumentStateFromGeneratedTree,
+  documentToImproveDocumentState,
+} from "./features/llm/apply";
+import { buildImprovePreview, type LlmImprovePreview } from "./features/llm/preview";
+import {
+  parseGenerateRequest,
+  parseGenerateResponse,
+  parseAndValidateImproveResponse,
+  parseImproveRequest,
+  type GenerateRequest,
+  type ImproveRequest,
+} from "./features/llm/schema";
+import { parseErrorMessage, runLlmGenerate, runLlmImprove } from "./features/llm/settingsRepository";
 import { filterPaletteCommands, type PaletteCommand } from "./features/palette/model";
 import { buildSearchResults } from "./features/search/model";
 import { useTheme } from "./hooks/useTheme";
@@ -17,6 +33,8 @@ import { createTauriWorkspaceRepository } from "./persistence";
 import { CloseConfirmModal } from "./ui/modals/CloseConfirmModal";
 import { CommandPaletteModal } from "./ui/modals/CommandPaletteModal";
 import { HelpModal } from "./ui/modals/HelpModal";
+import { LlmAssistModal, type LlmAssistMode } from "./ui/modals/LlmAssistModal";
+import { LlmSettingsModal } from "./ui/modals/LlmSettingsModal";
 import { NodeColorModal } from "./ui/modals/NodeColorModal";
 import { SearchModal } from "./ui/modals/SearchModal";
 import { clamp } from "./utils/number";
@@ -44,6 +62,10 @@ function App() {
     setPaletteIndex,
     nodeColorOpen,
     setNodeColorOpen,
+    llmSettingsOpen,
+    setLlmSettingsOpen,
+    llmAssistOpen,
+    setLlmAssistOpen,
     jumpSession,
     setJumpSession,
     jumpPrefix,
@@ -55,6 +77,14 @@ function App() {
 
   const activeDoc = state.workspace.documents[state.workspace.activeDocId];
   const closeConfirmOpen = state.closeConfirmDocId !== null;
+  const [llmAssistMode, setLlmAssistMode] = useState<LlmAssistMode>("generate");
+  const [llmAssistRunning, setLlmAssistRunning] = useState(false);
+  const [llmAssistError, setLlmAssistError] = useState<string | null>(null);
+  const [pendingImproveApply, setPendingImproveApply] = useState<{
+    docId: string;
+    nextState: DocumentState;
+    preview: LlmImprovePreview;
+  } | null>(null);
 
   const openJump = useCallback(() => {
     const session = buildJumpSession(activeDoc);
@@ -67,7 +97,14 @@ function App() {
     activeDocId: state.workspace.activeDocId,
     mode: state.mode,
     disabled:
-      helpOpen || searchOpen || paletteOpen || nodeColorOpen || closeConfirmOpen || jumpActive,
+      helpOpen ||
+      searchOpen ||
+      paletteOpen ||
+      nodeColorOpen ||
+      llmSettingsOpen ||
+      llmAssistOpen ||
+      closeConfirmOpen ||
+      jumpActive,
     viewportRef,
   });
 
@@ -91,6 +128,129 @@ function App() {
     if (searchResults.length === 0) return null;
     return new Set(searchResults.map((r) => r.nodeId));
   }, [searchOpen, searchResults]);
+
+  const formatValidationErrors = (errors: string[]): string => {
+    return errors.slice(0, 3).join("\n");
+  };
+
+  const clearImprovePreview = useCallback(() => {
+    setPendingImproveApply(null);
+  }, []);
+
+  const applyImprovePreview = useCallback(() => {
+    if (!pendingImproveApply) return;
+    dispatch({
+      type: "applyDocumentState",
+      docId: pendingImproveApply.docId,
+      nextState: pendingImproveApply.nextState,
+    });
+    setPendingImproveApply(null);
+    setLlmAssistOpen(false);
+  }, [dispatch, pendingImproveApply, setLlmAssistOpen]);
+
+  const runLlmAssist = useCallback(
+    async (input: string) => {
+      const docId = state.workspace.activeDocId;
+      const doc = state.workspace.documents[docId];
+      if (!doc) {
+        setLlmAssistError("アクティブドキュメントが見つかりません。");
+        return;
+      }
+
+      setLlmAssistRunning(true);
+      setLlmAssistError(null);
+      if (llmAssistMode === "improve") {
+        setPendingImproveApply(null);
+      }
+      try {
+        if (llmAssistMode === "generate") {
+          const request: GenerateRequest = {
+            version: "1",
+            mode: "generate",
+            topic: input,
+            language: "ja",
+            maxDepth: 4,
+            maxChildrenPerNode: 6,
+            style: "balanced",
+            constraints: {
+              avoidAbstractOnly: true,
+              preferActionable: true,
+            },
+          };
+          const parsedRequest = parseGenerateRequest(request);
+          if (!parsedRequest.ok) {
+            throw new Error(formatValidationErrors(parsedRequest.errors));
+          }
+          const rawResponse = await runLlmGenerate(parsedRequest.value);
+          const parsedResponse = parseGenerateResponse(rawResponse);
+          if (!parsedResponse.ok) {
+            throw new Error(formatValidationErrors(parsedResponse.errors));
+          }
+
+          const nextState = buildDocumentStateFromGeneratedTree(parsedResponse.value.root);
+          dispatch({ type: "applyDocumentState", docId, nextState });
+          setPendingImproveApply(null);
+          setLlmAssistOpen(false);
+          return;
+        }
+
+        const improveDocument = documentToImproveDocumentState(doc);
+        const request: ImproveRequest = {
+          version: "1",
+          mode: "improve",
+          goal: input,
+          document: improveDocument,
+          constraints: {
+            maxAdditions: 20,
+            keepExistingText: true,
+            allowReparent: true,
+            allowDelete: true,
+          },
+        };
+        const parsedRequest = parseImproveRequest(request);
+        if (!parsedRequest.ok) {
+          throw new Error(formatValidationErrors(parsedRequest.errors));
+        }
+
+        const rawResponse = await runLlmImprove(parsedRequest.value);
+        const parsedResponse = parseAndValidateImproveResponse(rawResponse, improveDocument);
+        if (!parsedResponse.ok) {
+          throw new Error(formatValidationErrors(parsedResponse.errors));
+        }
+
+        const applied = applyImproveOperationsToDocument(
+          improveDocument,
+          parsedResponse.value.operations,
+        );
+        if (!applied.ok) {
+          throw new Error(formatValidationErrors(applied.errors));
+        }
+
+        const preview = buildImprovePreview(
+          parsedResponse.value.summary,
+          parsedResponse.value.warnings,
+          parsedResponse.value.operations,
+          improveDocument,
+        );
+        setPendingImproveApply({
+          docId,
+          nextState: applied.value,
+          preview,
+        });
+      } catch (error) {
+        setLlmAssistError(parseErrorMessage(error));
+      } finally {
+        setLlmAssistRunning(false);
+      }
+    },
+    [
+      dispatch,
+      llmAssistMode,
+      setLlmAssistOpen,
+      state.workspace.activeDocId,
+      state.workspace.documents,
+    ],
+  );
 
   const paletteItems = useMemo(() => {
     const commands: PaletteCommand[] = [
@@ -125,6 +285,35 @@ function App() {
         },
       },
       {
+        id: "llm-settings",
+        title: "LLM settings",
+        subtitle: "Gemini API key / model",
+        run: () => {
+          setLlmSettingsOpen(true);
+          setPaletteOpen(false);
+        },
+      },
+      {
+        id: "llm-generate",
+        title: "LLM generate map",
+        subtitle: "Replace current map from a topic",
+        run: () => {
+          setLlmAssistMode("generate");
+          setLlmAssistOpen(true);
+          setPaletteOpen(false);
+        },
+      },
+      {
+        id: "llm-improve",
+        title: "LLM improve map",
+        subtitle: "Apply improvement diff to current map",
+        run: () => {
+          setLlmAssistMode("improve");
+          setLlmAssistOpen(true);
+          setPaletteOpen(false);
+        },
+      },
+      {
         id: "move-node-left",
         title: "Move node left",
         subtitle: "Shift+H (outdent)",
@@ -145,11 +334,32 @@ function App() {
     ];
 
     return filterPaletteCommands(commands, paletteQuery);
-  }, [cycleTheme, dispatch, paletteQuery, setHelpOpen, setPaletteOpen, setSearchOpen]);
+  }, [
+    cycleTheme,
+    dispatch,
+    paletteQuery,
+    setHelpOpen,
+    setLlmAssistMode,
+    setLlmAssistOpen,
+    setLlmSettingsOpen,
+    setPaletteOpen,
+    setSearchOpen,
+  ]);
 
   useEffect(() => {
     setSearchIndex(0);
   }, [searchQuery, setSearchIndex, state.workspace.activeDocId]);
+
+  useEffect(() => {
+    if (!llmAssistOpen) {
+      setLlmAssistError(null);
+      setLlmAssistRunning(false);
+      setPendingImproveApply(null);
+    }
+    if (llmAssistMode !== "improve") {
+      setPendingImproveApply(null);
+    }
+  }, [llmAssistOpen, llmAssistMode]);
 
   useEffect(() => {
     setPaletteIndex(0);
@@ -196,6 +406,8 @@ function App() {
       searchOpen ||
       paletteOpen ||
       nodeColorOpen ||
+      llmSettingsOpen ||
+      llmAssistOpen ||
       closeConfirmOpen
     ) {
       closeJump();
@@ -205,6 +417,8 @@ function App() {
     closeConfirmOpen,
     helpOpen,
     jumpSession,
+    llmSettingsOpen,
+    llmAssistOpen,
     nodeColorOpen,
     paletteOpen,
     searchOpen,
@@ -261,6 +475,8 @@ function App() {
         !searchOpen &&
         !paletteOpen &&
         !nodeColorOpen &&
+        !llmSettingsOpen &&
+        !llmAssistOpen &&
         !closeConfirmOpen &&
         !jumpActive;
 
@@ -287,6 +503,8 @@ function App() {
           searchOpen,
           paletteOpen,
           nodeColorOpen,
+          llmSettingsOpen,
+          llmAssistOpen,
           closeConfirmOpen,
           jumpSession,
           jumpPrefix,
@@ -316,6 +534,8 @@ function App() {
         setPaletteQuery,
         setPaletteIndex,
         setNodeColorOpen,
+        setLlmSettingsOpen,
+        setLlmAssistOpen,
         setJumpPrefix,
         openJump,
         closeJump,
@@ -336,12 +556,16 @@ function App() {
     jumpPrefix,
     jumpSession,
     nodeColorOpen,
+    llmSettingsOpen,
+    llmAssistOpen,
     openJump,
     paletteOpen,
     searchOpen,
     setHelpOpen,
     setJumpPrefix,
     setNodeColorOpen,
+    setLlmSettingsOpen,
+    setLlmAssistOpen,
     setPaletteIndex,
     setPaletteOpen,
     setPaletteQuery,
@@ -446,6 +670,19 @@ function App() {
           }}
           onClose={() => setNodeColorOpen(false)}
         />
+        <LlmAssistModal
+          open={llmAssistOpen}
+          mode={llmAssistMode}
+          running={llmAssistRunning}
+          errorMessage={llmAssistError}
+          improvePreview={llmAssistMode === "improve" ? pendingImproveApply?.preview ?? null : null}
+          onChangeMode={setLlmAssistMode}
+          onRun={runLlmAssist}
+          onApplyImprovePreview={applyImprovePreview}
+          onClearImprovePreview={clearImprovePreview}
+          onClose={() => setLlmAssistOpen(false)}
+        />
+        <LlmSettingsModal open={llmSettingsOpen} onClose={() => setLlmSettingsOpen(false)} />
         <HelpModal open={helpOpen} onClose={() => setHelpOpen(false)} />
       </div>
       <div className="statusBar">
@@ -477,6 +714,27 @@ function App() {
           ) : null}
         </div>
         <div className="statusRight">
+          <button
+            type="button"
+            className="statusHelpButton"
+            onMouseDown={(e) => {
+              e.preventDefault();
+              setLlmAssistMode("generate");
+              setLlmAssistOpen(true);
+            }}
+          >
+            AI
+          </button>
+          <button
+            type="button"
+            className="statusHelpButton"
+            onMouseDown={(e) => {
+              e.preventDefault();
+              setLlmSettingsOpen(true);
+            }}
+          >
+            LLM
+          </button>
           <button
             type="button"
             className="statusHelpButton"

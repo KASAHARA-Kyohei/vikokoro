@@ -50,6 +50,9 @@
   - `Move node left`
   - `Move node right`
   - `New tab`, `Close tab`, `Search`, `Help`, `Cycle theme`
+- LLM settings: Gemini の API key / model 設定、接続テスト
+- LLM assist: `Generate`（現在タブを再生成） / `Improve`（差分適用）
+  - `Improve` は適用前に差分プレビュー（操作件数/要約/警告/変更リスト）を表示
 
 ## 5. データと永続化
 
@@ -73,3 +76,7 @@
 - 新機能着手前に、まずこの `docs/CURRENT_SPEC.md` を仕様基準として読む
 - 仕様変更時は、実装と同じPRでこのファイルを更新する
 - 大きな変更時のみ `docs/milestones/*.md` も同期する
+
+## 8. LLM連携の下書き
+
+- マインドマップ生成/改善の入出力スキーマ案は `docs/LLM_SCHEMA.md` を参照

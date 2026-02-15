@@ -113,6 +113,14 @@ export function HelpModal({ open, onClose }: Props) {
               <div className="helpDesc">Command palette</div>
             </div>
             <div className="helpRow">
+              <div className="helpKeys">LLM</div>
+              <div className="helpDesc">Open LLM settings modal</div>
+            </div>
+            <div className="helpRow">
+              <div className="helpKeys">AI</div>
+              <div className="helpDesc">Open LLM assist modal (Generate / Improve)</div>
+            </div>
+            <div className="helpRow">
               <div className="helpKeys">
                 <kbd>Ctrl</kbd> + <kbd>Wheel</kbd>
               </div>
