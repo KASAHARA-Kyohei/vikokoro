@@ -1,0 +1,322 @@
+.llmAssistModal {
+  width: min(620px, calc(100% - 32px));
+  max-height: calc(100vh - 32px);
+  display: flex;
+  flex-direction: column;
+}
+
+.llmAssistModal .modalBody {
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.llmAssistModeRow {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 3px;
+  margin-bottom: 10px;
+}
+
+.llmAssistModeButton {
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  border-radius: 8px;
+  padding: 5px 10px;
+  cursor: pointer;
+}
+
+.llmAssistModeButtonActive {
+  border-color: var(--accentBorder);
+  background: var(--accentBg);
+  color: var(--text);
+}
+
+.llmAssistField {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.llmAssistLabel {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.llmAssistTextarea {
+  width: 100%;
+  min-height: 112px;
+  resize: vertical;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--inputBg);
+  color: var(--text);
+  padding: 10px;
+  line-height: 1.45;
+  outline: none;
+}
+
+.llmAssistFeedback {
+  margin-top: 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  padding: 8px 10px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.llmAssistFeedback-error {
+  border-color: var(--dangerBorder);
+  background: var(--dangerBg);
+  color: var(--text);
+}
+
+.llmAssistFeedback-muted {
+  color: var(--muted);
+}
+
+.llmAssistRunningBox {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-radius: 10px;
+  border: 1px solid var(--accentBorder);
+  background: var(--accentBg);
+  padding: 10px 12px;
+}
+
+.llmAssistSpinner {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  border: 2px solid color-mix(in srgb, var(--accentBorder), transparent 35%);
+  border-top-color: var(--text);
+  animation: llmAssistSpin 0.85s linear infinite;
+  flex: 0 0 auto;
+}
+
+.llmAssistRunningTitle {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.llmAssistRunningText {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.llmPreviewBox {
+  margin-top: 10px;
+  border-radius: 10px;
+  border: 1px solid var(--accentBorder);
+  background: var(--accentBg);
+  padding: 9px 10px;
+}
+
+.llmPreviewTitle {
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+
+.llmPreviewSummary {
+  color: var(--text);
+  line-height: 1.4;
+}
+
+.llmPreviewCounts {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.llmPreviewChanges {
+  margin-top: 8px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  padding: 7px 8px;
+}
+
+.llmPreviewGroup + .llmPreviewGroup {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border);
+}
+
+.llmPreviewGroupLabel {
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 5px;
+}
+
+.llmPreviewChangeItem {
+  font-size: 12px;
+  color: var(--text);
+  line-height: 1.4;
+}
+
+.llmPreviewChangeItem + .llmPreviewChangeItem {
+  margin-top: 4px;
+}
+
+.llmPreviewChangeMore {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.llmPreviewChangeMeta {
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+}
+
+.llmPreviewWarnings {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.llmReviewBox {
+  margin-top: 10px;
+  border-radius: 10px;
+  border: 1px solid var(--accentBorder);
+  background: var(--accentBg);
+  padding: 10px;
+}
+
+.llmReviewSummary {
+  color: var(--text);
+  line-height: 1.45;
+}
+
+.llmReviewSection {
+  margin-top: 10px;
+}
+
+.llmReviewSectionTitle {
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.llmReviewList {
+  display: grid;
+  gap: 4px;
+}
+
+.llmReviewListItem {
+  font-size: 12px;
+  color: var(--text);
+  line-height: 1.45;
+}
+
+.llmReviewFindings {
+  display: grid;
+  gap: 8px;
+}
+
+.llmReviewFinding {
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  padding: 8px;
+}
+
+.llmReviewFindingHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.llmReviewSeverity {
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border: 1px solid var(--border);
+}
+
+.llmReviewSeverity-high {
+  border-color: var(--dangerBorder);
+  background: var(--dangerBg);
+  color: var(--text);
+}
+
+.llmReviewSeverity-medium {
+  border-color: var(--accentBorder);
+  background: var(--accentBg);
+  color: var(--text);
+}
+
+.llmReviewSeverity-low {
+  border-color: var(--border);
+  background: var(--surfaceHover);
+  color: var(--text);
+}
+
+.llmReviewFindingTitle {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.llmReviewFindingDetail,
+.llmReviewFindingSuggestion {
+  margin-top: 6px;
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.llmReviewRefs {
+  margin-top: 7px;
+  display: grid;
+  gap: 6px;
+}
+
+.llmReviewRef {
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--inputBg);
+  padding: 6px 7px;
+}
+
+.llmReviewRefTitle {
+  color: var(--text);
+  font-size: 12px;
+}
+
+.llmReviewRefPath,
+.llmReviewEmpty {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+@keyframes llmAssistSpin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}

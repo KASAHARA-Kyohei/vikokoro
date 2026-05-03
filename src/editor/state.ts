@@ -51,6 +51,7 @@ export type EditorAction =
   | { type: "setCursorColor"; color: NodeColor | null }
   | { type: "commitInsertAndContinue" }
   | { type: "commitInsert" }
+  | { type: "applyDocumentState"; docId: DocId; nextState: DocumentState }
   | { type: "undo" }
   | { type: "redo" };
 
@@ -102,9 +103,13 @@ function sanitizeWorkspace(workspace: Workspace): Workspace {
   };
 }
 
-function updateActiveDoc(state: EditorAppState, updater: (doc: Document) => Document): EditorAppState {
-  const docId = state.workspace.activeDocId;
+function updateDocById(
+  state: EditorAppState,
+  docId: DocId,
+  updater: (doc: Document) => Document,
+): EditorAppState {
   const current = state.workspace.documents[docId];
+  if (!current) return state;
   const updated = updater(current);
   if (updated === current) {
     return state;
@@ -119,6 +124,10 @@ function updateActiveDoc(state: EditorAppState, updater: (doc: Document) => Docu
       },
     },
   };
+}
+
+function updateActiveDoc(state: EditorAppState, updater: (doc: Document) => Document): EditorAppState {
+  return updateDocById(state, state.workspace.activeDocId, updater);
 }
 
 export function editorReducer(state: EditorAppState, action: EditorAction): EditorAppState {
@@ -224,6 +233,37 @@ export function editorReducer(state: EditorAppState, action: EditorAction): Edit
           documents: restDocuments,
         },
       });
+    }
+    case "applyDocumentState": {
+      if (state.mode === "insert") return state;
+
+      const next = updateDocById(state, action.docId, (doc) => {
+        const rootNode = action.nextState.nodes[action.nextState.rootId];
+        if (!rootNode || rootNode.parentId !== null) return doc;
+
+        const cursorId = action.nextState.nodes[action.nextState.cursorId]
+          ? action.nextState.cursorId
+          : action.nextState.rootId;
+        if (!action.nextState.nodes[cursorId]) return doc;
+
+        const normalizedNext: DocumentState = cloneDocumentState({
+          rootId: action.nextState.rootId,
+          cursorId,
+          nodes: action.nextState.nodes,
+        });
+        const currentSnapshot = cloneDocumentState(doc);
+        if (documentStateEquals(currentSnapshot, normalizedNext)) return doc;
+
+        return {
+          ...doc,
+          ...normalizedNext,
+          undoStack: [...doc.undoStack, currentSnapshot],
+          redoStack: [],
+        };
+      });
+
+      if (next === state) return state;
+      return bumpSaveRevision(next);
     }
     case "deleteNode": {
       if (state.mode === "insert") return state;

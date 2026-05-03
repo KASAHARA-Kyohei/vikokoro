@@ -44,3 +44,9 @@ test("buildSearchResults: long path uses ellipsis", () => {
   assert.equal(results[0].nodeId, "a4");
   assert.equal(results[0].subtitle.includes("…"), true);
 });
+
+test("buildSearchResults: supports Japanese UI labels", () => {
+  const results = buildSearchResults(makeDoc(), "alpha", "ja");
+  assert.equal(results.length, 5);
+  assert.equal(results[0].subtitle.startsWith("パス:"), true);
+});

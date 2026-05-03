@@ -75,6 +75,26 @@ export function resolveKeyboardCommand(
     return { preventDefault: true, command: { type: "preventOnly" } };
   }
 
+  if (ctx.settingsOpen) {
+    if (key === "Escape") {
+      return { preventDefault: true, command: { type: "setSettingsOpen", open: false } };
+    }
+    if (ctrlKey && (key === "w" || key === "t" || key === "Tab")) {
+      return { preventDefault: true, command: { type: "preventOnly" } };
+    }
+    return { preventDefault: true, command: { type: "preventOnly" } };
+  }
+
+  if (ctx.llmAssistOpen) {
+    if (key === "Escape") {
+      return { preventDefault: true, command: { type: "setLlmAssistOpen", open: false } };
+    }
+    if (ctrlKey && (key === "w" || key === "t" || key === "Tab")) {
+      return { preventDefault: true, command: { type: "preventOnly" } };
+    }
+    return { preventDefault: true, command: { type: "preventOnly" } };
+  }
+
   if (ctx.closeConfirmOpen) {
     if (key === "y" || key === "Y") {
       return { preventDefault: true, command: { type: "dispatch", action: { type: "closeActiveDoc" } } };

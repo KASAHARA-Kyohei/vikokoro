@@ -1,5 +1,6 @@
 import type { DocId, Document, Mode, Tab } from "./types";
-import type { ThemeName } from "../hooks/useTheme";
+import type { AppLanguage } from "../hooks/useAppPreferences";
+import { APP_TEXT } from "../i18n/uiText";
 import "./TabBar.scss";
 
 type Props = {
@@ -10,22 +11,15 @@ type Props = {
   disabled: boolean;
   onSelect: (docId: DocId) => void;
   onNew: () => void;
-  theme: ThemeName;
-  onCycleTheme: () => void;
+  language: AppLanguage;
 };
 
-function getTabTitle(doc: Document | undefined): string {
-  if (!doc) return "(missing)";
+function getTabTitle(doc: Document | undefined, language: AppLanguage): string {
+  const labels = APP_TEXT[language].tabs;
+  if (!doc) return labels.missing;
   const root = doc.nodes[doc.rootId];
-  const text = root?.text ?? "";
-  return text.trim() === "" ? "Untitled" : text;
-}
-
-function getThemeLabel(theme: ThemeName): string {
-  if (theme === "dark") return "Dark";
-  if (theme === "light") return "Light";
-  if (theme === "ivory") return "Ivory";
-  return "Tokyo Night";
+  const rootText = root?.text ?? "";
+  return rootText.trim() === "" ? labels.untitled : rootText;
 }
 
 export function TabBar({
@@ -36,15 +30,14 @@ export function TabBar({
   disabled,
   onSelect,
   onNew,
-  theme,
-  onCycleTheme,
+  language,
 }: Props) {
   return (
     <div className="tabBar">
       <div className="tabList">
         {tabs.map((tab) => {
           const isActive = tab.docId === activeDocId;
-          const title = getTabTitle(documents[tab.docId]);
+          const title = getTabTitle(documents[tab.docId], language);
           return (
             <button
               key={tab.docId}
@@ -62,17 +55,6 @@ export function TabBar({
         })}
       </div>
       <div className="tabActions">
-        <button
-          className="tabTheme"
-          onMouseDown={(e) => {
-            e.preventDefault();
-            if (disabled || mode === "insert") return;
-            onCycleTheme();
-          }}
-          type="button"
-        >
-          Theme: {getThemeLabel(theme)}
-        </button>
         <button
           className="tabNew"
           onMouseDown={(e) => {

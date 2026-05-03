@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import type { AppLanguage } from "../../hooks/useAppPreferences";
 import "./CommandPaletteModal.scss";
 
 export type PaletteItem = {
@@ -9,6 +10,7 @@ export type PaletteItem = {
 
 type Props = {
   open: boolean;
+  language: AppLanguage;
   query: string;
   activeIndex: number;
   items: PaletteItem[];
@@ -21,6 +23,7 @@ type Props = {
 
 export function CommandPaletteModal({
   open,
+  language,
   query,
   activeIndex,
   items,
@@ -31,6 +34,24 @@ export function CommandPaletteModal({
   onClose,
 }: Props) {
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const text =
+    language === "ja"
+      ? {
+          title: "コマンドパレット",
+          placeholder: "コマンドを入力...",
+          count: `${items.length} 件`,
+          listLabel: "コマンド一覧",
+          run: "実行 (Enter)",
+          close: "閉じる (Esc)",
+        }
+      : {
+          title: "Command palette",
+          placeholder: "Type a command...",
+          count: `${items.length} commands`,
+          listLabel: "Commands",
+          run: "Run (Enter)",
+          close: "Close (Esc)",
+        };
 
   useEffect(() => {
     if (!open) return;
@@ -47,6 +68,7 @@ export function CommandPaletteModal({
     <div
       className="modalOverlay"
       onMouseDown={(e) => {
+        if (e.target !== e.currentTarget) return;
         e.preventDefault();
         onClose();
       }}
@@ -54,17 +76,17 @@ export function CommandPaletteModal({
       <div
         className="modal paletteModal"
         onMouseDown={(e) => {
-          e.preventDefault();
+          e.stopPropagation();
         }}
       >
-        <div className="modalTitle">Command palette</div>
+        <div className="modalTitle">{text.title}</div>
         <div className="modalBody">
           <div className="paletteBar">
             <input
               ref={inputRef}
               className="paletteInput"
               value={query}
-              placeholder="Type a command…"
+              placeholder={text.placeholder}
               onChange={(e) => onChangeQuery(e.currentTarget.value)}
               onKeyDown={(e) => {
                 if (e.key === "Escape") {
@@ -88,10 +110,10 @@ export function CommandPaletteModal({
                 }
               }}
             />
-            <div className="paletteMeta">{items.length} commands</div>
+            <div className="paletteMeta">{text.count}</div>
           </div>
 
-          <div className="paletteList" role="listbox" aria-label="Commands">
+          <div className="paletteList" role="listbox" aria-label={text.listLabel}>
             {items.map((item, idx) => {
               const isActive = idx === activeIndex;
               return (
@@ -123,7 +145,7 @@ export function CommandPaletteModal({
             }}
             disabled={items.length === 0}
           >
-            Run (Enter)
+            {text.run}
           </button>
           <button
             type="button"
@@ -133,7 +155,7 @@ export function CommandPaletteModal({
               onClose();
             }}
           >
-            Close (Esc)
+            {text.close}
           </button>
         </div>
       </div>

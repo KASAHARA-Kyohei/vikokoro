@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef } from "react";
 import type { NodeId } from "../../editor/types";
+import type { AppLanguage } from "../../hooks/useAppPreferences";
 import "./SearchModal.scss";
 
 export type SearchResultItem = {
@@ -10,6 +11,7 @@ export type SearchResultItem = {
 
 type Props = {
   open: boolean;
+  language: AppLanguage;
   query: string;
   results: SearchResultItem[];
   activeIndex: number;
@@ -23,6 +25,7 @@ type Props = {
 
 export function SearchModal({
   open,
+  language,
   query,
   results,
   activeIndex,
@@ -34,6 +37,28 @@ export function SearchModal({
   onClose,
 }: Props) {
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const text =
+    language === "ja"
+      ? {
+          title: "検索",
+          placeholder: "ノードを検索...",
+          emptyCount: "0 件",
+          resultLabel: (index: number, total: number) => `${index}/${total}`,
+          listLabel: "検索結果",
+          prev: "前へ (Shift+Enter)",
+          next: "次へ (Enter)",
+          close: "閉じる (Esc)",
+        }
+      : {
+          title: "Search",
+          placeholder: "Type to search nodes...",
+          emptyCount: "0 results",
+          resultLabel: (index: number, total: number) => `${index}/${total}`,
+          listLabel: "Search results",
+          prev: "Prev (Shift+Enter)",
+          next: "Next (Enter)",
+          close: "Close (Esc)",
+        };
 
   useEffect(() => {
     if (!open) return;
@@ -56,6 +81,7 @@ export function SearchModal({
     <div
       className="modalOverlay"
       onMouseDown={(e) => {
+        if (e.target !== e.currentTarget) return;
         e.preventDefault();
         onClose();
       }}
@@ -63,17 +89,17 @@ export function SearchModal({
       <div
         className="modal searchModal"
         onMouseDown={(e) => {
-          e.preventDefault();
+          e.stopPropagation();
         }}
       >
-        <div className="modalTitle">Search</div>
+        <div className="modalTitle">{text.title}</div>
         <div className="modalBody">
           <div className="searchBar">
             <input
               ref={inputRef}
               className="searchInput"
               value={query}
-              placeholder="Type to search nodes…"
+              placeholder={text.placeholder}
               onChange={(e) => onChangeQuery(e.currentTarget.value)}
               onKeyDown={(e) => {
                 if (e.key === "Escape") {
@@ -92,12 +118,14 @@ export function SearchModal({
               }}
             />
             <div className="searchMeta">
-              {results.length === 0 ? "0 results" : `${activeIndex + 1}/${results.length}`}
+              {results.length === 0
+                ? text.emptyCount
+                : text.resultLabel(activeIndex + 1, results.length)}
             </div>
           </div>
 
           {results.length > 0 ? (
-            <div className="searchList" role="listbox" aria-label="Search results">
+            <div className="searchList" role="listbox" aria-label={text.listLabel}>
               {results.slice(listStart, listStart + 8).map((result) => {
                 const isActive = result.nodeId === activeNodeId;
                 return (
@@ -130,7 +158,7 @@ export function SearchModal({
             }}
             disabled={results.length === 0}
           >
-            Prev (Shift+Enter)
+            {text.prev}
           </button>
           <button
             type="button"
@@ -141,7 +169,7 @@ export function SearchModal({
             }}
             disabled={results.length === 0}
           >
-            Next (Enter)
+            {text.next}
           </button>
           <button
             type="button"
@@ -151,7 +179,7 @@ export function SearchModal({
               onClose();
             }}
           >
-            Close (Esc)
+            {text.close}
           </button>
         </div>
       </div>
