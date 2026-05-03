@@ -27,6 +27,10 @@ Vimライクな **Normal / Insert** モードでノードの追加・移動・�
 - テーマ切替（Dark / Light / Ivory / Tokyo Night）
 - ズーム（`Ctrl + Wheel`） / パン（`Space + Drag`）
 - ローカル永続化（Tauri起動時のみ）
+- LLM設定モーダル（`LLM`）で Gemini の provider/model/API key を設定し接続テスト
+- LLM支援モーダル（`AI`）
+  - `Generate`: 現在タブを生成結果で置き換え
+  - `Improve`: 差分プレビューを表示し、`Apply` で反映
 
 
 ## 使い方（操作）
@@ -56,6 +60,15 @@ Vimライクな **Normal / Insert** モードでノードの追加・移動・�
   - 日本語IMEで変換を使った入力の場合は、変換確定の都合で「Enterが2段階」になることがあります
     （英数入力では1回で確定する想定です）
 
+LLM（Tauri起動時）:
+
+- ステータスバーまたはコマンドパレットから `LLM` を開く
+- `Provider` / `Model` を選び、APIキーを貼り付けて `Save`
+- `Test Connection` で確認（APIクォータを消費します）
+- `AI` を開いて実行
+  - `Generate`: トピックから新規マップを生成
+  - `Improve`: まずプレビュー、`Apply` 押下で反映
+
 
 ## データ保存について
 
@@ -63,6 +76,10 @@ Tauri起動時（`npm run tauri dev` / `npm run tauri build` で起動したア�
 
 - 保存先: OSごとの AppData 配下の `workspace.json`
   - Tauri側で `BaseDirectory::AppData` を使用
+- LLM設定の保存先: AppData 配下の `llm_settings.json`
+- APIキーの保存先:
+  - 優先: OSの認証情報ストレージ（keyring）
+  - フォールバック: keyringが使えない環境では `llm_settings.json`
 - ブラウザ起動（`npm run dev`）では `invoke` が使えないため、永続化は無効（UIは `Local` 表示）
 
 
@@ -134,6 +151,18 @@ spctl --assess --verbose=4 "/Applications/vikokoro.app"
 
 Viteの要件により Node.js のバージョンが古いと警告が出ます。
 `node -v` を確認し、必要なら `22.12+` または `20.19+` に上げてください。
+
+### `Gemini API key is not set` が出る
+
+- `LLM` を開いて `Stored key: Configured` になっているか確認
+- `Not set` のままなら、APIキーを再入力して `Save`
+- 保存後に `npm run tauri dev` を一度再起動
+
+### `Rate limit exceeded. Retry later.` が出る
+
+- Gemini API 側の `429` です
+- 連打を避け、少し待って再試行してください
+- 必要なら軽いモデルへ変更してください
 
 
 ## 主要ディレクトリ

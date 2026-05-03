@@ -149,3 +149,54 @@
 - テキスト編集を複数行にするか（M0はinput overlay前提で単一行）
 - レイアウト改善の範囲（自動整列の精度、折り返し等）
 - ショートカットを mac で `Cmd` 対応するか
+
+## 2026-02-15 LLM連携 実装引き継ぎメモ
+
+今回の作業で LLM 連携の基盤実装は一通り完了。
+
+- 完了コミット 1: `57d2b15`
+- 完了コミット 2: `4a60dc9`
+
+実装済み機能:
+
+- LLM 入出力スキーマ定義と検証 (`docs/LLM_SCHEMA.md`, `src/features/llm/schema.ts`)
+- 生成/改善の適用ロジック (`src/features/llm/apply.ts`)
+- Improve プレビュー生成ロジック (`src/features/llm/preview.ts`)
+- LLM 設定 UI (`src/ui/modals/LlmSettingsModal.tsx`)
+- LLM 実行 UI (`src/ui/modals/LlmAssistModal.tsx`)
+- Tauri 側 Gemini 連携 (`src-tauri/src/llm_repo.rs`)
+- `Generate` は現在タブ置き換え
+- `Improve` はプレビュー表示後に `Apply` 押下で反映
+
+今回の不具合対応:
+
+- モーダル内クリックで閉じる問題を修正
+- モデル候補に `gemini-3-flash-preview` を追加
+- `Gemini API key is not set` 対策として keyring 失敗時の AppData フォールバック保存を追加
+- Gemini 通信を `x-goog-api-key` ヘッダー送信へ変更
+- 通信タイムアウトを延長し、接続/タイムアウト系エラー文言を改善
+
+検証結果:
+
+- `npm run test:offline` 成功
+- `npm run build` 成功
+- `cargo check` 成功
+- 実機確認: `Test Connection` / `Generate` はユーザー環境で動作確認済み
+
+次回再開時の優先タスク:
+
+1. 未コミットのドキュメント更新をコミットする
+2. README の LLM 説明と実装差分がずれていないか最終確認する
+3. Improve プレビュー UX の微調整（必要に応じて）
+4. `429` 時の自動リトライ戦略を入れるか判断する
+
+現在の未コミット変更（この時点）:
+
+- `README.md`
+- `README.ja.md`
+- `docs/CURRENT_SPEC.md`
+
+運用メモ:
+
+- API キーはチャットやログに貼らない
+- 漏えいしたキーは即時失効して再発行する

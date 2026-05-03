@@ -27,6 +27,10 @@ Note: This is currently a personal project, so specs and behavior may change.
 - Theme switcher (Dark / Light / Ivory / Tokyo Night)
 - Zoom (`Ctrl + Wheel`) / Pan (`Space + Drag`)
 - Local persistence (Tauri runtime only)
+- LLM settings modal (`LLM`) for Gemini provider/model/API key and connection test
+- LLM assist modal (`AI`) with:
+  - `Generate`: replace current tab with a generated map
+  - `Improve`: show diff preview first, then apply only after `Apply`
 
 
 ## Usage
@@ -56,6 +60,15 @@ Editing (Insert mode):
   - When using Japanese IME conversion, confirmation can behave like a two-step Enter because of composition handling.
     (With direct alphanumeric input, one Enter is typically enough.)
 
+LLM (Tauri mode):
+
+- Open `LLM` from the status bar or command palette (`LLM settings`)
+- Set `Provider` and `Model`, paste API key, then `Save`
+- Run `Test Connection` (this consumes API quota)
+- Open `AI` and run:
+  - `Generate`: creates a new map from topic text
+  - `Improve`: creates a preview; press `Apply` to reflect changes
+
 
 ## Data Persistence
 
@@ -63,6 +76,10 @@ When running in Tauri (`npm run tauri dev` / `npm run tauri build`), the workspa
 
 - Save location: `workspace.json` under OS-specific AppData
   - Uses `BaseDirectory::AppData` on the Tauri side
+- LLM settings location: `llm_settings.json` under AppData
+- API key storage:
+  - First choice: OS credential storage (keyring)
+  - Fallback: AppData (`llm_settings.json`) when keyring is unavailable
 - In browser mode (`npm run dev`), `invoke` is unavailable, so persistence is disabled (UI shows `Local`)
 
 
@@ -134,6 +151,18 @@ spctl --assess --verbose=4 "/Applications/vikokoro.app"
 
 Because of Vite requirements, older Node.js versions can show warnings.
 Check `node -v` and upgrade to `22.12+` or `20.19+` if needed.
+
+### `Gemini API key is not set` appears
+
+- Open `LLM` and confirm `Stored key: Configured`
+- If it remains `Not set`, paste the key again and press `Save`
+- Restart `npm run tauri dev` once after saving
+
+### `Rate limit exceeded. Retry later.` appears
+
+- This is Gemini API `429`
+- Wait and retry (do not spam requests)
+- Try a lighter model if needed
 
 
 ## Main Directories
