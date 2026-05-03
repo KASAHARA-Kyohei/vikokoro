@@ -51,12 +51,16 @@
   - `Move node right`
   - `New tab`, `Close tab`, `Search`, `Help`, `Cycle theme`
 - LLM settings: Gemini の API key / model 設定、接続テスト
-- LLM assist: `Generate`（現在タブを再生成） / `Improve`（差分適用）
-  - `Improve` は適用前に差分プレビュー（操作件数/要約/警告/変更リスト）を表示
+  - モデル候補: `gemini-3-flash-preview`, `gemini-2.0-flash-lite`, `gemini-2.0-flash`, `gemini-1.5-flash`
+  - API key は keyring 優先、利用不可環境では AppData の設定ファイルへフォールバック保存
+- LLM assist: `Generate`（現在タブを再生成） / `Improve`（差分提案）
+  - `Generate`: 実行成功時に現在タブを置き換えてモーダルを閉じる
+  - `Improve`: 適用前に差分プレビュー（件数/要約/警告/親ノード単位の変更リスト）を表示し、`Apply` 押下で反映
 
 ## 5. データと永続化
 
 - Tauri 起動時は `workspace.json` を AppData 配下に保存/復元
+- LLM 設定は `llm_settings.json`（AppData）に保存
 - ブラウザ起動（`npm run dev`）では永続化なし（`Local` 表示）
 - 保存は debounce + 直列化で競合を抑止
 - JSON破損時は退避して起動継続
@@ -70,6 +74,8 @@
 - `H/L` 階層移動は「できない場合は no-op」
   - `L`: 先頭兄弟は不可
   - `H`: 親が root の場合は不可
+- LLM `Improve` は `Apply` するまでドキュメントに反映しない
+- LLM接続テスト/実行は Gemini API クォータを消費する
 
 ## 7. 次回開発時の運用ルール（推奨）
 
