@@ -1,4 +1,5 @@
 import type { NodeColor } from "../../editor/types";
+import type { AppLanguage } from "../../hooks/useAppPreferences";
 import "./NodeColorModal.scss";
 
 type ColorOption = {
@@ -8,29 +9,66 @@ type ColorOption = {
   hint?: string;
 };
 
-const COLOR_OPTIONS: ColorOption[] = [
-  { color: "blue", shortcut: "1", label: "Blue" },
-  { color: "green", shortcut: "2", label: "Green" },
-  { color: "yellow", shortcut: "3", label: "Yellow" },
-  { color: "pink", shortcut: "4", label: "Pink" },
-  { color: "gray", shortcut: "5", label: "Gray", hint: "done" },
-];
+function buildColorOptions(language: AppLanguage): ColorOption[] {
+  if (language === "ja") {
+    return [
+      { color: "blue", shortcut: "1", label: "青" },
+      { color: "green", shortcut: "2", label: "緑" },
+      { color: "yellow", shortcut: "3", label: "黄" },
+      { color: "pink", shortcut: "4", label: "桃" },
+      { color: "gray", shortcut: "5", label: "灰", hint: "完了" },
+    ];
+  }
+
+  return [
+    { color: "blue", shortcut: "1", label: "Blue" },
+    { color: "green", shortcut: "2", label: "Green" },
+    { color: "yellow", shortcut: "3", label: "Yellow" },
+    { color: "pink", shortcut: "4", label: "Pink" },
+    { color: "gray", shortcut: "5", label: "Gray", hint: "done" },
+  ];
+}
 
 type Props = {
   open: boolean;
+  language: AppLanguage;
   activeColor: NodeColor | null;
   onApplyColor: (color: NodeColor) => void;
   onClear: () => void;
   onClose: () => void;
 };
 
-export function NodeColorModal({ open, activeColor, onApplyColor, onClear, onClose }: Props) {
+export function NodeColorModal({
+  open,
+  language,
+  activeColor,
+  onApplyColor,
+  onClear,
+  onClose,
+}: Props) {
   if (!open) return null;
+
+  const text =
+    language === "ja"
+      ? {
+          title: "ノード色",
+          hint: "1-5 で適用、0 で解除、Esc で閉じます。",
+          clear: "解除 (0)",
+          close: "閉じる (Esc)",
+        }
+      : {
+          title: "Node color",
+          hint: "Press 1-5 to apply, 0 to clear, Esc to close.",
+          clear: "Clear (0)",
+          close: "Close (Esc)",
+        };
+  const colorOptions = buildColorOptions(language);
 
   return (
     <div
       className="modalOverlay"
       onMouseDown={(e) => {
+        if (e.target !== e.currentTarget) return;
         e.preventDefault();
         onClose();
       }}
@@ -38,14 +76,14 @@ export function NodeColorModal({ open, activeColor, onApplyColor, onClear, onClo
       <div
         className="modal nodeColorModal"
         onMouseDown={(e) => {
-          e.preventDefault();
+          e.stopPropagation();
         }}
       >
-        <div className="modalTitle">Node color</div>
+        <div className="modalTitle">{text.title}</div>
         <div className="modalBody">
-          <div className="nodeColorHint">Press 1-5 to apply, 0 to clear, Esc to close.</div>
+          <div className="nodeColorHint">{text.hint}</div>
           <div className="nodeColorList">
-            {COLOR_OPTIONS.map((option) => {
+            {colorOptions.map((option) => {
               const isActive = option.color === activeColor;
               return (
                 <button
@@ -78,7 +116,7 @@ export function NodeColorModal({ open, activeColor, onApplyColor, onClear, onClo
               onClear();
             }}
           >
-            Clear (0)
+            {text.clear}
           </button>
           <button
             type="button"
@@ -88,7 +126,7 @@ export function NodeColorModal({ open, activeColor, onApplyColor, onClear, onClo
               onClose();
             }}
           >
-            Close (Esc)
+            {text.close}
           </button>
         </div>
       </div>

@@ -3,6 +3,7 @@ import type { NodeColor } from "../../editor/types";
 const SCHEMA_VERSION = "1" as const;
 const GENERATE_STYLES = ["balanced", "idea", "task"] as const;
 const NODE_COLORS = ["blue", "green", "yellow", "pink", "gray"] as const;
+const REVIEW_SEVERITIES = ["high", "medium", "low"] as const;
 
 export type SchemaVersion = typeof SCHEMA_VERSION;
 export type GenerateStyle = (typeof GENERATE_STYLES)[number];
@@ -123,6 +124,37 @@ export type ImproveResponse = {
   summary: string;
   operations: ImproveOperation[];
   warnings: string[];
+};
+
+export type ReviewFindingSeverity = (typeof REVIEW_SEVERITIES)[number];
+
+export type ReviewRequest = {
+  version: SchemaVersion;
+  mode: "review";
+  focus: string;
+  document: ImproveDocumentState;
+  constraints: {
+    maxFindings: number;
+    includeStrengths: boolean;
+    includeNextActions: boolean;
+  };
+};
+
+export type ReviewFinding = {
+  severity: ReviewFindingSeverity;
+  title: string;
+  detail: string;
+  suggestion: string;
+  nodeRefs: string[];
+};
+
+export type ReviewResponse = {
+  version: SchemaVersion;
+  mode: "review";
+  summary: string;
+  strengths: string[];
+  findings: ReviewFinding[];
+  nextActions: string[];
 };
 
 type TreeNodeLike = {
@@ -359,7 +391,7 @@ function parseGeneratedTreeNode(
     if (parsed) children.push(parsed);
   });
 
-  if (!tempId || !text) return null;
+  if (tempId === null || text === null) return null;
 
   if (usedTempIds.has(tempId)) {
     errors.push(`${pathFor(path, "tempId")} must be unique`);
@@ -390,7 +422,7 @@ function parseImproveDocumentNode(
   const childrenIds = readStringArray(obj, "childrenIds", path, errors, 1);
   const color = parseNodeColor(obj.color, pathFor(path, "color"), errors, true);
 
-  if (!id || !text || !childrenIds) return null;
+  if (id === null || text === null || childrenIds === null) return null;
   if (id !== keyId) {
     errors.push(`${pathFor(path, "id")} must match node key "${keyId}"`);
     return null;
@@ -502,6 +534,10 @@ function validateDocumentStateIntegrity(document: ImproveDocumentState, path: st
   return errors;
 }
 
+export function validateLlmDocumentState(document: ImproveDocumentState): string[] {
+  return validateDocumentStateIntegrity(document, "input.document");
+}
+
 function cloneSimNodes(document: ImproveDocumentState): Record<string, SimNode> {
   const next: Record<string, SimNode> = {};
   Object.entries(document.nodes).forEach(([id, node]) => {
@@ -558,7 +594,7 @@ function parseImproveOperation(
     const parentId = readString(obj, "parentId", path, errors, 1);
     const index = readInteger(obj, "index", path, errors, 0);
     const nodeObj = expectRecord(obj.node, pathFor(path, "node"), errors);
-    if (!parentId || index === null || !nodeObj) return null;
+    if (parentId === null || index === null || !nodeObj) return null;
     const tempId = readString(nodeObj, "tempId", pathFor(path, "node"), errors, 1);
     const text = readString(nodeObj, "text", pathFor(path, "node"), errors);
     const color = parseNodeColor(
@@ -567,7 +603,7 @@ function parseImproveOperation(
       errors,
       true,
     );
-    if (!tempId || !text) return null;
+    if (tempId === null || text === null) return null;
     return {
       op: "add",
       parentId,
@@ -583,14 +619,14 @@ function parseImproveOperation(
   if (op === "updateText") {
     const nodeId = readString(obj, "nodeId", path, errors, 1);
     const text = readString(obj, "text", path, errors);
-    if (!nodeId || !text) return null;
+    if (nodeId === null || text === null) return null;
     return { op: "updateText", nodeId, text };
   }
 
   if (op === "setColor") {
     const nodeId = readString(obj, "nodeId", path, errors, 1);
     const color = parseNodeColor(obj.color, pathFor(path, "color"), errors, true);
-    if (!nodeId) return null;
+    if (nodeId === null) return null;
     return { op: "setColor", nodeId, color };
   }
 
@@ -598,19 +634,46 @@ function parseImproveOperation(
     const nodeId = readString(obj, "nodeId", path, errors, 1);
     const newParentId = readString(obj, "newParentId", path, errors, 1);
     const index = readInteger(obj, "index", path, errors, 0);
-    if (!nodeId || !newParentId || index === null) return null;
+    if (nodeId === null || newParentId === null || index === null) return null;
     return { op: "move", nodeId, newParentId, index };
   }
 
   if (op === "delete") {
     const nodeId = readString(obj, "nodeId", path, errors, 1);
     const strategy = readLiteral(obj, "strategy", "promoteChildren", path, errors);
-    if (!nodeId || !strategy) return null;
+    if (nodeId === null || !strategy) return null;
     return { op: "delete", nodeId, strategy: "promoteChildren" };
   }
 
   errors.push(`${pathFor(path, "op")} must be one of: add, updateText, setColor, move, delete`);
   return null;
+}
+
+function parseReviewFinding(
+  value: unknown,
+  path: string,
+  errors: string[],
+): ReviewFinding | null {
+  const obj = expectRecord(value, path, errors);
+  if (!obj) return null;
+
+  const severity = readEnum(obj, "severity", REVIEW_SEVERITIES, path, errors);
+  const title = readString(obj, "title", path, errors, 1);
+  const detail = readString(obj, "detail", path, errors, 1);
+  const suggestion = readString(obj, "suggestion", path, errors, 1);
+  const nodeRefs = readStringArray(obj, "nodeRefs", path, errors, 1);
+
+  if (!severity || title === null || detail === null || suggestion === null || nodeRefs === null) {
+    return null;
+  }
+
+  return {
+    severity,
+    title,
+    detail,
+    suggestion,
+    nodeRefs,
+  };
 }
 
 export function parseGenerateRequest(input: unknown): ParseResult<GenerateRequest> {
@@ -647,8 +710,8 @@ export function parseGenerateRequest(input: unknown): ParseResult<GenerateReques
   if (
     !version ||
     !mode ||
-    !topic ||
-    !language ||
+    topic === null ||
+    language === null ||
     maxDepth === null ||
     maxChildrenPerNode === null ||
     !style ||
@@ -683,7 +746,7 @@ export function parseGenerateResponse(input: unknown): ParseResult<GenerateRespo
   const usedTempIds = new Set<string>();
   const parsedRoot = parseGeneratedTreeNode(root.root, "input.root", errors, usedTempIds);
 
-  if (!version || !mode || !parsedRoot) {
+  if (!version || !mode || parsedRoot === null) {
     return fail(errors);
   }
 
@@ -725,7 +788,7 @@ export function parseImproveRequest(input: unknown): ParseResult<ImproveRequest>
         }
       });
     }
-    if (rootId && cursorId && nodesObj) {
+    if (rootId !== null && cursorId !== null && nodesObj) {
       document = { rootId, cursorId, nodes };
       errors.push(...validateDocumentStateIntegrity(document, "input.document"));
     }
@@ -750,7 +813,7 @@ export function parseImproveRequest(input: unknown): ParseResult<ImproveRequest>
   if (
     !version ||
     !mode ||
-    !goal ||
+    goal === null ||
     !document ||
     maxAdditions === null ||
     keepExistingText === null ||
@@ -815,7 +878,7 @@ export function parseImproveResponse(input: unknown): ParseResult<ImproveRespons
     if (parsed) operations.push(parsed);
   });
 
-  if (!version || !mode || !summary) {
+  if (!version || !mode || summary === null) {
     return fail(errors);
   }
   if (errors.length > 0) {
@@ -828,6 +891,129 @@ export function parseImproveResponse(input: unknown): ParseResult<ImproveRespons
     summary,
     operations,
     warnings,
+  });
+}
+
+export function parseReviewRequest(input: unknown): ParseResult<ReviewRequest> {
+  const errors: string[] = [];
+  const root = expectRecord(input, "input", errors);
+  if (!root) return fail(errors);
+
+  const version = readLiteral(root, "version", SCHEMA_VERSION, "input", errors);
+  const mode = readLiteral(root, "mode", "review", "input", errors);
+  const focus = readString(root, "focus", "input", errors, 1);
+
+  const documentObj = expectRecord(root.document, "input.document", errors);
+  const constraintsObj = expectRecord(root.constraints, "input.constraints", errors);
+
+  let document: ImproveDocumentState | null = null;
+  if (documentObj) {
+    const rootId = readString(documentObj, "rootId", "input.document", errors, 1);
+    const cursorId = readString(documentObj, "cursorId", "input.document", errors, 1);
+    const nodesObj = expectRecord(documentObj.nodes, "input.document.nodes", errors);
+    const nodes: Record<string, ImproveDocumentNode> = {};
+    if (nodesObj) {
+      Object.entries(nodesObj).forEach(([key, nodeValue]) => {
+        const parsed = parseImproveDocumentNode(
+          nodeValue,
+          `input.document.nodes.${key}`,
+          key,
+          errors,
+        );
+        if (parsed) {
+          nodes[key] = parsed;
+        }
+      });
+    }
+    if (rootId !== null && cursorId !== null && nodesObj) {
+      document = { rootId, cursorId, nodes };
+      errors.push(...validateDocumentStateIntegrity(document, "input.document"));
+    }
+  }
+
+  let maxFindings: number | null = null;
+  let includeStrengths: boolean | null = null;
+  let includeNextActions: boolean | null = null;
+  if (constraintsObj) {
+    maxFindings = readInteger(constraintsObj, "maxFindings", "input.constraints", errors, 0);
+    includeStrengths = readBoolean(
+      constraintsObj,
+      "includeStrengths",
+      "input.constraints",
+      errors,
+    );
+    includeNextActions = readBoolean(
+      constraintsObj,
+      "includeNextActions",
+      "input.constraints",
+      errors,
+    );
+  }
+
+  if (
+    !version ||
+    !mode ||
+    focus === null ||
+    !document ||
+    maxFindings === null ||
+    includeStrengths === null ||
+    includeNextActions === null
+  ) {
+    return fail(errors);
+  }
+  if (errors.length > 0) {
+    return fail(errors);
+  }
+
+  return ok({
+    version: "1",
+    mode: "review",
+    focus,
+    document,
+    constraints: {
+      maxFindings,
+      includeStrengths,
+      includeNextActions,
+    },
+  });
+}
+
+export function parseReviewResponse(input: unknown): ParseResult<ReviewResponse> {
+  const errors: string[] = [];
+  const root = expectRecord(input, "input", errors);
+  if (!root) return fail(errors);
+
+  const version = readLiteral(root, "version", SCHEMA_VERSION, "input", errors);
+  const mode = readLiteral(root, "mode", "review", "input", errors);
+  const summary = readString(root, "summary", "input", errors, 1);
+  const strengths = readStringArray(root, "strengths", "input", errors);
+  const nextActions = readStringArray(root, "nextActions", "input", errors);
+
+  if (!Array.isArray(root.findings)) {
+    errors.push("input.findings must be an array");
+    return fail(errors);
+  }
+
+  const findings: ReviewFinding[] = [];
+  root.findings.forEach((findingValue, index) => {
+    const parsed = parseReviewFinding(findingValue, `input.findings[${index}]`, errors);
+    if (parsed) findings.push(parsed);
+  });
+
+  if (!version || !mode || summary === null || strengths === null || nextActions === null) {
+    return fail(errors);
+  }
+  if (errors.length > 0) {
+    return fail(errors);
+  }
+
+  return ok({
+    version: "1",
+    mode: "review",
+    summary,
+    strengths,
+    findings,
+    nextActions,
   });
 }
 
@@ -974,6 +1160,26 @@ export function validateImproveResponseAgainstDocument(
   return errors;
 }
 
+export function validateReviewResponseAgainstDocument(
+  response: ReviewResponse,
+  document: ImproveDocumentState,
+): string[] {
+  const errors = validateDocumentStateIntegrity(document, "document");
+  if (errors.length > 0) return errors;
+
+  response.findings.forEach((finding, findingIndex) => {
+    finding.nodeRefs.forEach((nodeRef, nodeIndex) => {
+      if (!document.nodes[nodeRef]) {
+        errors.push(
+          `findings[${findingIndex}].nodeRefs[${nodeIndex}] references unknown node "${nodeRef}"`,
+        );
+      }
+    });
+  });
+
+  return errors;
+}
+
 export function parseAndValidateImproveResponse(
   input: unknown,
   document: ImproveDocumentState,
@@ -981,6 +1187,17 @@ export function parseAndValidateImproveResponse(
   const parsed = parseImproveResponse(input);
   if (!parsed.ok) return parsed;
   const errors = validateImproveResponseAgainstDocument(parsed.value, document);
+  if (errors.length > 0) return fail(errors);
+  return parsed;
+}
+
+export function parseAndValidateReviewResponse(
+  input: unknown,
+  document: ImproveDocumentState,
+): ParseResult<ReviewResponse> {
+  const parsed = parseReviewResponse(input);
+  if (!parsed.ok) return parsed;
+  const errors = validateReviewResponseAgainstDocument(parsed.value, document);
   if (errors.length > 0) return fail(errors);
   return parsed;
 }

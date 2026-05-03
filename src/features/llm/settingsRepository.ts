@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { GenerateRequest, ImproveRequest } from "./schema";
+import type { GenerateRequest, ImproveRequest, ReviewRequest } from "./schema";
 
 export type LlmProvider = "gemini";
 
@@ -114,6 +114,10 @@ export async function runLlmGenerate(request: GenerateRequest): Promise<unknown>
 
 export async function runLlmImprove(request: ImproveRequest): Promise<unknown> {
   return invoke("llm_improve", { request: { requestJson: JSON.stringify(request) } });
+}
+
+export async function runLlmReview(request: ReviewRequest): Promise<unknown> {
+  return invoke("llm_review", { request: { requestJson: JSON.stringify(request) } });
 }
 
 export function parseErrorMessage(error: unknown): string {

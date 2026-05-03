@@ -75,9 +75,9 @@ export function resolveKeyboardCommand(
     return { preventDefault: true, command: { type: "preventOnly" } };
   }
 
-  if (ctx.llmSettingsOpen) {
+  if (ctx.settingsOpen) {
     if (key === "Escape") {
-      return { preventDefault: true, command: { type: "setLlmSettingsOpen", open: false } };
+      return { preventDefault: true, command: { type: "setSettingsOpen", open: false } };
     }
     if (ctrlKey && (key === "w" || key === "t" || key === "Tab")) {
       return { preventDefault: true, command: { type: "preventOnly" } };

@@ -6,7 +6,11 @@ const {
   parseImproveRequest,
   parseImproveResponse,
   parseAndValidateImproveResponse,
+  parseReviewRequest,
+  parseReviewResponse,
+  parseAndValidateReviewResponse,
   validateImproveResponseAgainstDocument,
+  validateReviewResponseAgainstDocument,
 } = require("../../.tmp-tests/src/features/llm/schema.js");
 
 function makeDocument() {
@@ -126,6 +130,43 @@ test("parseImproveRequest: broken tree is rejected", () => {
   assert.equal(parsed.errors.some((e) => e.includes("parentId")), true);
 });
 
+test("parseImproveRequest: empty node text is accepted", () => {
+  const document = makeDocument();
+  document.nodes.a.text = "";
+
+  const parsed = parseImproveRequest({
+    version: "1",
+    mode: "improve",
+    goal: "test",
+    document,
+    constraints: {
+      maxAdditions: 10,
+      keepExistingText: true,
+      allowReparent: true,
+      allowDelete: false,
+    },
+  });
+  assert.equal(parsed.ok, true);
+});
+
+test("parseReviewRequest: valid payload", () => {
+  const parsed = parseReviewRequest({
+    version: "1",
+    mode: "review",
+    focus: "漏れと次のアクションを確認",
+    document: makeDocument(),
+    constraints: {
+      maxFindings: 6,
+      includeStrengths: true,
+      includeNextActions: true,
+    },
+  });
+  assert.equal(parsed.ok, true);
+  if (!parsed.ok) return;
+  assert.equal(parsed.value.mode, "review");
+  assert.equal(parsed.value.constraints.maxFindings, 6);
+});
+
 test("validateImproveResponseAgainstDocument: valid operations pass", () => {
   const response = parseImproveResponse({
     version: "1",
@@ -178,4 +219,87 @@ test("parseAndValidateImproveResponse: root delete is rejected", () => {
   assert.equal(result.ok, false);
   if (result.ok) return;
   assert.equal(result.errors.some((e) => e.includes("cannot delete root node")), true);
+});
+
+test("parseReviewResponse: empty arrays are accepted", () => {
+  const parsed = parseReviewResponse({
+    version: "1",
+    mode: "review",
+    summary: "ok",
+    strengths: [],
+    findings: [],
+    nextActions: [],
+  });
+  assert.equal(parsed.ok, true);
+  if (!parsed.ok) return;
+  assert.equal(parsed.value.findings.length, 0);
+});
+
+test("parseReviewResponse: invalid severity is rejected", () => {
+  const parsed = parseReviewResponse({
+    version: "1",
+    mode: "review",
+    summary: "bad",
+    strengths: [],
+    findings: [
+      {
+        severity: "urgent",
+        title: "bad",
+        detail: "bad",
+        suggestion: "bad",
+        nodeRefs: [],
+      },
+    ],
+    nextActions: [],
+  });
+  assert.equal(parsed.ok, false);
+  if (parsed.ok) return;
+  assert.equal(parsed.errors.some((e) => e.includes("severity")), true);
+});
+
+test("validateReviewResponseAgainstDocument: unknown node ref is rejected", () => {
+  const response = parseReviewResponse({
+    version: "1",
+    mode: "review",
+    summary: "ok",
+    strengths: [],
+    findings: [
+      {
+        severity: "high",
+        title: "missing",
+        detail: "detail",
+        suggestion: "suggestion",
+        nodeRefs: ["missing-node"],
+      },
+    ],
+    nextActions: [],
+  });
+  assert.equal(response.ok, true);
+  if (!response.ok) return;
+
+  const errors = validateReviewResponseAgainstDocument(response.value, makeDocument());
+  assert.equal(errors.some((e) => e.includes("unknown node")), true);
+});
+
+test("parseAndValidateReviewResponse: valid response passes", () => {
+  const result = parseAndValidateReviewResponse(
+    {
+      version: "1",
+      mode: "review",
+      summary: "ok",
+      strengths: ["構造が大きく崩れていない"],
+      findings: [
+        {
+          severity: "medium",
+          title: "粒度が粗い",
+          detail: "a 配下が抽象的です。",
+          suggestion: "具体タスクに分解してください。",
+          nodeRefs: ["a"],
+        },
+      ],
+      nextActions: ["a を 3 つの実行タスクに分解する"],
+    },
+    makeDocument(),
+  );
+  assert.equal(result.ok, true);
 });

@@ -111,6 +111,12 @@
   color: var(--text);
 }
 
+.statusPillLlm {
+  border-color: var(--accentBorder);
+  background: color-mix(in srgb, var(--accentBg), var(--surface) 20%);
+  color: var(--text);
+}
+
 .statusHelpButton {
   border: 1px solid var(--border);
   background: var(--surface);

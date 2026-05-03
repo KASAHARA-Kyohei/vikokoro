@@ -1,4 +1,15 @@
-import type { ImproveDocumentState, ImproveOperation } from "./schema";
+import type {
+  ImproveDocumentState,
+  ImproveOperation,
+  ReviewFindingSeverity,
+  ReviewResponse,
+} from "./schema";
+import type { AppLanguage } from "../../hooks/useAppPreferences";
+import {
+  getEmptyNodeLabel,
+  getSearchPathPrefix,
+  getSearchRootLabel,
+} from "../../i18n/uiText";
 
 export type LlmImprovePreview = {
   summary: string;
@@ -19,13 +30,117 @@ export type LlmImprovePreview = {
   hiddenChangeCount: number;
 };
 
+export type LlmReviewResult = {
+  summary: string;
+  strengths: string[];
+  findings: {
+    severity: ReviewFindingSeverity;
+    title: string;
+    detail: string;
+    suggestion: string;
+    refs: {
+      nodeId: string;
+      title: string;
+      path: string;
+    }[];
+  }[];
+  nextActions: string[];
+};
+
+const REVIEW_SEVERITY_ORDER: Record<ReviewFindingSeverity, number> = {
+  high: 0,
+  medium: 1,
+  low: 2,
+};
+
+function labelText(text: string, language: AppLanguage): string {
+  const trimmed = text.trim();
+  const label = trimmed === "" ? getEmptyNodeLabel(language) : trimmed;
+  return language === "ja" ? `「${label}」` : `"${label}"`;
+}
+
+function summarizeNodeTitle(text: string, language: AppLanguage): string {
+  const trimmed = text.trim();
+  return trimmed === "" ? getEmptyNodeLabel(language) : trimmed;
+}
+
+function buildNodePath(
+  document: ImproveDocumentState,
+  nodeId: string,
+  language: AppLanguage,
+): string {
+  const labels: string[] = [];
+  let depth = 0;
+  let current = document.nodes[nodeId];
+  while (current) {
+    labels.push(summarizeNodeTitle(current.text, language));
+    if (!current.parentId) break;
+    current = document.nodes[current.parentId];
+    depth += 1;
+    if (depth > 1000) break;
+  }
+
+  labels.reverse();
+  const ancestors = labels.slice(0, -1);
+  if (ancestors.length === 0) {
+    return `${getSearchPathPrefix(language)}: ${getSearchRootLabel(language)}`;
+  }
+  if (ancestors.length > 3) {
+    const tail = ancestors.slice(-3);
+    return `${getSearchPathPrefix(language)}: ${["…", ...tail].join(" › ")}`;
+  }
+  return `${getSearchPathPrefix(language)}: ${ancestors.join(" › ")}`;
+}
+
+function getPreviewText(language: AppLanguage) {
+  if (language === "ja") {
+    return {
+      parent: "親",
+      root: "(root)",
+      add: "追加",
+      rename: "名前変更",
+      color: "色変更",
+      move: "移動",
+      delete: "削除",
+      clearColor: "解除",
+      addSentence: (newLabel: string, parentLabel: string, index: number) =>
+        `追加: ${newLabel} を ${parentLabel} の ${index + 1} 番目に追加`,
+      renameSentence: (fromLabel: string, toLabel: string) => `名前変更: ${fromLabel} -> ${toLabel}`,
+      colorSentence: (nodeLabel: string, color: string) => `色変更: ${nodeLabel} を ${color} に設定`,
+      moveSentence: (nodeLabel: string, parentLabel: string, index: number) =>
+        `移動: ${nodeLabel} を ${parentLabel} の ${index + 1} 番目へ`,
+      deleteSentence: (nodeLabel: string) => `削除: ${nodeLabel}（子は繰り上げ）`,
+    };
+  }
+
+  return {
+    parent: "Parent",
+    root: "(root)",
+    add: "Add",
+    rename: "Rename",
+    color: "Color",
+    move: "Move",
+    delete: "Delete",
+    clearColor: "clear",
+    addSentence: (newLabel: string, parentLabel: string, index: number) =>
+      `Add: place ${newLabel} under ${parentLabel} at position ${index + 1}`,
+    renameSentence: (fromLabel: string, toLabel: string) => `Rename: ${fromLabel} -> ${toLabel}`,
+    colorSentence: (nodeLabel: string, color: string) => `Color: set ${nodeLabel} to ${color}`,
+    moveSentence: (nodeLabel: string, parentLabel: string, index: number) =>
+      `Move: place ${nodeLabel} under ${parentLabel} at position ${index + 1}`,
+    deleteSentence: (nodeLabel: string) => `Delete: remove ${nodeLabel} and promote its children`,
+  };
+}
+
 export function buildImprovePreview(
   summary: string,
   warnings: string[],
   operations: ImproveOperation[],
   document: ImproveDocumentState,
+  language: AppLanguage = "ja",
 ): LlmImprovePreview {
   const MAX_CHANGES = 12;
+  const text = getPreviewText(language);
   const counts = {
     add: 0,
     updateText: 0,
@@ -47,11 +162,6 @@ export function buildImprovePreview(
   const tempRefToNodeId: Record<string, string> = {};
   const tempRefToText: Record<string, string> = {};
 
-  const labelText = (text: string): string => {
-    const trimmed = text.trim();
-    return `「${trimmed === "" ? "(empty)" : trimmed}」`;
-  };
-
   const parentRefOrUndefined = (parentId: string | null): string | undefined => {
     return parentId ?? undefined;
   };
@@ -65,23 +175,25 @@ export function buildImprovePreview(
 
   const labelNodeRef = (nodeRef: string): string => {
     const nodeId = resolveNodeId(nodeRef);
-    if (nodeId) return labelText(simNodes[nodeId].text);
-    if (tempRefToText[nodeRef] !== undefined) return labelText(tempRefToText[nodeRef]);
+    if (nodeId) return labelText(simNodes[nodeId].text, language);
+    if (tempRefToText[nodeRef] !== undefined) return labelText(tempRefToText[nodeRef], language);
     return `ID:${nodeRef}`;
   };
 
   const parentGroupLabel = (parentRef: string | undefined): string => {
-    return parentRef ? `親: ${labelNodeRef(parentRef)}` : "親: (root)";
+    return parentRef
+      ? `${text.parent}: ${labelNodeRef(parentRef)}`
+      : `${text.parent}: ${text.root}`;
   };
 
   operations.forEach((op) => {
     if (op.op === "add") {
       counts.add += 1;
       const parentLabel = labelNodeRef(op.parentId);
-      const newLabel = labelText(op.node.text);
+      const newLabel = labelText(op.node.text, language);
       changes.push({
         groupLabel: parentGroupLabel(op.parentId),
-        text: `追加: ${newLabel} を ${parentLabel} の ${op.index + 1} 番目に追加`,
+        text: text.addSentence(newLabel, parentLabel, op.index),
         nodeRef: op.node.tempId,
         parentRef: op.parentId,
       });
@@ -108,10 +220,10 @@ export function buildImprovePreview(
       const nodeId = resolveNodeId(op.nodeId);
       const parentRef = parentRefOrUndefined(nodeId ? simNodes[nodeId]?.parentId ?? null : null);
       const fromLabel = labelNodeRef(op.nodeId);
-      const toLabel = labelText(op.text);
+      const toLabel = labelText(op.text, language);
       changes.push({
         groupLabel: parentGroupLabel(parentRef),
-        text: `名前変更: ${fromLabel} -> ${toLabel}`,
+        text: text.renameSentence(fromLabel, toLabel),
         nodeRef: op.nodeId,
         parentRef,
       });
@@ -131,7 +243,7 @@ export function buildImprovePreview(
       const nodeLabel = labelNodeRef(op.nodeId);
       changes.push({
         groupLabel: parentGroupLabel(parentRef),
-        text: `色変更: ${nodeLabel} を ${op.color ?? "clear"} に設定`,
+        text: text.colorSentence(nodeLabel, op.color ?? text.clearColor),
         nodeRef: op.nodeId,
         parentRef,
       });
@@ -144,7 +256,7 @@ export function buildImprovePreview(
       const parentLabel = labelNodeRef(op.newParentId);
       changes.push({
         groupLabel: parentGroupLabel(op.newParentId),
-        text: `移動: ${nodeLabel} を ${parentLabel} の ${op.index + 1} 番目へ`,
+        text: text.moveSentence(nodeLabel, parentLabel, op.index),
         nodeRef: op.nodeId,
         parentRef: op.newParentId,
       });
@@ -174,7 +286,7 @@ export function buildImprovePreview(
     const nodeLabel = labelNodeRef(op.nodeId);
     changes.push({
       groupLabel: parentGroupLabel(parentRef),
-      text: `削除: ${nodeLabel}（子は繰り上げ）`,
+      text: text.deleteSentence(nodeLabel),
       nodeRef: op.nodeId,
       parentRef,
     });
@@ -204,5 +316,38 @@ export function buildImprovePreview(
     operationCounts: counts,
     changes: clippedChanges,
     hiddenChangeCount,
+  };
+}
+
+export function buildReviewResult(
+  response: ReviewResponse,
+  document: ImproveDocumentState,
+  language: AppLanguage = "ja",
+): LlmReviewResult {
+  const findings = [...response.findings]
+    .sort((a, b) => REVIEW_SEVERITY_ORDER[a.severity] - REVIEW_SEVERITY_ORDER[b.severity])
+    .map((finding) => ({
+      severity: finding.severity,
+      title: finding.title,
+      detail: finding.detail,
+      suggestion: finding.suggestion,
+      refs: finding.nodeRefs
+        .map((nodeId) => {
+          const node = document.nodes[nodeId];
+          if (!node) return null;
+          return {
+            nodeId,
+            title: summarizeNodeTitle(node.text, language),
+            path: buildNodePath(document, nodeId, language),
+          };
+        })
+        .filter((ref): ref is NonNullable<typeof ref> => ref !== null),
+    }));
+
+  return {
+    summary: response.summary,
+    strengths: response.strengths,
+    findings,
+    nextActions: response.nextActions,
   };
 }

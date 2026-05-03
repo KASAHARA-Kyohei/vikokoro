@@ -1,6 +1,9 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { buildImprovePreview } = require("../../.tmp-tests/src/features/llm/preview.js");
+const {
+  buildImprovePreview,
+  buildReviewResult,
+} = require("../../.tmp-tests/src/features/llm/preview.js");
 
 function makeDocument() {
   return {
@@ -110,4 +113,41 @@ test("buildImprovePreview: clips long change list and reports hidden count", () 
   assert.equal(preview.changes.length, 12);
   assert.equal(preview.hiddenChangeCount, 1);
   assert.equal(preview.changes.every((c) => c.nodeRef === "a"), true);
+});
+
+test("buildReviewResult: sorts by severity and resolves node refs", () => {
+  const result = buildReviewResult(
+    {
+      version: "1",
+      mode: "review",
+      summary: "summary",
+      strengths: ["strong point"],
+      findings: [
+        {
+          severity: "low",
+          title: "Later",
+          detail: "detail",
+          suggestion: "suggestion",
+          nodeRefs: [],
+        },
+        {
+          severity: "high",
+          title: "First",
+          detail: "detail",
+          suggestion: "suggestion",
+          nodeRefs: ["a"],
+        },
+      ],
+      nextActions: ["action"],
+    },
+    makeDocument(),
+    "en",
+  );
+
+  assert.equal(result.summary, "summary");
+  assert.equal(result.findings[0].severity, "high");
+  assert.equal(result.findings[0].refs[0].title, "A");
+  assert.equal(result.findings[0].refs[0].path, "Path: Root");
+  assert.equal(result.findings[1].severity, "low");
+  assert.equal(result.findings[1].refs.length, 0);
 });

@@ -10,6 +10,8 @@
     "rootDir": "."
   },
   "include": [
+    "src/hooks/useAppPreferences.ts",
+    "src/i18n/uiText.ts",
     "src/editor/types.ts",
     "src/editor/layout.ts",
     "src/editor/domain/**/*.ts",
@@ -17,6 +19,7 @@
     "src/features/search/model.ts",
     "src/features/llm/schema.ts",
     "src/features/llm/apply.ts",
+    "src/features/llm/errorFormatter.ts",
     "src/features/llm/preview.ts"
   ]
 }

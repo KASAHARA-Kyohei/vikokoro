@@ -11,6 +11,8 @@ use tauri::Manager;
 
 const GEMINI_PROVIDER: &str = "gemini";
 const GEMINI_DEFAULT_MODEL: &str = "gemini-3-flash-preview";
+const JSON_MAX_OUTPUT_TOKENS_DEFAULT: u32 = 4096;
+const JSON_MAX_OUTPUT_TOKENS_IMPROVE: u32 = 8192;
 const GEMINI_MODELS: [&str; 4] = [
     "gemini-3-flash-preview",
     "gemini-2.0-flash-lite",
@@ -325,14 +327,18 @@ async fn send_gemini_generate_content(model: &str, api_key: &str, body: Value) -
     Err(gemini_error_message(status, detail))
 }
 
-fn extract_candidate_text(response: &Value) -> Result<String, String> {
+fn first_candidate(response: &Value) -> Result<&Value, String> {
     let candidates = response
         .get("candidates")
         .and_then(|v| v.as_array())
         .ok_or_else(|| "Gemini response has no candidates array".to_string())?;
-    let first = candidates
+    candidates
         .first()
-        .ok_or_else(|| "Gemini response returned no candidates".to_string())?;
+        .ok_or_else(|| "Gemini response returned no candidates".to_string())
+}
+
+fn extract_candidate_text(response: &Value) -> Result<String, String> {
+    let first = first_candidate(response)?;
     let parts = first
         .get("content")
         .and_then(|v| v.get("parts"))
@@ -344,6 +350,14 @@ fn extract_candidate_text(response: &Value) -> Result<String, String> {
         }
     }
     Err("Gemini response has no text part".to_string())
+}
+
+fn extract_finish_reason(response: &Value) -> Option<String> {
+    first_candidate(response)
+        .ok()
+        .and_then(|candidate| candidate.get("finishReason"))
+        .and_then(|value| value.as_str())
+        .map(ToString::to_string)
 }
 
 fn strip_markdown_code_fence(text: &str) -> String {
@@ -388,8 +402,33 @@ fn build_improve_prompt(request_json: &str) -> String {
         "You are a planning assistant for mind maps.\n\
 Return exactly one valid JSON object.\n\
 No markdown. No code fences. No explanations.\n\
+You must return this exact top-level schema:\n\
+{{\"version\":\"1\",\"mode\":\"improve\",\"summary\":\"string\",\"operations\":[...],\"warnings\":[\"string\"]}}\n\
+Each operation must use exactly one of these shapes:\n\
+1. add      => {{\"op\":\"add\",\"parentId\":\"existing-or-temp-node-id\",\"index\":0,\"node\":{{\"tempId\":\"new-temp-id\",\"text\":\"string\",\"color\":null|\"blue\"|\"green\"|\"yellow\"|\"pink\"|\"gray\"}}}}\n\
+2. updateText => {{\"op\":\"updateText\",\"nodeId\":\"existing-or-temp-node-id\",\"text\":\"string\"}}\n\
+3. setColor => {{\"op\":\"setColor\",\"nodeId\":\"existing-or-temp-node-id\",\"color\":null|\"blue\"|\"green\"|\"yellow\"|\"pink\"|\"gray\"}}\n\
+4. move     => {{\"op\":\"move\",\"nodeId\":\"existing-or-temp-node-id\",\"newParentId\":\"existing-or-temp-node-id\",\"index\":0}}\n\
+5. delete   => {{\"op\":\"delete\",\"nodeId\":\"existing-or-temp-node-id\",\"strategy\":\"promoteChildren\"}}\n\
+Rules:\n\
+- Never omit required fields.\n\
+- Never rename keys.\n\
+- Do not mix fields from different operation types.\n\
+- Use only node ids that exist in request.document.nodes, except new temp ids created by add.node.tempId.\n\
+- If nothing should change, return \"operations\": [].\n\
+- warnings must always be an array.\n\
+Use this request JSON as strict constraints:\n{request_json}"
+    )
+}
+
+fn build_review_prompt(request_json: &str) -> String {
+    format!(
+        "You are a constructive reviewer for mind maps.\n\
+Return exactly one valid JSON object.\n\
+No markdown. No code fences. No explanations.\n\
+Review for missing items, ambiguity, and whether the map can be executed as concrete next actions.\n\
 Output schema:\n\
-{{\"version\":\"1\",\"mode\":\"improve\",\"summary\":\"string\",\"operations\":[{{\"op\":\"add\"|\"updateText\"|\"setColor\"|\"move\"|\"delete\",...}}],\"warnings\":[\"string\"]}}\n\
+{{\"version\":\"1\",\"mode\":\"review\",\"summary\":\"string\",\"strengths\":[\"string\"],\"findings\":[{{\"severity\":\"high\"|\"medium\"|\"low\",\"title\":\"string\",\"detail\":\"string\",\"suggestion\":\"string\",\"nodeRefs\":[\"nodeId\"]}}],\"nextActions\":[\"string\"]}}\n\
 Use this request JSON as strict constraints:\n{request_json}"
     )
 }
@@ -397,6 +436,7 @@ Use this request JSON as strict constraints:\n{request_json}"
 async fn run_gemini_json_with_prompt(
     app: &tauri::AppHandle,
     prompt: String,
+    max_output_tokens: u32,
 ) -> Result<Value, String> {
     let (model, api_key) = load_runtime_model_and_api_key(app)?;
     let body = serde_json::json!({
@@ -408,7 +448,7 @@ async fn run_gemini_json_with_prompt(
       ],
       "generationConfig": {
         "temperature": 0.2,
-        "maxOutputTokens": 4096,
+        "maxOutputTokens": max_output_tokens,
         "responseMimeType": "application/json"
       }
     });
@@ -416,8 +456,17 @@ async fn run_gemini_json_with_prompt(
     let response = send_gemini_generate_content(&model, &api_key, body).await?;
     let text = extract_candidate_text(&response)?;
     let cleaned = strip_markdown_code_fence(&text);
-    serde_json::from_str::<Value>(&cleaned)
-        .map_err(|e| format!("Gemini returned invalid JSON: {e}. Raw: {cleaned}"))
+    let finish_reason = extract_finish_reason(&response);
+    serde_json::from_str::<Value>(&cleaned).map_err(|e| {
+        let truncated =
+            e.is_eof() || finish_reason.as_deref() == Some("MAX_TOKENS") || !cleaned.ends_with('}');
+        if truncated {
+            "Gemini response was cut off before the JSON finished. Retry the request or narrow the improve goal.".to_string()
+        } else {
+            let snippet = cleaned.chars().take(320).collect::<String>();
+            format!("Gemini returned invalid JSON: {e}. Raw: {snippet}")
+        }
+    })
 }
 
 pub async fn llm_generate(
@@ -428,7 +477,12 @@ pub async fn llm_generate(
     if request_json.is_empty() {
         return Err("requestJson is empty".to_string());
     }
-    run_gemini_json_with_prompt(app, build_generate_prompt(request_json)).await
+    run_gemini_json_with_prompt(
+        app,
+        build_generate_prompt(request_json),
+        JSON_MAX_OUTPUT_TOKENS_DEFAULT,
+    )
+    .await
 }
 
 pub async fn llm_improve(
@@ -439,7 +493,28 @@ pub async fn llm_improve(
     if request_json.is_empty() {
         return Err("requestJson is empty".to_string());
     }
-    run_gemini_json_with_prompt(app, build_improve_prompt(request_json)).await
+    run_gemini_json_with_prompt(
+        app,
+        build_improve_prompt(request_json),
+        JSON_MAX_OUTPUT_TOKENS_IMPROVE,
+    )
+    .await
+}
+
+pub async fn llm_review(
+    app: &tauri::AppHandle,
+    request: LlmSchemaRequestInput,
+) -> Result<Value, String> {
+    let request_json = request.request_json.trim();
+    if request_json.is_empty() {
+        return Err("requestJson is empty".to_string());
+    }
+    run_gemini_json_with_prompt(
+        app,
+        build_review_prompt(request_json),
+        JSON_MAX_OUTPUT_TOKENS_DEFAULT,
+    )
+    .await
 }
 
 pub async fn test_llm_connection(

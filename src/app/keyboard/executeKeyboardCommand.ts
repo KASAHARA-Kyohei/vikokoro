@@ -9,7 +9,7 @@ type CommandExecutor = {
   setPaletteQuery: (query: string) => void;
   setPaletteIndex: (index: number) => void;
   setNodeColorOpen: (open: boolean) => void;
-  setLlmSettingsOpen: (open: boolean) => void;
+  setSettingsOpen: (open: boolean) => void;
   setLlmAssistOpen: (open: boolean) => void;
   setJumpPrefix: (prefix: string) => void;
   openJump: () => void;
@@ -53,8 +53,8 @@ export function executeKeyboardCommand(command: KeyboardCommand, executor: Comma
     case "setNodeColorOpen":
       executor.setNodeColorOpen(command.open);
       return;
-    case "setLlmSettingsOpen":
-      executor.setLlmSettingsOpen(command.open);
+    case "setSettingsOpen":
+      executor.setSettingsOpen(command.open);
       return;
     case "setLlmAssistOpen":
       executor.setLlmAssistOpen(command.open);
