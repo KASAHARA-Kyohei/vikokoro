@@ -36,7 +36,8 @@
 - `i` で Insert 開始
 - `Esc` で確定して Normal へ
 - Insert 中は編集優先（多くのショートカットは無効）
-- `Enter` で確定（IME composing 中は確定しない）
+- `Enter` で確定して Normal へ
+  - IME composing 中に押した場合は、composition end 後に同じ Enter で確定する
 
 ## 4. UI/UX 機能
 

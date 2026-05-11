@@ -21,7 +21,6 @@ type Props = {
   jumpPrefix: string;
   onSelectNode: (nodeId: NodeId) => void;
   onChangeText: (text: string) => void;
-  onEnterContinue: () => void;
   onEnterCommit: () => void;
   onEsc: () => void;
 };
@@ -59,7 +58,6 @@ export function EditorView({
   jumpPrefix,
   onSelectNode,
   onChangeText,
-  onEnterContinue,
   onEnterCommit,
   onEsc,
 }: Props) {
@@ -67,14 +65,43 @@ export function EditorView({
   const inputRef = useRef<HTMLInputElement | null>(null);
   const canvasRef = useRef<HTMLDivElement | null>(null);
   const isComposingRef = useRef(false);
-  const didUseCompositionRef = useRef(false);
-  const compositionConfirmConsumedRef = useRef(false);
+  const pendingCompositionEnterRef = useRef(false);
+  const pendingCompositionTextRef = useRef<string | null>(null);
+  const compositionEnterTimerRef = useRef<number | null>(null);
   const prevNodesRef = useRef<Record<NodeId, Node> | null>(null);
   const prevPositionsRef = useRef<Record<NodeId, NodePosition> | null>(null);
   const [exitingNodes, setExitingNodes] = useState<Record<NodeId, ExitingNode>>({});
 
   const cursorPos = layout.positions[doc.cursorId];
   const cursorNode = doc.nodes[doc.cursorId];
+
+  const clearCompositionEnterTimer = () => {
+    if (compositionEnterTimerRef.current === null) return;
+    window.clearTimeout(compositionEnterTimerRef.current);
+    compositionEnterTimerRef.current = null;
+  };
+
+  const resetCompositionEnter = () => {
+    pendingCompositionEnterRef.current = false;
+    pendingCompositionTextRef.current = null;
+    clearCompositionEnterTimer();
+  };
+
+  const commitPendingCompositionEnter = (text: string | null) => {
+    if (!pendingCompositionEnterRef.current) return;
+
+    pendingCompositionEnterRef.current = false;
+    pendingCompositionTextRef.current = null;
+    clearCompositionEnterTimer();
+    if (text !== null) {
+      onChangeText(text);
+    }
+
+    compositionEnterTimerRef.current = window.setTimeout(() => {
+      compositionEnterTimerRef.current = null;
+      onEnterCommit();
+    }, 0);
+  };
 
   useEffect(() => {
     if (disabled) return;
@@ -135,6 +162,12 @@ export function EditorView({
       return next;
     });
   }, [doc.nodes, layout.positions]);
+
+  useEffect(() => {
+    return () => {
+      clearCompositionEnterTimer();
+    };
+  }, []);
 
   const nodeEntries = useMemo(() => {
     const entries: { node: Node; pos: NodePosition | undefined }[] = Object.values(doc.nodes).map(
@@ -285,21 +318,21 @@ export function EditorView({
             onChange={(e) => onChangeText(e.currentTarget.value)}
             onCompositionStart={() => {
               isComposingRef.current = true;
-              didUseCompositionRef.current = true;
-              compositionConfirmConsumedRef.current = false;
+              resetCompositionEnter();
             }}
-            onCompositionEnd={() => {
+            onCompositionEnd={(e) => {
               isComposingRef.current = false;
+              commitPendingCompositionEnter(e.currentTarget.value);
             }}
             onBlur={() => {
               isComposingRef.current = false;
-              didUseCompositionRef.current = false;
-              compositionConfirmConsumedRef.current = false;
+              resetCompositionEnter();
             }}
             onKeyDown={(e) => {
               if (e.key === "Escape") {
                 e.preventDefault();
                 e.stopPropagation();
+                resetCompositionEnter();
                 onEsc();
                 return;
               }
@@ -309,22 +342,23 @@ export function EditorView({
                 const imeComposing =
                   isComposingRef.current || native.isComposing || native.keyCode === 229;
                 if (imeComposing) {
-                  // Windows IME can consume the first Enter for conversion commit.
-                  compositionConfirmConsumedRef.current = true;
+                  // Let the IME receive Enter, then commit this edit when composition ends.
+                  e.stopPropagation();
+                  pendingCompositionEnterRef.current = true;
+                  pendingCompositionTextRef.current = e.currentTarget.value;
+                  clearCompositionEnterTimer();
+                  compositionEnterTimerRef.current = window.setTimeout(() => {
+                    compositionEnterTimerRef.current = null;
+                    if (isComposingRef.current) return;
+                    commitPendingCompositionEnter(pendingCompositionTextRef.current);
+                  }, 0);
                   return;
                 }
 
-                const didUseComposition = didUseCompositionRef.current;
-                const consumedByImeConfirm = compositionConfirmConsumedRef.current;
-                didUseCompositionRef.current = false;
-                compositionConfirmConsumedRef.current = false;
+                resetCompositionEnter();
                 e.preventDefault();
                 e.stopPropagation();
-                if (didUseComposition && !consumedByImeConfirm) {
-                  onEnterContinue();
-                } else {
-                  onEnterCommit();
-                }
+                onEnterCommit();
                 return;
               }
 

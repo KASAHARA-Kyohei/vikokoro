@@ -56,9 +56,8 @@ Vimライクな **Normal / Insert** モードでノードの追加・移動・�
 
 - `i`: Insertに入る
 - `Esc`: 確定してNormalへ
-- `Enter`: 確定
-  - 日本語IMEで変換を使った入力の場合は、変換確定の都合で「Enterが2段階」になることがあります
-    （英数入力では1回で確定する想定です）
+- `Enter`: 確定してNormalへ
+  - 日本語IMEで変換中に押した場合も、変換確定後に同じEnterでNormalへ戻ります
 
 LLM（Tauri起動時）:
 
