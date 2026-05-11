@@ -49,7 +49,7 @@
   - Command palette（`Ctrl+P`）
 
 ## 追加で入れた改善（仕様外だが便利）
-- Insert中 `Enter` で編集確定→Normal（IME composing中は確定しない）
+- Insert中 `Enter` で編集確定→Normal（IME composing中はcomposition end後に同じEnterで確定）
 - タブ閉じは確認モーダル（`y`で閉じる / `n` or `Esc`でキャンセル）
 - ノード削除: Normalで `dd`
   - ルートは削除不可

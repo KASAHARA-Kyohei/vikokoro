@@ -726,7 +726,6 @@ function App() {
           jumpPrefix={jumpPrefix}
           onSelectNode={(nodeId) => dispatch({ type: "selectNode", nodeId })}
           onChangeText={(nodeText) => dispatch({ type: "setCursorText", text: nodeText })}
-          onEnterContinue={() => dispatch({ type: "commitInsertAndContinue" })}
           onEnterCommit={() => dispatch({ type: "commitInsert" })}
           onEsc={() => dispatch({ type: "commitInsert" })}
         />

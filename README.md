@@ -56,9 +56,8 @@ Editing (Insert mode):
 
 - `i`: Enter Insert mode
 - `Esc`: Confirm and return to Normal mode
-- `Enter`: Confirm
-  - When using Japanese IME conversion, confirmation can behave like a two-step Enter because of composition handling.
-    (With direct alphanumeric input, one Enter is typically enough.)
+- `Enter`: Confirm and return to Normal mode
+  - When pressed during Japanese IME composition, it confirms after composition ends and returns to Normal with the same Enter.
 
 LLM (Tauri mode):
 
