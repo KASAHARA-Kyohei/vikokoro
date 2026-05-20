@@ -22,6 +22,7 @@ export type EditorAppState = {
   workspace: Workspace;
   mode: Mode;
   insertOrigin: { docId: DocId; snapshot: DocumentState } | null;
+  noteEditOrigin: { docId: DocId; snapshot: DocumentState } | null;
   hydrated: boolean;
   saveRevision: number;
   closeConfirmDocId: DocId | null;
@@ -48,6 +49,9 @@ export type EditorAction =
   | { type: "addChildAndInsert" }
   | { type: "addSiblingAndInsert" }
   | { type: "setCursorText"; text: string }
+  | { type: "beginNoteEdit" }
+  | { type: "setCursorNote"; note: string }
+  | { type: "commitNoteEdit" }
   | { type: "setCursorColor"; color: NodeColor | null }
   | { type: "commitInsertAndContinue" }
   | { type: "commitInsert" }
@@ -69,10 +73,15 @@ export function createInitialAppState(): EditorAppState {
     workspace,
     mode: "normal",
     insertOrigin: null,
+    noteEditOrigin: null,
     hydrated: false,
     saveRevision: 0,
     closeConfirmDocId: null,
   };
+}
+
+function normalizeNote(note: string): string | undefined {
+  return note.trim() === "" ? undefined : note;
 }
 
 function bumpSaveRevision(state: EditorAppState): EditorAppState {
@@ -142,6 +151,7 @@ export function editorReducer(state: EditorAppState, action: EditorAction): Edit
         hydrated: true,
         mode: "normal",
         insertOrigin: null,
+        noteEditOrigin: null,
         closeConfirmDocId: null,
         workspace: sanitizeWorkspace(action.workspace),
       };
@@ -314,7 +324,12 @@ export function editorReducer(state: EditorAppState, action: EditorAction): Edit
       const docId = state.workspace.activeDocId;
       const doc = state.workspace.documents[docId];
       const snapshot = cloneDocumentState(doc);
-      return { ...state, mode: "insert", insertOrigin: { docId, snapshot } };
+      return {
+        ...state,
+        mode: "insert",
+        insertOrigin: { docId, snapshot },
+        noteEditOrigin: null,
+      };
     }
     case "addChildAndInsert": {
       if (state.mode === "insert") return state;
@@ -325,6 +340,7 @@ export function editorReducer(state: EditorAppState, action: EditorAction): Edit
         ...nextState,
         mode: "insert",
         insertOrigin: { docId, snapshot: before },
+        noteEditOrigin: null,
       });
     }
     case "addSiblingAndInsert": {
@@ -336,6 +352,7 @@ export function editorReducer(state: EditorAppState, action: EditorAction): Edit
         ...nextState,
         mode: "insert",
         insertOrigin: { docId, snapshot: before },
+        noteEditOrigin: null,
       });
     }
     case "setCursorText": {
@@ -351,6 +368,50 @@ export function editorReducer(state: EditorAppState, action: EditorAction): Edit
           },
         };
       });
+    }
+    case "beginNoteEdit": {
+      if (state.mode === "insert") return state;
+      const docId = state.workspace.activeDocId;
+      const doc = state.workspace.documents[docId];
+      return {
+        ...state,
+        noteEditOrigin: { docId, snapshot: cloneDocumentState(doc) },
+      };
+    }
+    case "setCursorNote": {
+      if (state.mode === "insert") return state;
+      return updateActiveDoc(state, (doc) => {
+        const cursor = doc.nodes[doc.cursorId];
+        if (!cursor) return doc;
+        const nextNote = normalizeNote(action.note);
+        if (cursor.note === nextNote) return doc;
+        return {
+          ...doc,
+          nodes: {
+            ...doc.nodes,
+            [cursor.id]: { ...cursor, note: nextNote },
+          },
+        };
+      });
+    }
+    case "commitNoteEdit": {
+      if (state.mode === "insert") return state;
+      const origin = state.noteEditOrigin;
+      const docId = state.workspace.activeDocId;
+      const currentDoc = state.workspace.documents[docId];
+      if (!origin || origin.docId !== docId) {
+        return { ...state, noteEditOrigin: null };
+      }
+      if (documentStateEquals(origin.snapshot, currentDoc)) {
+        return { ...state, noteEditOrigin: null };
+      }
+
+      const next = updateActiveDoc({ ...state, noteEditOrigin: null }, (doc) => ({
+        ...doc,
+        undoStack: [...doc.undoStack, origin.snapshot],
+        redoStack: [],
+      }));
+      return bumpSaveRevision(next);
     }
     case "setCursorColor": {
       if (state.mode === "insert") return state;
@@ -382,15 +443,15 @@ export function editorReducer(state: EditorAppState, action: EditorAction): Edit
       const docId = state.workspace.activeDocId;
       const currentDoc = state.workspace.documents[docId];
       if (!origin || origin.docId !== docId) {
-        return { ...state, mode: "normal", insertOrigin: null };
+        return { ...state, mode: "normal", insertOrigin: null, noteEditOrigin: null };
       }
 
       if (documentStateEquals(origin.snapshot, currentDoc)) {
-        return { ...state, mode: "normal", insertOrigin: null };
+        return { ...state, mode: "normal", insertOrigin: null, noteEditOrigin: null };
       }
 
       const next = updateActiveDoc(
-        { ...state, mode: "normal", insertOrigin: null },
+        { ...state, mode: "normal", insertOrigin: null, noteEditOrigin: null },
         (doc) => ({
           ...doc,
           undoStack: [...doc.undoStack, origin.snapshot],
@@ -410,6 +471,7 @@ export function editorReducer(state: EditorAppState, action: EditorAction): Edit
         return {
           ...state,
           insertOrigin: { docId, snapshot: cloneDocumentState(currentDoc) },
+          noteEditOrigin: null,
         };
       }
 
@@ -428,6 +490,7 @@ export function editorReducer(state: EditorAppState, action: EditorAction): Edit
         ...next,
         mode: "insert",
         insertOrigin: { docId, snapshot: cloneDocumentState(nextDoc) },
+        noteEditOrigin: null,
       });
     }
     case "undo": {

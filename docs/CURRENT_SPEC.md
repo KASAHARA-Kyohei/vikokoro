@@ -24,6 +24,9 @@
   - `1-5`: 色適用（`5` は完了向けグレー）
   - `0`: 色解除
   - `Esc`: メニューを閉じる
+- `m`: ノード詳細メモを開く
+  - 複数行メモを編集
+  - `Esc`: 閉じて確定
 - `u` / `Ctrl+r`: Undo / Redo
 - `Ctrl+T` / `Ctrl+W`: タブ作成 / タブ閉じ（確認あり）
 - `Ctrl+Tab` / `Ctrl+Shift+Tab`: タブ切替
@@ -46,6 +49,7 @@
 - Pan: `Space + Drag`
 - Save status 表示: `Saving... / Saved / Local`
 - Node color: `Blue / Green / Yellow / Pink / Gray`
+- Node memo: ノードごとの複数行メモ、メモあり時は `M` バッジ表示
 - Search: 部分一致、Path表示、結果ハイライト、`Enter/Shift+Enter` で巡回
 - Command Palette: 主要操作を実行可能
   - `Move node left`
@@ -72,6 +76,9 @@
 - root ノードは削除不可
 - ノード削除時は子を親直下へ繰り上げ
 - ノード色の変更/解除は Undo/Redo 対象
+- ノード詳細メモは Undo/Redo 対象
+- ノード詳細メモの Undo/Redo は「メモモーダルを開いて閉じるまで」で1単位
+- Search はノード本文のみ対象で、詳細メモ本文は検索対象外
 - `H/L` 階層移動は「できない場合は no-op」
   - `L`: 先頭兄弟は不可
   - `H`: 親が root の場合は不可

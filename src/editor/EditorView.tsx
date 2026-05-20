@@ -260,6 +260,7 @@ export function EditorView({
           const isMatch = highlightedNodeIds?.has(node.id) ?? false;
           const isActiveMatch = activeHighlightedNodeId === node.id;
           const jump = getJumpHintState(jumpHints, node.id, jumpPrefix);
+          const hasNote = Boolean(node.note);
           return (
             <div
               key={node.id}
@@ -286,6 +287,48 @@ export function EditorView({
                   {jump.hint}
                 </div>
               ) : null}
+              {hasNote ? (
+                <div className="nodeNoteBadge" aria-hidden="true">
+                  <svg
+                    className="nodeNoteBadgeIcon"
+                    viewBox="0 0 16 16"
+                    fill="none"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <path
+                      d="M5 3.5H11.25C12.2165 3.5 13 4.2835 13 5.25V11.5C13 12.4665 12.2165 13.25 11.25 13.25H5.25C4.2835 13.25 3.5 12.4665 3.5 11.5V5C3.5 4.17157 4.17157 3.5 5 3.5Z"
+                      stroke="currentColor"
+                      strokeWidth="1.15"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                    <path
+                      d="M6 2.75V4.25"
+                      stroke="currentColor"
+                      strokeWidth="1.15"
+                      strokeLinecap="round"
+                    />
+                    <path
+                      d="M10.5 2.75V4.25"
+                      stroke="currentColor"
+                      strokeWidth="1.15"
+                      strokeLinecap="round"
+                    />
+                    <path
+                      d="M5.75 7H10.75"
+                      stroke="currentColor"
+                      strokeWidth="1.15"
+                      strokeLinecap="round"
+                    />
+                    <path
+                      d="M5.75 9.5H9.25"
+                      stroke="currentColor"
+                      strokeWidth="1.15"
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                </div>
+              ) : null}
               <div className="nodeText">{node.text || " "}</div>
             </div>
           );
@@ -305,6 +348,48 @@ export function EditorView({
               }
               style={{ left: pos.x, top: pos.y, width: NODE_WIDTH, height: NODE_HEIGHT }}
             >
+              {node.note ? (
+                <div className="nodeNoteBadge" aria-hidden="true">
+                  <svg
+                    className="nodeNoteBadgeIcon"
+                    viewBox="0 0 16 16"
+                    fill="none"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <path
+                      d="M5 3.5H11.25C12.2165 3.5 13 4.2835 13 5.25V11.5C13 12.4665 12.2165 13.25 11.25 13.25H5.25C4.2835 13.25 3.5 12.4665 3.5 11.5V5C3.5 4.17157 4.17157 3.5 5 3.5Z"
+                      stroke="currentColor"
+                      strokeWidth="1.15"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                    <path
+                      d="M6 2.75V4.25"
+                      stroke="currentColor"
+                      strokeWidth="1.15"
+                      strokeLinecap="round"
+                    />
+                    <path
+                      d="M10.5 2.75V4.25"
+                      stroke="currentColor"
+                      strokeWidth="1.15"
+                      strokeLinecap="round"
+                    />
+                    <path
+                      d="M5.75 7H10.75"
+                      stroke="currentColor"
+                      strokeWidth="1.15"
+                      strokeLinecap="round"
+                    />
+                    <path
+                      d="M5.75 9.5H9.25"
+                      stroke="currentColor"
+                      strokeWidth="1.15"
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                </div>
+              ) : null}
               <div className="nodeText">{node.text || " "}</div>
             </div>
           );

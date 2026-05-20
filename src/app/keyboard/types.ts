@@ -16,6 +16,7 @@ export type KeyboardResolverContext = {
   searchOpen: boolean;
   paletteOpen: boolean;
   nodeColorOpen: boolean;
+  nodeMemoOpen: boolean;
   settingsOpen: boolean;
   llmAssistOpen: boolean;
   closeConfirmOpen: boolean;
@@ -32,6 +33,7 @@ export type KeyboardCommand =
   | { type: "setPaletteQuery"; query: string }
   | { type: "setPaletteIndex"; index: number }
   | { type: "setNodeColorOpen"; open: boolean }
+  | { type: "setNodeMemoOpen"; open: boolean }
   | { type: "setSettingsOpen"; open: boolean }
   | { type: "setLlmAssistOpen"; open: boolean }
   | { type: "dispatch"; action: EditorAction }

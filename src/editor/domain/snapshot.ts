@@ -6,6 +6,7 @@ export function cloneDocumentState(doc: DocumentState): DocumentState {
     nodes[id] = {
       id: node.id,
       text: node.text,
+      note: node.note,
       parentId: node.parentId,
       childrenIds: [...node.childrenIds],
       color: node.color,
@@ -30,6 +31,7 @@ export function documentStateEquals(a: DocumentState, b: DocumentState): boolean
     if (!bn) return false;
     if (an.id !== bn.id) return false;
     if (an.text !== bn.text) return false;
+    if (an.note !== bn.note) return false;
     if (an.parentId !== bn.parentId) return false;
     if (an.color !== bn.color) return false;
     if (an.childrenIds.length !== bn.childrenIds.length) return false;

@@ -8,6 +8,7 @@ export type NodeColor = "blue" | "green" | "yellow" | "pink" | "gray";
 export type Node = {
   id: NodeId;
   text: string;
+  note?: string;
   parentId: NodeId | null;
   childrenIds: NodeId[];
   color?: NodeColor;

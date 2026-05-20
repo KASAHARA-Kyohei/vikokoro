@@ -10,8 +10,22 @@ function makeState() {
     rootId: "root",
     cursorId: "a",
     nodes: {
-      root: { id: "root", text: "root", parentId: null, childrenIds: ["a"], color: undefined },
-      a: { id: "a", text: "A", parentId: "root", childrenIds: [], color: undefined },
+      root: {
+        id: "root",
+        text: "root",
+        note: undefined,
+        parentId: null,
+        childrenIds: ["a"],
+        color: undefined,
+      },
+      a: {
+        id: "a",
+        text: "A",
+        note: "memo",
+        parentId: "root",
+        childrenIds: [],
+        color: undefined,
+      },
     },
   };
 }
@@ -37,6 +51,10 @@ test("documentStateEquals: detect differences", () => {
   const c = cloneDocumentState(a);
   c.nodes.a.text = "changed";
   assert.equal(documentStateEquals(a, c), false);
+
+  const noteChanged = cloneDocumentState(a);
+  noteChanged.nodes.a.note = "changed memo";
+  assert.equal(documentStateEquals(a, noteChanged), false);
 
   const d = cloneDocumentState(a);
   d.nodes.root.childrenIds = ["z"];

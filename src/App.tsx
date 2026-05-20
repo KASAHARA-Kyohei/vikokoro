@@ -56,6 +56,7 @@ import { CommandPaletteModal } from "./ui/modals/CommandPaletteModal";
 import { HelpModal } from "./ui/modals/HelpModal";
 import { LlmAssistModal, type LlmAssistMode } from "./ui/modals/LlmAssistModal";
 import { NodeColorModal } from "./ui/modals/NodeColorModal";
+import { NodeMemoModal } from "./ui/modals/NodeMemoModal";
 import { SearchModal } from "./ui/modals/SearchModal";
 import { SettingsModal } from "./ui/modals/SettingsModal";
 import { clamp } from "./utils/number";
@@ -84,6 +85,8 @@ function App() {
     setPaletteIndex,
     nodeColorOpen,
     setNodeColorOpen,
+    nodeMemoOpen,
+    setNodeMemoOpen,
     settingsOpen,
     setSettingsOpen,
     llmAssistOpen,
@@ -124,6 +127,7 @@ function App() {
       searchOpen ||
       paletteOpen ||
       nodeColorOpen ||
+      nodeMemoOpen ||
       settingsOpen ||
       llmAssistOpen ||
       closeConfirmOpen ||
@@ -511,6 +515,7 @@ function App() {
       searchOpen ||
       paletteOpen ||
       nodeColorOpen ||
+      nodeMemoOpen ||
       settingsOpen ||
       llmAssistOpen ||
       closeConfirmOpen
@@ -523,6 +528,7 @@ function App() {
     helpOpen,
     jumpSession,
     llmAssistOpen,
+    nodeMemoOpen,
     nodeColorOpen,
     paletteOpen,
     searchOpen,
@@ -587,6 +593,7 @@ function App() {
         !searchOpen &&
         !paletteOpen &&
         !nodeColorOpen &&
+        !nodeMemoOpen &&
         !settingsOpen &&
         !llmAssistOpen &&
         !closeConfirmOpen &&
@@ -615,6 +622,7 @@ function App() {
           searchOpen,
           paletteOpen,
           nodeColorOpen,
+          nodeMemoOpen,
           settingsOpen,
           llmAssistOpen,
           closeConfirmOpen,
@@ -646,6 +654,7 @@ function App() {
         setPaletteQuery,
         setPaletteIndex,
         setNodeColorOpen,
+        setNodeMemoOpen,
         setSettingsOpen,
         setLlmAssistOpen,
         setJumpPrefix,
@@ -668,6 +677,7 @@ function App() {
     jumpPrefix,
     jumpSession,
     llmAssistOpen,
+    nodeMemoOpen,
     nodeColorOpen,
     openJump,
     paletteOpen,
@@ -676,6 +686,7 @@ function App() {
     setHelpOpen,
     setJumpPrefix,
     setLlmAssistOpen,
+    setNodeMemoOpen,
     setNodeColorOpen,
     setPaletteIndex,
     setPaletteOpen,
@@ -702,7 +713,7 @@ function App() {
         activeDocId={state.workspace.activeDocId}
         documents={state.workspace.documents}
         mode={state.mode}
-        disabled={closeConfirmOpen}
+        disabled={closeConfirmOpen || nodeMemoOpen}
         onSelect={(docId) => dispatch({ type: "setActiveDoc", docId })}
         onNew={() => dispatch({ type: "createDoc" })}
         language={language}
@@ -717,7 +728,7 @@ function App() {
         <EditorView
           doc={activeDoc}
           mode={state.mode}
-          disabled={closeConfirmOpen || jumpActive}
+          disabled={closeConfirmOpen || jumpActive || nodeMemoOpen}
           zoom={zoomPan.zoom}
           panGestureActive={zoomPan.panGestureActive}
           highlightedNodeIds={highlightedNodeIds}
@@ -787,6 +798,17 @@ function App() {
             setNodeColorOpen(false);
           }}
           onClose={() => setNodeColorOpen(false)}
+        />
+        <NodeMemoModal
+          open={nodeMemoOpen}
+          language={language}
+          nodeTitle={activeDoc.nodes[activeDoc.cursorId]?.text || (language === "ja" ? "(空)" : "(empty)")}
+          note={activeDoc.nodes[activeDoc.cursorId]?.note ?? ""}
+          onChangeNote={(note) => dispatch({ type: "setCursorNote", note })}
+          onClose={() => {
+            dispatch({ type: "commitNoteEdit" });
+            setNodeMemoOpen(false);
+          }}
         />
         <LlmAssistModal
           open={llmAssistOpen}

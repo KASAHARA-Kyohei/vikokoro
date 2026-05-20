@@ -33,7 +33,7 @@
   background: var(--surface);
   display: flex;
   align-items: center;
-  padding: 0 10px;
+  padding: 0 30px 0 10px;
   box-sizing: border-box;
   user-select: none;
   cursor: default;
@@ -175,6 +175,28 @@
 .nodeJumpHintMatched {
   border-color: var(--accentBorder);
   background: color-mix(in srgb, var(--accentBg), var(--surface) 18%);
+}
+
+.nodeNoteBadge {
+  position: absolute;
+  right: 8px;
+  bottom: 7px;
+  width: 18px;
+  height: 18px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surfaceHover), var(--surface) 30%);
+  color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.nodeNoteBadgeIcon {
+  width: 12px;
+  height: 12px;
+  display: block;
 }
 
 .nodeSelected {

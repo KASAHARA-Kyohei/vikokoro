@@ -21,6 +21,7 @@ Note: This is currently a personal project, so specs and behavior may change.
 - Jump to any node with hint keys (`f` then displayed key sequence)
 - Delete with `dd` (root is protected, children are promoted)
 - Node colors (`c` to open, `1-5` to apply, `0` to clear; `5` = gray for done/history)
+- Node memos (`m` to open, multi-line notes, `M` badge on nodes with notes)
 - Undo / Redo
 - Tabs (multiple documents)
 - Search (`Ctrl+F`) / Command palette (`Ctrl+P`) / Help (`?`)
@@ -50,6 +51,7 @@ Common keys (Normal mode):
 - `f` + hint key(s): Jump to any node
 - `dd`: Delete
 - `c`: Open node color menu (`1-5` apply, `0` clear, `Esc` close)
+- `m`: Open node memo (`Esc` closes and commits)
 - `u` / `Ctrl+r`: Undo / Redo
 
 Editing (Insert mode):

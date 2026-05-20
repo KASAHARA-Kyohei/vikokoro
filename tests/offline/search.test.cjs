@@ -9,12 +9,12 @@ function makeDoc() {
     cursorId: "root",
     nodes: {
       root: { id: "root", text: "Root", parentId: null, childrenIds: ["a", "b"] },
-      a: { id: "a", text: "Alpha task", parentId: "root", childrenIds: ["a1"] },
+      a: { id: "a", text: "Alpha task", note: "supplementary", parentId: "root", childrenIds: ["a1"] },
       a1: { id: "a1", text: "alpha deep", parentId: "a", childrenIds: ["a2"] },
       a2: { id: "a2", text: "alpha deeper", parentId: "a1", childrenIds: ["a3"] },
       a3: { id: "a3", text: "alpha deepest", parentId: "a2", childrenIds: ["a4"] },
       a4: { id: "a4", text: "alpha final", parentId: "a3", childrenIds: [] },
-      b: { id: "b", text: "Beta", parentId: "root", childrenIds: [] },
+      b: { id: "b", text: "Beta", note: "memo only target", parentId: "root", childrenIds: [] },
     },
     undoStack: [],
     redoStack: [],
@@ -49,4 +49,9 @@ test("buildSearchResults: supports Japanese UI labels", () => {
   const results = buildSearchResults(makeDoc(), "alpha", "ja");
   assert.equal(results.length, 5);
   assert.equal(results[0].subtitle.startsWith("パス:"), true);
+});
+
+test("buildSearchResults: note text is not searchable", () => {
+  const results = buildSearchResults(makeDoc(), "memo only target");
+  assert.deepEqual(results, []);
 });

@@ -75,6 +75,25 @@ export function resolveKeyboardCommand(
     return { preventDefault: true, command: { type: "preventOnly" } };
   }
 
+  if (ctx.nodeMemoOpen) {
+    if (key === "Escape") {
+      return {
+        preventDefault: true,
+        command: {
+          type: "multi",
+          commands: [
+            { type: "dispatch", action: { type: "commitNoteEdit" } },
+            { type: "setNodeMemoOpen", open: false },
+          ],
+        },
+      };
+    }
+    if (ctrlKey && (key === "w" || key === "t" || key === "Tab")) {
+      return { preventDefault: true, command: { type: "preventOnly" } };
+    }
+    return { preventDefault: false, command: { type: "none" } };
+  }
+
   if (ctx.settingsOpen) {
     if (key === "Escape") {
       return { preventDefault: true, command: { type: "setSettingsOpen", open: false } };
@@ -190,6 +209,19 @@ export function resolveKeyboardCommand(
 
   if (!ctrlKey && !metaKey && !altKey && key === "c") {
     return { preventDefault: true, command: { type: "setNodeColorOpen", open: true } };
+  }
+
+  if (!ctrlKey && !metaKey && !altKey && key === "m") {
+    return {
+      preventDefault: true,
+      command: {
+        type: "multi",
+        commands: [
+          { type: "dispatch", action: { type: "beginNoteEdit" } },
+          { type: "setNodeMemoOpen", open: true },
+        ],
+      },
+    };
   }
 
   if (ctrlKey && (key === "t" || key === "T")) {
