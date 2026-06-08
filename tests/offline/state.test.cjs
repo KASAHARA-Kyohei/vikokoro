@@ -51,3 +51,251 @@ test("blank note is normalized away", () => {
   const doc = state.workspace.documents[state.workspace.activeDocId];
   assert.equal(doc.nodes[doc.cursorId].note, undefined);
 });
+
+function withTree(state) {
+  const docId = state.workspace.activeDocId;
+  return {
+    ...state,
+    workspace: {
+      ...state.workspace,
+      documents: {
+        ...state.workspace.documents,
+        [docId]: {
+          id: docId,
+          rootId: "root",
+          cursorId: "a",
+          collapsedNodeIds: [],
+          nodePositions: {
+            root: { x: 0, y: 25 },
+            a: { x: 260, y: 0 },
+            a1: { x: 520, y: 0 },
+            b: { x: 260, y: 50 },
+          },
+          edgeAnchors: {},
+          nodes: {
+            root: { id: "root", text: "root", parentId: null, childrenIds: ["a", "b"] },
+            a: { id: "a", text: "a", parentId: "root", childrenIds: ["a1"] },
+            a1: { id: "a1", text: "a1", parentId: "a", childrenIds: [] },
+            b: { id: "b", text: "b", parentId: "root", childrenIds: [] },
+          },
+          undoStack: [],
+          redoStack: [],
+        },
+      },
+    },
+  };
+}
+
+test("collapse state is saved but does not create an undo entry", () => {
+  let state = withTree(makeReadyState());
+  state = editorReducer(state, { type: "collapseNode" });
+  const doc = state.workspace.documents[state.workspace.activeDocId];
+
+  assert.deepEqual(doc.collapsedNodeIds, ["a"]);
+  assert.equal(doc.undoStack.length, 0);
+  assert.equal(state.saveRevision, 1);
+});
+
+test("collapsing an ancestor moves cursor to the collapsed node", () => {
+  let state = withTree(makeReadyState());
+  const docId = state.workspace.activeDocId;
+  state.workspace.documents[docId].cursorId = "a1";
+  state = editorReducer(state, { type: "collapseNode", nodeId: "a" });
+
+  assert.equal(state.workspace.documents[docId].cursorId, "a");
+});
+
+test("search reveal expands ancestors and exits unrelated focus", () => {
+  let state = withTree(makeReadyState());
+  const docId = state.workspace.activeDocId;
+  state.workspace.documents[docId].collapsedNodeIds = ["a"];
+  state = { ...state, focusRootId: "b" };
+
+  state = editorReducer(state, { type: "selectNodeReveal", nodeId: "a1" });
+
+  assert.equal(state.focusRootId, null);
+  assert.equal(state.workspace.documents[docId].cursorId, "a1");
+  assert.deepEqual(state.workspace.documents[docId].collapsedNodeIds, []);
+});
+
+test("legacy hydration defaults and sanitizes collapsed node IDs", () => {
+  const initial = createInitialAppState();
+  const legacy = withTree(makeReadyState()).workspace;
+  const docId = legacy.activeDocId;
+  delete legacy.documents[docId].collapsedNodeIds;
+  delete legacy.documents[docId].edgeAnchors;
+
+  const state = editorReducer(initial, {
+    type: "finishHydration",
+    workspace: legacy,
+  });
+
+  assert.deepEqual(state.workspace.documents[docId].collapsedNodeIds, []);
+  assert.deepEqual(state.workspace.documents[docId].edgeAnchors, {});
+});
+
+test("adding a sibling outside the focused branch exits focus", () => {
+  let state = { ...withTree(makeReadyState()), focusRootId: "a" };
+  state = editorReducer(state, { type: "addSiblingAndInsert" });
+
+  assert.equal(state.focusRootId, null);
+});
+
+test("outdenting the cursor outside the focused branch exits focus", () => {
+  let state = { ...withTree(makeReadyState()), focusRootId: "a" };
+  const docId = state.workspace.activeDocId;
+  state.workspace.documents[docId].cursorId = "a1";
+
+  state = editorReducer(state, { type: "reparentNode", direction: "left" });
+
+  assert.equal(state.focusRootId, null);
+  assert.equal(state.workspace.documents[docId].nodes.a1.parentId, "root");
+});
+
+test("moving multiple nodes is one undo step and undo restores positions", () => {
+  let state = withTree(makeReadyState());
+  const docId = state.workspace.activeDocId;
+
+  state = editorReducer(state, {
+    type: "moveNodes",
+    nodeIds: ["a", "a1"],
+    dx: -12,
+    dy: 24,
+  });
+
+  let doc = state.workspace.documents[docId];
+  assert.deepEqual(doc.nodePositions.a, { x: 248, y: 24 });
+  assert.deepEqual(doc.nodePositions.a1, { x: 508, y: 24 });
+  assert.equal(doc.undoStack.length, 1);
+
+  state = editorReducer(state, { type: "undo" });
+  doc = state.workspace.documents[docId];
+  assert.deepEqual(doc.nodePositions.a, { x: 260, y: 0 });
+  assert.deepEqual(doc.nodePositions.a1, { x: 520, y: 0 });
+});
+
+test("branch auto-layout keeps branch root position", () => {
+  let state = withTree(makeReadyState());
+  const docId = state.workspace.activeDocId;
+  state.workspace.documents[docId].nodePositions.a1 = { x: -300, y: 900 };
+
+  state = editorReducer(state, { type: "autoLayout", scope: "branch" });
+
+  const doc = state.workspace.documents[docId];
+  assert.deepEqual(doc.nodePositions.a, { x: 260, y: 0 });
+  assert.deepEqual(doc.nodePositions.a1, { x: 520, y: 0 });
+  assert.equal(doc.undoStack.length, 1);
+});
+
+test("blank-canvas child creation stores the requested position", () => {
+  let state = withTree(makeReadyState());
+  const docId = state.workspace.activeDocId;
+
+  state = editorReducer(state, {
+    type: "addChildAtPosition",
+    point: { x: -140, y: 330 },
+  });
+
+  const doc = state.workspace.documents[docId];
+  assert.equal(state.mode, "insert");
+  assert.deepEqual(doc.nodePositions[doc.cursorId], { x: -140, y: 330 });
+  assert.equal(doc.nodes[doc.cursorId].parentId, "a");
+});
+
+test("legacy hydration fills node positions and drops unknown positions", () => {
+  const initial = createInitialAppState();
+  const workspace = withTree(makeReadyState()).workspace;
+  const docId = workspace.activeDocId;
+  workspace.documents[docId].nodePositions = {
+    root: { x: -10, y: 20 },
+    ghost: { x: 1, y: 2 },
+  };
+
+  const state = editorReducer(initial, {
+    type: "finishHydration",
+    workspace,
+  });
+  const positions = state.workspace.documents[docId].nodePositions;
+
+  assert.deepEqual(positions.root, { x: -10, y: 20 });
+  assert.equal(Boolean(positions.a), true);
+  assert.equal(Boolean(positions.ghost), false);
+});
+
+test("manual connector anchors are undoable and redoable", () => {
+  let state = withTree(makeReadyState());
+  const docId = state.workspace.activeDocId;
+
+  state = editorReducer(state, {
+    type: "setEdgeAnchor",
+    edgeKey: "root->a",
+    endpoint: "from",
+    side: "bottom",
+  });
+  state = editorReducer(state, {
+    type: "setEdgeAnchor",
+    edgeKey: "root->a",
+    endpoint: "to",
+    side: "top",
+  });
+
+  let doc = state.workspace.documents[docId];
+  assert.deepEqual(doc.edgeAnchors["root->a"], { from: "bottom", to: "top" });
+  assert.equal(doc.undoStack.length, 2);
+
+  state = editorReducer(state, { type: "undo" });
+  doc = state.workspace.documents[docId];
+  assert.deepEqual(doc.edgeAnchors["root->a"], { from: "bottom", to: null });
+
+  state = editorReducer(state, { type: "redo" });
+  doc = state.workspace.documents[docId];
+  assert.deepEqual(doc.edgeAnchors["root->a"], { from: "bottom", to: "top" });
+});
+
+test("resetting connector anchors creates one undo step", () => {
+  let state = withTree(makeReadyState());
+  const docId = state.workspace.activeDocId;
+  state.workspace.documents[docId].edgeAnchors = {
+    "root->a": { from: "right", to: "left" },
+  };
+
+  state = editorReducer(state, { type: "resetEdgeAnchors", edgeKey: "root->a" });
+
+  let doc = state.workspace.documents[docId];
+  assert.deepEqual(doc.edgeAnchors, {});
+  assert.equal(doc.undoStack.length, 1);
+
+  state = editorReducer(state, { type: "undo" });
+  doc = state.workspace.documents[docId];
+  assert.deepEqual(doc.edgeAnchors["root->a"], { from: "right", to: "left" });
+});
+
+test("node deletion removes invalid connector anchors", () => {
+  let state = withTree(makeReadyState());
+  const docId = state.workspace.activeDocId;
+  state.workspace.documents[docId].edgeAnchors = {
+    "root->a": { from: "right", to: "left" },
+    "a->a1": { from: "bottom", to: "top" },
+  };
+  state.workspace.documents[docId].cursorId = "a";
+
+  state = editorReducer(state, { type: "deleteNode" });
+
+  const doc = state.workspace.documents[docId];
+  assert.deepEqual(doc.edgeAnchors, {});
+});
+
+test("reparent removes connector anchors for edges that no longer exist", () => {
+  let state = withTree(makeReadyState());
+  const docId = state.workspace.activeDocId;
+  state.workspace.documents[docId].edgeAnchors = {
+    "a->a1": { from: "right", to: "left" },
+  };
+  state.workspace.documents[docId].cursorId = "a1";
+
+  state = editorReducer(state, { type: "reparentNode", direction: "left" });
+
+  const doc = state.workspace.documents[docId];
+  assert.equal(doc.nodes.a1.parentId, "root");
+  assert.deepEqual(doc.edgeAnchors, {});
+});

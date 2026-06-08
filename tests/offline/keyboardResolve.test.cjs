@@ -13,6 +13,7 @@ function baseContext() {
     settingsOpen: false,
     llmAssistOpen: false,
     closeConfirmOpen: false,
+    focusActive: false,
     jumpSession: null,
     jumpPrefix: "",
   };
@@ -33,6 +34,52 @@ test("m opens node memo from normal mode", () => {
     { type: "dispatch", action: { type: "beginNoteEdit" } },
     { type: "setNodeMemoOpen", open: true },
   ]);
+});
+
+test("F enters focus and Escape exits focus", () => {
+  const enter = resolveKeyboardCommand(baseContext(), {
+    key: "F",
+    ctrlKey: false,
+    metaKey: false,
+    altKey: false,
+    shiftKey: true,
+  });
+  assert.deepEqual(enter.command, {
+    type: "dispatch",
+    action: { type: "enterFocus" },
+  });
+
+  const exit = resolveKeyboardCommand(
+    { ...baseContext(), focusActive: true },
+    {
+      key: "Escape",
+      ctrlKey: false,
+      metaKey: false,
+      altKey: false,
+      shiftKey: false,
+    },
+  );
+  assert.deepEqual(exit.command, {
+    type: "dispatch",
+    action: { type: "exitFocus" },
+  });
+});
+
+test("h moves focus up while focus is active", () => {
+  const resolution = resolveKeyboardCommand(
+    { ...baseContext(), focusActive: true },
+    {
+      key: "h",
+      ctrlKey: false,
+      metaKey: false,
+      altKey: false,
+      shiftKey: false,
+    },
+  );
+  assert.deepEqual(resolution.command, {
+    type: "dispatch",
+    action: { type: "focusParent" },
+  });
 });
 
 test("escape closes and commits node memo", () => {
@@ -75,4 +122,54 @@ test("typing while node memo is open is not intercepted", () => {
 
   assert.equal(resolution.preventDefault, false);
   assert.deepEqual(resolution.command, { type: "none" });
+});
+
+test("Alt+h/j/k/l nudges positions using physical key codes", () => {
+  const small = resolveKeyboardCommand(baseContext(), {
+    key: "˙",
+    code: "KeyH",
+    ctrlKey: false,
+    metaKey: false,
+    altKey: true,
+    shiftKey: false,
+  });
+  assert.deepEqual(small.command, { type: "nudgeSelection", dx: -8, dy: 0 });
+
+  const large = resolveKeyboardCommand(baseContext(), {
+    key: "Ô",
+    code: "KeyJ",
+    ctrlKey: false,
+    metaKey: false,
+    altKey: true,
+    shiftKey: true,
+  });
+  assert.deepEqual(large.command, { type: "nudgeSelection", dx: 0, dy: 32 });
+});
+
+test("equals auto-layouts a branch and plus auto-layouts the entire map", () => {
+  const branch = resolveKeyboardCommand(baseContext(), {
+    key: "=",
+    code: "Equal",
+    ctrlKey: false,
+    metaKey: false,
+    altKey: false,
+    shiftKey: false,
+  });
+  assert.deepEqual(branch.command, {
+    type: "dispatch",
+    action: { type: "autoLayout", scope: "branch" },
+  });
+
+  const all = resolveKeyboardCommand(baseContext(), {
+    key: "+",
+    code: "Equal",
+    ctrlKey: false,
+    metaKey: false,
+    altKey: false,
+    shiftKey: true,
+  });
+  assert.deepEqual(all.command, {
+    type: "dispatch",
+    action: { type: "autoLayout", scope: "all" },
+  });
 });

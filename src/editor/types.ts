@@ -4,6 +4,12 @@ export type DocId = string;
 export type Mode = "normal" | "insert";
 
 export type NodeColor = "blue" | "green" | "yellow" | "pink" | "gray";
+export type CanvasPoint = { x: number; y: number };
+export type AnchorSide = "top" | "right" | "bottom" | "left";
+export type EdgeAnchor = {
+  from: AnchorSide | null;
+  to: AnchorSide | null;
+};
 
 export type Node = {
   id: NodeId;
@@ -18,10 +24,13 @@ export type DocumentState = {
   rootId: NodeId;
   cursorId: NodeId;
   nodes: Record<NodeId, Node>;
+  nodePositions: Record<NodeId, CanvasPoint>;
+  edgeAnchors: Record<string, EdgeAnchor>;
 };
 
 export type Document = DocumentState & {
   id: DocId;
+  collapsedNodeIds: NodeId[];
   undoStack: DocumentState[];
   redoStack: DocumentState[];
 };

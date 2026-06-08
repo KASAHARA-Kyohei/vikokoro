@@ -28,6 +28,12 @@ struct Document {
     root_id: String,
     cursor_id: String,
     nodes: HashMap<String, Node>,
+    #[serde(default)]
+    node_positions: HashMap<String, CanvasPoint>,
+    #[serde(default)]
+    edge_anchors: HashMap<String, EdgeAnchor>,
+    #[serde(default)]
+    collapsed_node_ids: Vec<String>,
     undo_stack: Vec<DocumentState>,
     redo_stack: Vec<DocumentState>,
 }
@@ -38,6 +44,33 @@ struct DocumentState {
     root_id: String,
     cursor_id: String,
     nodes: HashMap<String, Node>,
+    #[serde(default)]
+    node_positions: HashMap<String, CanvasPoint>,
+    #[serde(default)]
+    edge_anchors: HashMap<String, EdgeAnchor>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+struct CanvasPoint {
+    x: f64,
+    y: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+enum AnchorSide {
+    Top,
+    Right,
+    Bottom,
+    Left,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+struct EdgeAnchor {
+    from: Option<AnchorSide>,
+    to: Option<AnchorSide>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -45,6 +78,8 @@ struct DocumentState {
 struct Node {
     id: String,
     text: String,
+    #[serde(default)]
+    note: Option<String>,
     parent_id: Option<String>,
     children_ids: Vec<String>,
     color: Option<String>,
@@ -116,4 +151,101 @@ pub fn save_workspace_to_disk(app: &tauri::AppHandle, workspace: Workspace) -> R
     let text = serde_json::to_string_pretty(&workspace).map_err(|e| e.to_string())?;
     write_workspace_json_atomic(&path, &format!("{text}\n"))?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{AnchorSide, CanvasPoint, DocumentState, EdgeAnchor, Workspace};
+
+    const LEGACY_WORKSPACE: &str = r#"{
+      "tabs": [{"docId": "doc-1"}],
+      "activeDocId": "doc-1",
+      "documents": {
+        "doc-1": {
+          "id": "doc-1",
+          "rootId": "root",
+          "cursorId": "root",
+          "nodes": {
+            "root": {
+              "id": "root",
+              "text": "Root",
+              "parentId": null,
+              "childrenIds": [],
+              "color": null
+            }
+          },
+          "undoStack": [],
+          "redoStack": []
+        }
+      }
+    }"#;
+
+    #[test]
+    fn legacy_workspace_defaults_collapsed_nodes_note_and_edge_anchors() {
+        let workspace: Workspace = serde_json::from_str(LEGACY_WORKSPACE).unwrap();
+        let document = workspace.documents.get("doc-1").unwrap();
+        let root = document.nodes.get("root").unwrap();
+
+        assert!(document.collapsed_node_ids.is_empty());
+        assert!(document.node_positions.is_empty());
+        assert!(document.edge_anchors.is_empty());
+        assert_eq!(root.note, None);
+    }
+
+    #[test]
+    fn workspace_round_trip_preserves_positions_collapsed_nodes_note_and_edge_anchors() {
+        let mut workspace: Workspace = serde_json::from_str(LEGACY_WORKSPACE).unwrap();
+        let document = workspace.documents.get_mut("doc-1").unwrap();
+        document.collapsed_node_ids.push("root".to_string());
+        document
+            .node_positions
+            .insert("root".to_string(), CanvasPoint { x: -12.5, y: 44.0 });
+        document.edge_anchors.insert(
+            "root->child".to_string(),
+            EdgeAnchor {
+                from: Some(AnchorSide::Right),
+                to: Some(AnchorSide::Left),
+            },
+        );
+        document.nodes.get_mut("root").unwrap().note = Some("memo".to_string());
+        document.undo_stack.push(DocumentState {
+            root_id: document.root_id.clone(),
+            cursor_id: document.cursor_id.clone(),
+            nodes: document.nodes.clone(),
+            node_positions: document.node_positions.clone(),
+            edge_anchors: document.edge_anchors.clone(),
+        });
+
+        let json = serde_json::to_string(&workspace).unwrap();
+        let restored: Workspace = serde_json::from_str(&json).unwrap();
+        let restored_document = restored.documents.get("doc-1").unwrap();
+
+        assert_eq!(restored_document.collapsed_node_ids, vec!["root"]);
+        assert_eq!(
+            restored_document.node_positions.get("root"),
+            Some(&CanvasPoint { x: -12.5, y: 44.0 })
+        );
+        assert_eq!(
+            restored_document.undo_stack[0].node_positions.get("root"),
+            Some(&CanvasPoint { x: -12.5, y: 44.0 })
+        );
+        assert_eq!(
+            restored_document.edge_anchors.get("root->child"),
+            Some(&EdgeAnchor {
+                from: Some(AnchorSide::Right),
+                to: Some(AnchorSide::Left),
+            })
+        );
+        assert_eq!(
+            restored_document.undo_stack[0].edge_anchors.get("root->child"),
+            Some(&EdgeAnchor {
+                from: Some(AnchorSide::Right),
+                to: Some(AnchorSide::Left),
+            })
+        );
+        assert_eq!(
+            restored_document.nodes.get("root").unwrap().note.as_deref(),
+            Some("memo")
+        );
+    }
 }

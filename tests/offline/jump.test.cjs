@@ -4,6 +4,9 @@ const {
   buildJumpSession,
   resolveJumpKey,
 } = require("../../.tmp-tests/src/features/jump/model.js");
+const {
+  buildVisibleTreeProjection,
+} = require("../../.tmp-tests/src/editor/domain/visibleTree.js");
 
 function makeDoc(nodeCount = 30) {
   const nodes = {
@@ -82,4 +85,13 @@ test("resolveJumpKey: two-stroke prefix then select", () => {
   });
   assert.equal(second.type, "select");
   assert.equal(second.nodeId, session.hintToNode[twoCharHint]);
+});
+
+test("buildJumpSession: excludes nodes hidden by collapse", () => {
+  const doc = makeDoc(3);
+  doc.collapsedNodeIds = ["root"];
+  const projection = buildVisibleTreeProjection(doc, null);
+  const session = buildJumpSession(projection.state);
+
+  assert.deepEqual(Object.values(session.hintToNode), ["root"]);
 });

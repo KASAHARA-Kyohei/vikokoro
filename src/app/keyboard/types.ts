@@ -4,6 +4,7 @@ import type { JumpSession } from "../../features/jump/model";
 
 export type KeyboardInput = {
   key: string;
+  code?: string;
   ctrlKey: boolean;
   metaKey: boolean;
   altKey: boolean;
@@ -20,6 +21,7 @@ export type KeyboardResolverContext = {
   settingsOpen: boolean;
   llmAssistOpen: boolean;
   closeConfirmOpen: boolean;
+  focusActive: boolean;
   jumpSession: JumpSession | null;
   jumpPrefix: string;
 };
@@ -42,6 +44,7 @@ export type KeyboardCommand =
   | { type: "setJumpPrefix"; prefix: string }
   | { type: "openJump" }
   | { type: "closeJump" }
+  | { type: "nudgeSelection"; dx: number; dy: number }
   | { type: "multi"; commands: KeyboardCommand[] };
 
 export type KeyboardResolution = {

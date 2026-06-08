@@ -17,6 +17,7 @@
     "src/editor/state.ts",
     "src/editor/domain/**/*.ts",
     "src/app/keyboard/types.ts",
+    "src/app/keyboard/foldChord.ts",
     "src/app/keyboard/resolveKeyboardCommand.ts",
     "src/features/jump/model.ts",
     "src/features/search/model.ts",

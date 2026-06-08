@@ -15,6 +15,7 @@ type CommandExecutor = {
   setJumpPrefix: (prefix: string) => void;
   openJump: () => void;
   closeJump: () => void;
+  nudgeSelection: (dx: number, dy: number) => void;
 };
 
 export function executeKeyboardCommand(command: KeyboardCommand, executor: CommandExecutor): void {
@@ -71,6 +72,9 @@ export function executeKeyboardCommand(command: KeyboardCommand, executor: Comma
       return;
     case "closeJump":
       executor.closeJump();
+      return;
+    case "nudgeSelection":
+      executor.nudgeSelection(command.dx, command.dy);
       return;
     default:
       return;

@@ -3,11 +3,17 @@ import "./App.scss";
 import { executeKeyboardCommand } from "./app/keyboard/executeKeyboardCommand";
 import { resolveKeyboardCommand } from "./app/keyboard/resolveKeyboardCommand";
 import { useDeleteChord } from "./app/keyboard/useDeleteChord";
+import { useFoldChord } from "./app/keyboard/useFoldChord";
 import { useEditorUiSession } from "./app/session/useEditorUiSession";
 import { EditorView } from "./editor/EditorView";
 import { TabBar } from "./editor/TabBar";
+import { makeEdgeKey } from "./editor/domain/edgeAnchors";
 import { createInitialAppState, editorReducer } from "./editor/state";
-import type { DocumentState } from "./editor/types";
+import type { AnchorSide, Document, DocumentState, NodeId } from "./editor/types";
+import {
+  buildVisibleTreeProjection,
+  getBreadcrumbNodeIds,
+} from "./editor/domain/visibleTree";
 import { buildJumpSession } from "./features/jump/model";
 import {
   applyImproveOperationsToDocument,
@@ -67,6 +73,7 @@ function App() {
   const text = APP_TEXT[language];
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const { reset: resetDeleteChord, consumeD: consumeDeleteChord } = useDeleteChord();
+  const { reset: resetFoldChord, consume: consumeFoldChord } = useFoldChord();
 
   const {
     helpOpen,
@@ -101,6 +108,32 @@ function App() {
   } = useEditorUiSession();
 
   const activeDoc = state.workspace.documents[state.workspace.activeDocId];
+  const visibleProjection = useMemo(
+    () => buildVisibleTreeProjection(activeDoc, state.focusRootId),
+    [activeDoc, state.focusRootId],
+  );
+  const visibleDoc = useMemo<Document>(
+    () => ({ ...activeDoc, ...visibleProjection.state }),
+    [activeDoc, visibleProjection.state],
+  );
+  const collapsibleNodeIds = useMemo(() => {
+    const ids = new Set<NodeId>();
+    for (const nodeId of visibleProjection.visibleNodeIds) {
+      if (activeDoc.nodes[nodeId]?.childrenIds.length) ids.add(nodeId);
+    }
+    return ids;
+  }, [activeDoc.nodes, visibleProjection.visibleNodeIds]);
+  const collapsedNodeIds = useMemo(
+    () => new Set(activeDoc.collapsedNodeIds),
+    [activeDoc.collapsedNodeIds],
+  );
+  const focusBreadcrumbIds = useMemo(
+    () =>
+      state.focusRootId
+        ? getBreadcrumbNodeIds(activeDoc, state.focusRootId)
+        : [],
+    [activeDoc, state.focusRootId],
+  );
   const closeConfirmOpen = state.closeConfirmDocId !== null;
   const [llmAssistMode, setLlmAssistMode] = useState<LlmAssistMode>("generate");
   const [llmAssistRunning, setLlmAssistRunning] = useState(false);
@@ -111,13 +144,15 @@ function App() {
     preview: LlmImprovePreview;
   } | null>(null);
   const [reviewResult, setReviewResult] = useState<LlmReviewResult | null>(null);
+  const [selectedNodeIds, setSelectedNodeIds] = useState<Set<NodeId>>(new Set());
+  const [selectedEdgeKey, setSelectedEdgeKey] = useState<string | null>(null);
 
   const openJump = useCallback(() => {
-    const session = buildJumpSession(activeDoc);
+    const session = buildJumpSession(visibleDoc);
     if (Object.keys(session.hintToNode).length === 0) return;
     setJumpSession(session);
     setJumpPrefix("");
-  }, [activeDoc, setJumpPrefix, setJumpSession]);
+  }, [setJumpPrefix, setJumpSession, visibleDoc]);
 
   const zoomPan = useZoomPan({
     activeDocId: state.workspace.activeDocId,
@@ -134,6 +169,26 @@ function App() {
       jumpActive,
     viewportRef,
   });
+
+  useEffect(() => {
+    setSelectedNodeIds(new Set());
+    setSelectedEdgeKey(null);
+  }, [state.workspace.activeDocId, state.focusRootId]);
+
+  useEffect(() => {
+    if (!selectedEdgeKey) return;
+    const exists = Object.values(visibleDoc.nodes).some((node) =>
+      node.childrenIds.some((childId) => makeEdgeKey(node.id, childId) === selectedEdgeKey),
+    );
+    if (!exists) setSelectedEdgeKey(null);
+  }, [selectedEdgeKey, visibleDoc.nodes]);
+
+  const changeEdgeAnchor = useCallback(
+    (edgeKey: string, endpoint: "from" | "to", side: AnchorSide) => {
+      dispatch({ type: "setEdgeAnchor", edgeKey, endpoint, side });
+    },
+    [],
+  );
 
   const activeTabIndex = useMemo(() => {
     return state.workspace.tabs.findIndex((tab) => tab.docId === state.workspace.activeDocId);
@@ -317,6 +372,7 @@ function App() {
         const applied = applyImproveOperationsToDocument(
           improveDocument,
           improveResponse.operations,
+          doc.nodePositions,
         );
         if (!applied.ok) {
           throw new Error(formatLlmValidationErrors(applied.errors, language));
@@ -433,17 +489,83 @@ function App() {
         subtitle: paletteText.moveNodeRightSubtitle,
         run: () => dispatch({ type: "reparentNode", direction: "right" }),
       },
+      {
+        id: "toggle-collapse",
+        title: paletteText.toggleCollapseTitle,
+        subtitle: "za",
+        run: () => dispatch({ type: "toggleNodeCollapsed" }),
+      },
+      {
+        id: "collapse-branch",
+        title: paletteText.collapseBranchTitle,
+        subtitle: "zc",
+        run: () => dispatch({ type: "collapseNode" }),
+      },
+      {
+        id: "expand-branch",
+        title: paletteText.expandBranchTitle,
+        subtitle: "zo",
+        run: () => dispatch({ type: "expandNode" }),
+      },
+      {
+        id: "collapse-all",
+        title: paletteText.collapseAllTitle,
+        subtitle: "zM",
+        run: () => dispatch({ type: "collapseAllVisible" }),
+      },
+      {
+        id: "expand-all",
+        title: paletteText.expandAllTitle,
+        subtitle: "zR",
+        run: () => dispatch({ type: "expandAllVisible" }),
+      },
+      {
+        id: "focus-branch",
+        title: paletteText.focusBranchTitle,
+        subtitle: "F",
+        run: () => dispatch({ type: "enterFocus" }),
+      },
+      {
+        id: "layout-branch",
+        title: paletteText.layoutBranchTitle,
+        subtitle: "=",
+        run: () => dispatch({ type: "autoLayout", scope: "branch" }),
+      },
+      {
+        id: "layout-all",
+        title: paletteText.layoutAllTitle,
+        subtitle: "+",
+        run: () => dispatch({ type: "autoLayout", scope: "all" }),
+      },
+      ...(selectedEdgeKey
+        ? [{
+            id: "reset-connector-anchors",
+            title: paletteText.resetConnectorAnchorsTitle,
+            subtitle: paletteText.resetConnectorAnchorsSubtitle,
+            run: () => dispatch({ type: "resetEdgeAnchors" as const, edgeKey: selectedEdgeKey }),
+          }]
+        : []),
+      ...(state.focusRootId
+        ? [{
+            id: "exit-focus",
+            title: paletteText.exitFocusTitle,
+            subtitle: "Esc",
+            run: () => dispatch({ type: "exitFocus" as const }),
+          }]
+        : []),
     ];
 
     return filterPaletteCommands(commands, paletteQuery);
   }, [
     dispatch,
     paletteQuery,
+    selectedEdgeKey,
     setHelpOpen,
     setLlmAssistOpen,
     setPaletteOpen,
     setSearchOpen,
     setSettingsOpen,
+    state.focusRootId,
     text.palette,
   ]);
 
@@ -559,7 +681,7 @@ function App() {
     const nodeId = searchResults[nextIndex]?.nodeId;
     if (!nodeId) return;
     setSearchIndex(nextIndex);
-    dispatch({ type: "selectNode", nodeId });
+    dispatch({ type: "selectNodeReveal", nodeId });
   };
 
   const runPaletteSelected = () => {
@@ -601,6 +723,24 @@ function App() {
 
       if (state.mode === "insert") {
         resetDeleteChord();
+        resetFoldChord();
+      }
+
+      if (!commandLayerActive) {
+        resetFoldChord();
+      }
+
+      if (commandLayerActive && !event.ctrlKey && !event.metaKey && !event.altKey) {
+        const foldAction = consumeFoldChord(event.key);
+        if (foldAction) {
+          event.preventDefault();
+          if (foldAction === "toggle") dispatch({ type: "toggleNodeCollapsed" });
+          if (foldAction === "collapse") dispatch({ type: "collapseNode" });
+          if (foldAction === "expand") dispatch({ type: "expandNode" });
+          if (foldAction === "collapseAll") dispatch({ type: "collapseAllVisible" });
+          if (foldAction === "expandAll") dispatch({ type: "expandAllVisible" });
+          return;
+        }
       }
 
       if (commandLayerActive && event.key !== "d") {
@@ -626,11 +766,13 @@ function App() {
           settingsOpen,
           llmAssistOpen,
           closeConfirmOpen,
+          focusActive: state.focusRootId !== null,
           jumpSession,
           jumpPrefix,
         },
         {
           key: event.key,
+          code: event.code,
           ctrlKey: event.ctrlKey,
           metaKey: event.metaKey,
           altKey: event.altKey,
@@ -660,6 +802,12 @@ function App() {
         setJumpPrefix,
         openJump,
         closeJump,
+        nudgeSelection: (dx, dy) => {
+          const selected = selectedNodeIds.has(activeDoc.cursorId)
+            ? [...selectedNodeIds].filter((id) => Boolean(activeDoc.nodes[id]))
+            : [activeDoc.cursorId];
+          dispatch({ type: "moveNodes", nodeIds: selected, dx, dy });
+        },
       });
     };
 
@@ -671,6 +819,7 @@ function App() {
     closeConfirmOpen,
     closeJump,
     consumeDeleteChord,
+    consumeFoldChord,
     dispatch,
     helpOpen,
     jumpActive,
@@ -682,6 +831,7 @@ function App() {
     openJump,
     paletteOpen,
     resetDeleteChord,
+    resetFoldChord,
     searchOpen,
     setHelpOpen,
     setJumpPrefix,
@@ -695,7 +845,10 @@ function App() {
     setSettingsOpen,
     settingsOpen,
     state.hydrated,
+    state.focusRootId,
     state.mode,
+    selectedNodeIds,
+    activeDoc,
   ]);
 
   if (!state.hydrated) {
@@ -718,6 +871,45 @@ function App() {
         onNew={() => dispatch({ type: "createDoc" })}
         language={language}
       />
+      {state.focusRootId ? (
+        <div className="focusBreadcrumb" aria-label={text.focus.breadcrumbLabel}>
+          <button
+            type="button"
+            className="focusBreadcrumbButton"
+            onMouseDown={(event) => {
+              event.preventDefault();
+              dispatch({ type: "exitFocus" });
+            }}
+          >
+            {text.focus.all}
+          </button>
+          {focusBreadcrumbIds.map((nodeId) => {
+            const node = activeDoc.nodes[nodeId];
+            if (!node) return null;
+            const isCurrent = nodeId === state.focusRootId;
+            return (
+              <span className="focusBreadcrumbSegment" key={nodeId}>
+                <span className="focusBreadcrumbSeparator">›</span>
+                <button
+                  type="button"
+                  className={
+                    "focusBreadcrumbButton" +
+                    (isCurrent ? " focusBreadcrumbButtonCurrent" : "")
+                  }
+                  disabled={isCurrent}
+                  onMouseDown={(event) => {
+                    event.preventDefault();
+                    dispatch({ type: "setFocusRoot", nodeId });
+                  }}
+                >
+                  {node.text.trim() || text.focus.empty}
+                </button>
+              </span>
+            );
+          })}
+          <span className="focusBreadcrumbHint">{text.focus.exitHint}</span>
+        </div>
+      ) : null}
       <div
         className={zoomPan.viewportClassName}
         ref={viewportRef}
@@ -726,16 +918,56 @@ function App() {
         tabIndex={0}
       >
         <EditorView
-          doc={activeDoc}
+          doc={visibleProjection.state}
+          sourceDoc={activeDoc}
           mode={state.mode}
-          disabled={closeConfirmOpen || jumpActive || nodeMemoOpen}
+          disabled={
+            closeConfirmOpen ||
+            jumpActive ||
+            nodeMemoOpen ||
+            helpOpen ||
+            searchOpen ||
+            paletteOpen ||
+            nodeColorOpen ||
+            settingsOpen ||
+            llmAssistOpen
+          }
           zoom={zoomPan.zoom}
+          viewportRef={viewportRef}
           panGestureActive={zoomPan.panGestureActive}
           highlightedNodeIds={highlightedNodeIds}
           activeHighlightedNodeId={activeSearchNodeId}
           jumpHints={jumpSession?.nodeToHint ?? null}
           jumpPrefix={jumpPrefix}
-          onSelectNode={(nodeId) => dispatch({ type: "selectNode", nodeId })}
+          collapsibleNodeIds={collapsibleNodeIds}
+          collapsedNodeIds={collapsedNodeIds}
+          hiddenDescendantCounts={visibleProjection.hiddenDescendantCounts}
+          selectedNodeIds={selectedNodeIds}
+          selectedEdgeKey={selectedEdgeKey}
+          onSelectNode={(nodeId) => {
+            setSelectedEdgeKey(null);
+            dispatch({ type: "selectNode", nodeId });
+          }}
+          onSelectionChange={setSelectedNodeIds}
+          onSelectEdge={(edgeKey) => {
+            setSelectedNodeIds(new Set());
+            setSelectedEdgeKey(edgeKey);
+          }}
+          onChangeEdgeAnchor={changeEdgeAnchor}
+          onResetEdgeAnchors={(edgeKey) =>
+            dispatch({ type: "resetEdgeAnchors", edgeKey })
+          }
+          onMoveNodes={(nodeIds, dx, dy) =>
+            dispatch({ type: "moveNodes", nodeIds, dx, dy })
+          }
+          onCreateChildAt={(point) => {
+            setSelectedNodeIds(new Set());
+            setSelectedEdgeKey(null);
+            dispatch({ type: "addChildAtPosition", point });
+          }}
+          onToggleCollapse={(nodeId) =>
+            dispatch({ type: "toggleNodeCollapsed", nodeId })
+          }
           onChangeText={(nodeText) => dispatch({ type: "setCursorText", text: nodeText })}
           onEnterCommit={() => dispatch({ type: "commitInsert" })}
           onEsc={() => dispatch({ type: "commitInsert" })}
@@ -761,7 +993,7 @@ function App() {
           onSelectNode={(nodeId) => {
             const nextIndex = searchResults.findIndex((r) => r.nodeId === nodeId);
             if (nextIndex >= 0) setSearchIndex(nextIndex);
-            dispatch({ type: "selectNode", nodeId });
+            dispatch({ type: "selectNodeReveal", nodeId });
           }}
           onMoveNext={() => moveSearch(1)}
           onMovePrev={() => moveSearch(-1)}
