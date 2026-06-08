@@ -14,7 +14,8 @@
       {
         "title": "vikokoro",
         "width": 800,
-        "height": 600
+        "height": 600,
+        "maximized": true
       }
     ],
     "security": {

@@ -19,6 +19,56 @@
   outline: none;
 }
 
+.focusBreadcrumb {
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 10px;
+  border-bottom: 1px solid var(--divider);
+  background: color-mix(in srgb, var(--panel), var(--surface) 25%);
+  color: var(--muted);
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.focusBreadcrumbSegment {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.focusBreadcrumbSeparator {
+  opacity: 0.65;
+}
+
+.focusBreadcrumbButton {
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  padding: 3px 6px;
+  cursor: pointer;
+}
+
+.focusBreadcrumbButton:hover {
+  background: var(--surfaceHover);
+  color: var(--text);
+}
+
+.focusBreadcrumbButtonCurrent {
+  color: var(--text);
+  background: var(--accentBg);
+  cursor: default;
+}
+
+.focusBreadcrumbHint {
+  margin-left: auto;
+  padding-left: 12px;
+  font-size: 11px;
+  opacity: 0.8;
+}
+
 .editorViewportPannable,
 .editorViewportPannable .node {
   cursor: grab;

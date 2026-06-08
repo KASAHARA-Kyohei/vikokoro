@@ -1,9 +1,13 @@
 .editorCanvas {
   position: relative;
+  min-width: 100%;
+  min-height: 100%;
 }
 
 .editorCanvasOuter {
   position: relative;
+  min-width: 100%;
+  min-height: 100%;
 }
 
 .editorLines {
@@ -19,9 +23,29 @@
   stroke-width: 1.2;
 }
 
-.edgePathSelected {
+.edgePathHighlighted {
   stroke: var(--edgeSelected);
   stroke-width: 2;
+}
+
+.edgePathSelected {
+  stroke: var(--accent);
+  stroke-width: 2.4;
+}
+
+.edgeHitPath {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 14;
+  pointer-events: stroke;
+  cursor: pointer;
+}
+
+.alignmentGuide {
+  stroke: var(--accent);
+  stroke-width: 1;
+  stroke-dasharray: 4 4;
+  opacity: 0.72;
 }
 
 .node {
@@ -33,7 +57,7 @@
   background: var(--surface);
   display: flex;
   align-items: center;
-  padding: 0 10px;
+  padding: 0 30px 0 10px;
   box-sizing: border-box;
   user-select: none;
   cursor: default;
@@ -43,6 +67,74 @@
     background 120ms ease,
     border-color 120ms ease,
     box-shadow 120ms ease;
+}
+
+.connectorHandles {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.connectorHandle {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid color-mix(in srgb, var(--accentBorder), var(--border) 35%);
+  background: var(--surface);
+  box-shadow: 0 1px 5px color-mix(in srgb, #000 24%, transparent);
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.connectorHandle:hover,
+.connectorHandleActive {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.connectorHandle-top {
+  left: 50%;
+  top: -6px;
+  transform: translateX(-50%);
+}
+
+.connectorHandle-right {
+  right: -6px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.connectorHandle-bottom {
+  left: 50%;
+  bottom: -6px;
+  transform: translateX(-50%);
+}
+
+.connectorHandle-left {
+  left: -6px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.connectorAutoButton {
+  position: absolute;
+  z-index: 3;
+  transform: translate(-50%, -50%);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface), var(--accentBg) 18%);
+  color: var(--text);
+  font-size: 10px;
+  line-height: 1;
+  padding: 4px 7px;
+  cursor: pointer;
+  box-shadow: 0 4px 12px color-mix(in srgb, #000 18%, transparent);
+}
+
+.connectorAutoButton:hover {
+  border-color: var(--accentBorder);
 }
 
 .nodeExiting {
@@ -177,9 +269,72 @@
   background: color-mix(in srgb, var(--accentBg), var(--surface) 18%);
 }
 
+.nodeNoteBadge {
+  position: absolute;
+  right: 8px;
+  bottom: 7px;
+  width: 18px;
+  height: 18px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surfaceHover), var(--surface) 30%);
+  color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.nodeNoteBadgeIcon {
+  width: 12px;
+  height: 12px;
+  display: block;
+}
+
+.nodeFoldButton {
+  position: absolute;
+  right: -10px;
+  top: -10px;
+  z-index: 3;
+  min-width: 22px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surfaceHover);
+  color: var(--muted);
+  font: 600 11px/1 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+}
+
+.nodeFoldButton:hover {
+  color: var(--text);
+  border-color: var(--accentBorder);
+}
+
+.nodeFoldButtonCollapsed {
+  color: var(--text);
+  border-color: var(--accentBorder);
+  background: color-mix(in srgb, var(--accentBg), var(--surface) 35%);
+}
+
 .nodeSelected {
   border: 2px solid var(--accent);
   box-shadow: var(--shadowNodeSelected);
+}
+
+.nodeMultiSelected {
+  outline: 2px solid color-mix(in srgb, var(--accent), transparent 35%);
+  outline-offset: 2px;
+}
+
+.nodeDragging {
+  transition: none;
+  cursor: grabbing;
 }
 
 .nodeEditing {
@@ -197,4 +352,13 @@
   padding: 0 10px;
   outline: none;
   transition: left 140ms ease, top 140ms ease, background 120ms ease;
+}
+
+.selectionMarquee {
+  position: absolute;
+  z-index: 4;
+  pointer-events: none;
+  border: 1px solid var(--accentBorder);
+  background: color-mix(in srgb, var(--accentBg), transparent 55%);
+  border-radius: 4px;
 }

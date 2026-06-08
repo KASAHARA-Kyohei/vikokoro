@@ -9,11 +9,13 @@ type CommandExecutor = {
   setPaletteQuery: (query: string) => void;
   setPaletteIndex: (index: number) => void;
   setNodeColorOpen: (open: boolean) => void;
+  setNodeMemoOpen: (open: boolean) => void;
   setSettingsOpen: (open: boolean) => void;
   setLlmAssistOpen: (open: boolean) => void;
   setJumpPrefix: (prefix: string) => void;
   openJump: () => void;
   closeJump: () => void;
+  nudgeSelection: (dx: number, dy: number) => void;
 };
 
 export function executeKeyboardCommand(command: KeyboardCommand, executor: CommandExecutor): void {
@@ -53,6 +55,9 @@ export function executeKeyboardCommand(command: KeyboardCommand, executor: Comma
     case "setNodeColorOpen":
       executor.setNodeColorOpen(command.open);
       return;
+    case "setNodeMemoOpen":
+      executor.setNodeMemoOpen(command.open);
+      return;
     case "setSettingsOpen":
       executor.setSettingsOpen(command.open);
       return;
@@ -67,6 +72,9 @@ export function executeKeyboardCommand(command: KeyboardCommand, executor: Comma
       return;
     case "closeJump":
       executor.closeJump();
+      return;
+    case "nudgeSelection":
+      executor.nudgeSelection(command.dx, command.dy);
       return;
     default:
       return;

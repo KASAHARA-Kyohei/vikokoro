@@ -4,6 +4,7 @@ import type { JumpSession } from "../../features/jump/model";
 
 export type KeyboardInput = {
   key: string;
+  code?: string;
   ctrlKey: boolean;
   metaKey: boolean;
   altKey: boolean;
@@ -16,9 +17,11 @@ export type KeyboardResolverContext = {
   searchOpen: boolean;
   paletteOpen: boolean;
   nodeColorOpen: boolean;
+  nodeMemoOpen: boolean;
   settingsOpen: boolean;
   llmAssistOpen: boolean;
   closeConfirmOpen: boolean;
+  focusActive: boolean;
   jumpSession: JumpSession | null;
   jumpPrefix: string;
 };
@@ -32,6 +35,7 @@ export type KeyboardCommand =
   | { type: "setPaletteQuery"; query: string }
   | { type: "setPaletteIndex"; index: number }
   | { type: "setNodeColorOpen"; open: boolean }
+  | { type: "setNodeMemoOpen"; open: boolean }
   | { type: "setSettingsOpen"; open: boolean }
   | { type: "setLlmAssistOpen"; open: boolean }
   | { type: "dispatch"; action: EditorAction }
@@ -40,6 +44,7 @@ export type KeyboardCommand =
   | { type: "setJumpPrefix"; prefix: string }
   | { type: "openJump" }
   | { type: "closeJump" }
+  | { type: "nudgeSelection"; dx: number; dy: number }
   | { type: "multi"; commands: KeyboardCommand[] };
 
 export type KeyboardResolution = {

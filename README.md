@@ -18,9 +18,17 @@ Note: This is currently a personal project, so specs and behavior may change.
 - `Tab` adds a child node, `Enter` adds a sibling node (both start editing immediately)
 - Move the cursor with `h/j/k/l`, reorder siblings with `J/K`
 - Move node hierarchy with `H/L` (left/right = outdent/indent, subtree included)
+- Freely position nodes by dragging; `Shift+Drag` moves an entire branch
+- Multi-select with `Shift+Click` or a blank-canvas marquee, then move together
+- Double-click blank canvas space to add a child at that position
+- Alignment guides with light snapping; `=` / `+` auto-layout a branch / the full map
+- Click an edge to manually choose parent/child connector sides; `Auto` resets the edge
 - Jump to any node with hint keys (`f` then displayed key sequence)
+- Focus the selected branch with `F`, then return through breadcrumbs or `Esc`
+- Fold branches with `za` / `zc` / `zo`, or fold/unfold all visible branches with `zM` / `zR`
 - Delete with `dd` (root is protected, children are promoted)
 - Node colors (`c` to open, `1-5` to apply, `0` to clear; `5` = gray for done/history)
+- Node memos (`m` to open, multi-line notes, `M` badge on nodes with notes)
 - Undo / Redo
 - Tabs (multiple documents)
 - Search (`Ctrl+F`) / Command palette (`Ctrl+P`) / Help (`?`)
@@ -47,9 +55,18 @@ Common keys (Normal mode):
 - `h/j/k/l`: Move to parent/next/previous/child
 - `J/K`: Reorder sibling down/up
 - `H/L`: Move node left/right in hierarchy (outdent / indent)
+- `Alt+h/j/k/l`: Nudge the selection 8px (`Shift` makes it 32px)
+- `=` / `+`: Auto-layout the selected branch / entire map
+- Mouse drag: Free positioning (`Shift` moves the entire branch)
+- Blank-canvas double-click: Add a child at the clicked position
+- Edge click: Select a connector, then click top/right/bottom/left anchors on either node
 - `f` + hint key(s): Jump to any node
+- `F`: Focus the selected branch (`Esc` returns to the full map)
+- `za` / `zc` / `zo`: Toggle / collapse / expand a branch
+- `zM` / `zR`: Collapse / expand all visible branches
 - `dd`: Delete
 - `c`: Open node color menu (`1-5` apply, `0` clear, `Esc` close)
+- `m`: Open node memo (`Esc` closes and commits)
 - `u` / `Ctrl+r`: Undo / Redo
 
 Editing (Insert mode):

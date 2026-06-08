@@ -1,5 +1,14 @@
 import { generateId } from "../../editor/domain/id";
-import type { Document, DocumentState, Node, NodeColor, NodeId } from "../../editor/types";
+import { findAvailablePosition } from "../../editor/domain/freeLayout";
+import { H_GAP, NODE_WIDTH, sanitizeNodePositions } from "../../editor/layout";
+import type {
+  CanvasPoint,
+  Document,
+  DocumentState,
+  Node,
+  NodeColor,
+  NodeId,
+} from "../../editor/types";
 import {
   parseImproveRequest,
   type GeneratedTreeNode,
@@ -158,12 +167,15 @@ export function buildDocumentStateFromGeneratedTree(root: GeneratedTreeNode): Do
     rootId,
     cursorId: rootId,
     nodes,
+    nodePositions: sanitizeNodePositions({ rootId, nodes }, undefined),
+    edgeAnchors: {},
   };
 }
 
 export function applyImproveOperationsToDocument(
   document: ImproveDocumentState,
   operations: ImproveOperation[],
+  existingPositions: Record<NodeId, CanvasPoint> = {},
 ): ApplyImproveResult {
   const errors: string[] = [];
   const nodes = cloneMutableNodes(document);
@@ -312,7 +324,30 @@ export function applyImproveOperationsToDocument(
     rootId: document.rootId,
     cursorId,
     nodes,
+    nodePositions: {},
+    edgeAnchors: {},
   };
+  const fallbackPositions = sanitizeNodePositions(
+    { rootId: document.rootId, nodes },
+    existingPositions,
+  );
+  const originalIds = new Set(Object.keys(document.nodes));
+  for (const id of Object.keys(nodes)) {
+    if (originalIds.has(id) && existingPositions[id]) {
+      nextState.nodePositions[id] = { ...fallbackPositions[id] };
+      continue;
+    }
+    const parentId = nodes[id].parentId;
+    const parentPoint = parentId
+      ? nextState.nodePositions[parentId] ?? fallbackPositions[parentId]
+      : fallbackPositions[id];
+    nextState.nodePositions[id] = findAvailablePosition(
+      parentPoint
+        ? { x: parentPoint.x + NODE_WIDTH + H_GAP, y: parentPoint.y }
+        : fallbackPositions[id],
+      nextState.nodePositions,
+    );
+  }
   const integrityErrors = validateResultState(nextState);
   if (integrityErrors.length > 0) {
     return { ok: false, errors: integrityErrors };

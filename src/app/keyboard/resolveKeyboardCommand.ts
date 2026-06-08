@@ -14,7 +14,7 @@ export function resolveKeyboardCommand(
   ctx: KeyboardResolverContext,
   input: KeyboardInput,
 ): KeyboardResolution {
-  const { key, ctrlKey, metaKey, altKey, shiftKey } = input;
+  const { key, code, ctrlKey, metaKey, altKey, shiftKey } = input;
 
   if (ctx.helpOpen) {
     if (key === "Escape") {
@@ -73,6 +73,25 @@ export function resolveKeyboardCommand(
       };
     }
     return { preventDefault: true, command: { type: "preventOnly" } };
+  }
+
+  if (ctx.nodeMemoOpen) {
+    if (key === "Escape") {
+      return {
+        preventDefault: true,
+        command: {
+          type: "multi",
+          commands: [
+            { type: "dispatch", action: { type: "commitNoteEdit" } },
+            { type: "setNodeMemoOpen", open: false },
+          ],
+        },
+      };
+    }
+    if (ctrlKey && (key === "w" || key === "t" || key === "Tab")) {
+      return { preventDefault: true, command: { type: "preventOnly" } };
+    }
+    return { preventDefault: false, command: { type: "none" } };
   }
 
   if (ctx.settingsOpen) {
@@ -184,12 +203,56 @@ export function resolveKeyboardCommand(
     return { preventDefault: false, command: { type: "none" } };
   }
 
+  if (altKey && !ctrlKey && !metaKey) {
+    const step = shiftKey ? 32 : 8;
+    const directionByCode: Record<string, { dx: number; dy: number }> = {
+      KeyH: { dx: -step, dy: 0 },
+      KeyJ: { dx: 0, dy: step },
+      KeyK: { dx: 0, dy: -step },
+      KeyL: { dx: step, dy: 0 },
+    };
+    const delta = code ? directionByCode[code] : undefined;
+    if (delta) {
+      return {
+        preventDefault: true,
+        command: { type: "nudgeSelection", ...delta },
+      };
+    }
+  }
+
+  if (ctx.focusActive && key === "Escape") {
+    return {
+      preventDefault: true,
+      command: { type: "dispatch", action: { type: "exitFocus" } },
+    };
+  }
+
+  if (!ctrlKey && !metaKey && !altKey && key === "F") {
+    return {
+      preventDefault: true,
+      command: { type: "dispatch", action: { type: "enterFocus" } },
+    };
+  }
+
   if (!ctrlKey && !metaKey && !altKey && key.toLowerCase() === "f") {
     return { preventDefault: true, command: { type: "openJump" } };
   }
 
   if (!ctrlKey && !metaKey && !altKey && key === "c") {
     return { preventDefault: true, command: { type: "setNodeColorOpen", open: true } };
+  }
+
+  if (!ctrlKey && !metaKey && !altKey && key === "m") {
+    return {
+      preventDefault: true,
+      command: {
+        type: "multi",
+        commands: [
+          { type: "dispatch", action: { type: "beginNoteEdit" } },
+          { type: "setNodeMemoOpen", open: true },
+        ],
+      },
+    };
   }
 
   if (ctrlKey && (key === "t" || key === "T")) {
@@ -235,10 +298,29 @@ export function resolveKeyboardCommand(
     return { preventDefault: true, command: { type: "dispatch", action: { type: "enterInsert" } } };
   }
 
+  if (key === "=" && !shiftKey) {
+    return {
+      preventDefault: true,
+      command: { type: "dispatch", action: { type: "autoLayout", scope: "branch" } },
+    };
+  }
+
+  if (key === "+" || (key === "=" && shiftKey)) {
+    return {
+      preventDefault: true,
+      command: { type: "dispatch", action: { type: "autoLayout", scope: "all" } },
+    };
+  }
+
   if (key === "h") {
     return {
       preventDefault: true,
-      command: { type: "dispatch", action: { type: "moveCursor", direction: "parent" } },
+      command: {
+        type: "dispatch",
+        action: ctx.focusActive
+          ? { type: "focusParent" }
+          : { type: "moveCursor", direction: "parent" },
+      },
     };
   }
 

@@ -1,0 +1,45 @@
+.nodeMemoModal {
+  width: min(560px, calc(100% - 32px));
+  max-height: calc(100vh - 32px);
+  display: flex;
+  flex-direction: column;
+}
+
+.nodeMemoModal .modalBody {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.nodeMemoSubjectLabel {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.nodeMemoSubjectValue {
+  margin-top: 4px;
+  color: var(--text);
+  font-weight: 600;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.nodeMemoHint {
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.nodeMemoTextarea {
+  width: 100%;
+  min-height: 240px;
+  margin-top: 10px;
+  resize: vertical;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--inputBg);
+  color: var(--text);
+  padding: 10px;
+  line-height: 1.55;
+  outline: none;
+}

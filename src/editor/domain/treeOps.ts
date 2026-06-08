@@ -1,4 +1,6 @@
 import type { Document, Node, NodeId } from "../types";
+import { H_GAP, NODE_HEIGHT, NODE_WIDTH, V_GAP } from "../layout";
+import { findAvailablePosition } from "./freeLayout";
 import { generateId } from "./id";
 
 export function moveCursor(
@@ -122,11 +124,18 @@ export function addChild(doc: Document): { updated: Document; newNodeId: NodeId 
   const newId = generateId();
   const newNode: Node = { id: newId, text: "", parentId: cursor.id, childrenIds: [] };
   const nextCursorChildren = [...cursor.childrenIds, newId];
+  const currentPositions = doc.nodePositions ?? {};
+  const parentPoint = currentPositions[cursor.id] ?? { x: 0, y: 0 };
+  const point = findAvailablePosition(
+    { x: parentPoint.x + NODE_WIDTH + H_GAP, y: parentPoint.y },
+    currentPositions,
+  );
 
   return {
     updated: {
       ...doc,
       cursorId: newId,
+      nodePositions: { ...currentPositions, [newId]: point },
       nodes: {
         ...doc.nodes,
         [newId]: newNode,
@@ -154,11 +163,18 @@ export function addSibling(doc: Document): { updated: Document; newNodeId: NodeI
   const newNode: Node = { id: newId, text: "", parentId: parent.id, childrenIds: [] };
   const nextChildren = [...parent.childrenIds];
   nextChildren.splice(index + 1, 0, newId);
+  const currentPositions = doc.nodePositions ?? {};
+  const cursorPoint = currentPositions[cursor.id] ?? { x: 0, y: 0 };
+  const point = findAvailablePosition(
+    { x: cursorPoint.x, y: cursorPoint.y + NODE_HEIGHT + V_GAP },
+    currentPositions,
+  );
 
   return {
     updated: {
       ...doc,
       cursorId: newId,
+      nodePositions: { ...currentPositions, [newId]: point },
       nodes: {
         ...doc.nodes,
         [newId]: newNode,
@@ -186,7 +202,9 @@ export function deleteCursorNodeAndPromoteChildren(doc: Document): Document {
   ];
 
   const nextNodes: Record<NodeId, Node> = { ...doc.nodes };
+  const nextNodePositions = { ...(doc.nodePositions ?? {}) };
   delete nextNodes[deleting.id];
+  delete nextNodePositions[deleting.id];
   nextNodes[parent.id] = { ...parent, childrenIds: nextParentChildren };
 
   for (const childId of promotedIds) {
@@ -212,5 +230,6 @@ export function deleteCursorNodeAndPromoteChildren(doc: Document): Document {
     ...doc,
     cursorId: nextCursorId,
     nodes: nextNodes,
+    nodePositions: nextNodePositions,
   };
 }

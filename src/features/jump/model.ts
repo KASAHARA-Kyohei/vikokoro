@@ -1,5 +1,5 @@
 import { computeLayout } from "../../editor/layout";
-import type { Document, NodeId } from "../../editor/types";
+import type { DocumentState, NodeId } from "../../editor/types";
 
 const JUMP_HINT_KEYS = [
   "f",
@@ -87,7 +87,7 @@ function normalizeJumpKey(key: string): string | null {
   return (JUMP_HINT_KEYS as readonly string[]).includes(normalized) ? normalized : null;
 }
 
-export function buildJumpSession(doc: Document): JumpSession {
+export function buildJumpSession(doc: DocumentState): JumpSession {
   const layout = computeLayout(doc);
   const cursorPos = layout.positions[doc.cursorId];
 
