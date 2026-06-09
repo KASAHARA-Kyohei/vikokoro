@@ -1,5 +1,5 @@
 import type { Document, Node, NodeId } from "../types";
-import { H_GAP, NODE_HEIGHT, NODE_WIDTH, V_GAP } from "../layout";
+import { getNodeSize, getNodeSizes, H_GAP, V_GAP } from "../layout";
 import { findAvailablePosition } from "./freeLayout";
 import { generateId } from "./id";
 
@@ -126,9 +126,14 @@ export function addChild(doc: Document): { updated: Document; newNodeId: NodeId 
   const nextCursorChildren = [...cursor.childrenIds, newId];
   const currentPositions = doc.nodePositions ?? {};
   const parentPoint = currentPositions[cursor.id] ?? { x: 0, y: 0 };
+  const sizes = getNodeSizes(doc.nodes);
+  const parentSize = sizes[cursor.id] ?? getNodeSize(cursor);
+  const newNodeSize = getNodeSize(newNode);
   const point = findAvailablePosition(
-    { x: parentPoint.x + NODE_WIDTH + H_GAP, y: parentPoint.y },
+    { x: parentPoint.x + parentSize.width + H_GAP, y: parentPoint.y },
     currentPositions,
+    sizes,
+    newNodeSize,
   );
 
   return {
@@ -165,9 +170,14 @@ export function addSibling(doc: Document): { updated: Document; newNodeId: NodeI
   nextChildren.splice(index + 1, 0, newId);
   const currentPositions = doc.nodePositions ?? {};
   const cursorPoint = currentPositions[cursor.id] ?? { x: 0, y: 0 };
+  const sizes = getNodeSizes(doc.nodes);
+  const cursorSize = sizes[cursor.id] ?? getNodeSize(cursor);
+  const newNodeSize = getNodeSize(newNode);
   const point = findAvailablePosition(
-    { x: cursorPoint.x, y: cursorPoint.y + NODE_HEIGHT + V_GAP },
+    { x: cursorPoint.x, y: cursorPoint.y + cursorSize.height + V_GAP },
     currentPositions,
+    sizes,
+    newNodeSize,
   );
 
   return {
