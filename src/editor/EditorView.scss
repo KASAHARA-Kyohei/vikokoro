@@ -230,11 +230,11 @@
 }
 
 .nodeText {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   width: 100%;
   color: var(--text);
+  line-height: 20px;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 
 .nodeJumpDimmed {
@@ -349,8 +349,14 @@
   border: 2px solid var(--accent);
   background: var(--inputBg);
   color: var(--text);
-  padding: 0 10px;
+  font: inherit;
+  line-height: 20px;
+  padding: 7px 30px 7px 10px;
   outline: none;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  resize: none;
+  white-space: pre-wrap;
   transition: left 140ms ease, top 140ms ease, background 120ms ease;
 }
 

@@ -1,17 +1,20 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ANCHOR_SIDES, makeEdgeKey } from "./domain/edgeAnchors";
+import {
+  createEditorEnterState,
+  transitionEditorEnter,
+} from "./domain/editorEnter";
+import type { EditorEnterEvent } from "./domain/editorEnter";
 import { collectSubtreeNodeIds, computeSnapAdjustment, moveNodePositions } from "./domain/freeLayout";
 import { computeCenteredScrollFromRects } from "./domain/viewport";
 import type { AnchorSide, CanvasPoint, DocumentState, Mode, Node, NodeId } from "./types";
 import "./EditorView.scss";
 import {
   computeLayout,
-  NODE_HEIGHT,
-  NODE_WIDTH,
   getEdgeEndpoints,
   svgPathForEdge,
 } from "./layout";
-import type { NodePosition } from "./layout";
+import type { NodePosition, NodeSize } from "./layout";
 
 type Props = {
   doc: DocumentState;
@@ -47,7 +50,7 @@ type Props = {
   onEsc: () => void;
 };
 
-type ExitingNode = { node: Node; pos: NodePosition };
+type ExitingNode = { node: Node; pos: NodePosition; size: NodeSize };
 
 type JumpHintState = {
   hint: string | null;
@@ -121,14 +124,12 @@ export function EditorView({
     };
   }, [doc, dragPreview]);
   const layout = useMemo(() => computeLayout(previewDoc), [previewDoc]);
-  const inputRef = useRef<HTMLInputElement | null>(null);
+  const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const canvasRef = useRef<HTMLDivElement | null>(null);
-  const isComposingRef = useRef(false);
-  const pendingCompositionEnterRef = useRef(false);
-  const pendingCompositionTextRef = useRef<string | null>(null);
-  const compositionEnterTimerRef = useRef<number | null>(null);
+  const editorEnterStateRef = useRef(createEditorEnterState());
   const prevNodesRef = useRef<Record<NodeId, Node> | null>(null);
   const prevPositionsRef = useRef<Record<NodeId, NodePosition> | null>(null);
+  const prevSizesRef = useRef<Record<NodeId, NodeSize> | null>(null);
   const initialViewPositionedRef = useRef(false);
   const initialCursorIdRef = useRef<NodeId | null>(null);
   const initialCenterFrameRef = useRef<number | null>(null);
@@ -188,32 +189,10 @@ export function EditorView({
     };
   }, [doc.cursorId, doc.rootId, layout.positions, viewportRef, zoom]);
 
-  const clearCompositionEnterTimer = () => {
-    if (compositionEnterTimerRef.current === null) return;
-    window.clearTimeout(compositionEnterTimerRef.current);
-    compositionEnterTimerRef.current = null;
-  };
-
-  const resetCompositionEnter = () => {
-    pendingCompositionEnterRef.current = false;
-    pendingCompositionTextRef.current = null;
-    clearCompositionEnterTimer();
-  };
-
-  const commitPendingCompositionEnter = (text: string | null) => {
-    if (!pendingCompositionEnterRef.current) return;
-
-    pendingCompositionEnterRef.current = false;
-    pendingCompositionTextRef.current = null;
-    clearCompositionEnterTimer();
-    if (text !== null) {
-      onChangeText(text);
-    }
-
-    compositionEnterTimerRef.current = window.setTimeout(() => {
-      compositionEnterTimerRef.current = null;
-      onEnterCommit();
-    }, 0);
+  const applyEditorEnterEvent = (event: EditorEnterEvent) => {
+    const result = transitionEditorEnter(editorEnterStateRef.current, event);
+    editorEnterStateRef.current = result.state;
+    return result.decision;
   };
 
   useEffect(() => {
@@ -238,7 +217,8 @@ export function EditorView({
   useEffect(() => {
     const prevNodes = prevNodesRef.current;
     const prevPositions = prevPositionsRef.current;
-    if (prevNodes && prevPositions) {
+    const prevSizes = prevSizesRef.current;
+    if (prevNodes && prevPositions && prevSizes) {
       const currentIds = new Set(Object.keys(doc.nodes));
       const removed: NodeId[] = [];
       for (const id of Object.keys(prevNodes)) {
@@ -251,8 +231,9 @@ export function EditorView({
           for (const id of removed) {
             const node = prevNodes[id];
             const pos = prevPositions[id];
-            if (!node || !pos) continue;
-            next[id] = { node, pos };
+            const size = prevSizes[id];
+            if (!node || !pos || !size) continue;
+            next[id] = { node, pos, size };
             window.setTimeout(() => {
               setExitingNodes((latest) => {
                 if (!latest[id]) return latest;
@@ -268,6 +249,7 @@ export function EditorView({
 
     prevNodesRef.current = doc.nodes;
     prevPositionsRef.current = layout.positions;
+    prevSizesRef.current = layout.sizes;
 
     setExitingNodes((current) => {
       const next: Record<NodeId, ExitingNode> = {};
@@ -276,13 +258,7 @@ export function EditorView({
       }
       return next;
     });
-  }, [doc.nodes, layout.positions]);
-
-  useEffect(() => {
-    return () => {
-      clearCompositionEnterTimer();
-    };
-  }, []);
+  }, [doc.nodes, layout.positions, layout.sizes]);
 
   const nodeEntries = useMemo(() => {
     const entries: { node: Node; pos: NodePosition | undefined }[] = Object.values(doc.nodes).map(
@@ -340,12 +316,18 @@ export function EditorView({
     const from = layout.positions[selectedEdge.fromId];
     const to = layout.positions[selectedEdge.toId];
     if (!from || !to) return null;
-    const endpoints = getEdgeEndpoints(from, to, doc.edgeAnchors[selectedEdgeKey]);
+    const endpoints = getEdgeEndpoints(
+      from,
+      to,
+      doc.edgeAnchors[selectedEdgeKey],
+      layout.sizes[selectedEdge.fromId],
+      layout.sizes[selectedEdge.toId],
+    );
     return {
       x: (endpoints.from.x + endpoints.to.x) / 2,
       y: (endpoints.from.y + endpoints.to.y) / 2,
     };
-  }, [doc.edgeAnchors, layout.positions, selectedEdge, selectedEdgeKey]);
+  }, [doc.edgeAnchors, layout.positions, layout.sizes, selectedEdge, selectedEdgeKey]);
 
   const clientToCanvas = (clientX: number, clientY: number): CanvasPoint | null => {
     const rect = canvasRef.current?.getBoundingClientRect();
@@ -377,14 +359,28 @@ export function EditorView({
       if (!moved && Math.hypot(rawDx, rawDy) < 4 / zoom) return;
       moved = true;
       const movingSet = new Set(moveIds);
-      const movingPoints = moveIds
-        .map((id) => sourceDoc.nodePositions[id])
-        .filter((point): point is CanvasPoint => Boolean(point))
-        .map((point) => ({ x: point.x + rawDx, y: point.y + rawDy }));
-      const stationaryPoints = Object.entries(doc.nodePositions)
+      const movingNodes = moveIds
+        .map((id) => {
+          const point = sourceDoc.nodePositions[id];
+          const size = layout.sizes[id];
+          if (!point || !size) return null;
+          return {
+            x: point.x + rawDx,
+            y: point.y + rawDy,
+            width: size.width,
+            height: size.height,
+          };
+        })
+        .filter((node): node is CanvasPoint & NodeSize => Boolean(node));
+      const stationaryNodes = Object.entries(doc.nodePositions)
         .filter(([id]) => !movingSet.has(id))
-        .map(([, point]) => point);
-      const snap = computeSnapAdjustment(movingPoints, stationaryPoints, 6 / zoom);
+        .map(([id, point]) => {
+          const size = layout.sizes[id];
+          if (!size) return null;
+          return { ...point, ...size };
+        })
+        .filter((node): node is CanvasPoint & NodeSize => Boolean(node));
+      const snap = computeSnapAdjustment(movingNodes, stationaryNodes, 6 / zoom);
       latestDx = rawDx + snap.dx;
       latestDy = rawDy + snap.dy;
       setDragPreview({
@@ -439,11 +435,13 @@ export function EditorView({
       setSelectionRect(rect);
       const next = new Set(baseSelection);
       for (const [id, pos] of Object.entries(layout.positions)) {
+        const size = layout.sizes[id];
+        if (!size) continue;
         if (
           pos.x < rect.x + rect.width &&
-          pos.x + NODE_WIDTH > rect.x &&
+          pos.x + size.width > rect.x &&
           pos.y < rect.y + rect.height &&
-          pos.y + NODE_HEIGHT > rect.y
+          pos.y + size.height > rect.y
         ) {
           next.add(id);
         }
@@ -495,7 +493,13 @@ export function EditorView({
             const to = layout.positions[edge.toId];
             if (!from || !to) return null;
             const key = makeEdgeKey(edge.fromId, edge.toId);
-            const endpoints = getEdgeEndpoints(from, to, doc.edgeAnchors[key]);
+            const endpoints = getEdgeEndpoints(
+              from,
+              to,
+              doc.edgeAnchors[key],
+              layout.sizes[edge.fromId],
+              layout.sizes[edge.toId],
+            );
             const isHighlighted = highlightedEdgeKeys.has(key);
             const isSelected = selectedEdgeKey === key;
             const path = svgPathForEdge(
@@ -567,6 +571,8 @@ export function EditorView({
         ) : null}
 
         {nodeEntries.map(({ node, pos }) => {
+          const size = layout.sizes[node.id];
+          if (!size) return null;
           const isCursor = node.id === doc.cursorId;
           const isMatch = highlightedNodeIds?.has(node.id) ?? false;
           const isActiveMatch = activeHighlightedNodeId === node.id;
@@ -598,7 +604,7 @@ export function EditorView({
                 (isActiveMatch ? " nodeMatchActive" : "") +
                 (jump.isDimmed ? " nodeJumpDimmed" : "")
               }
-              style={{ left: pos.x, top: pos.y, width: NODE_WIDTH, height: NODE_HEIGHT }}
+              style={{ left: pos.x, top: pos.y, width: size.width, height: size.height }}
               onMouseDown={(event) => beginNodeInteraction(event, node.id)}
             >
               {jump.hint ? (
@@ -708,7 +714,7 @@ export function EditorView({
           />
         ) : null}
 
-        {Object.entries(exitingNodes).map(([id, { node, pos }]) => {
+        {Object.entries(exitingNodes).map(([id, { node, pos, size }]) => {
           const isCursor = id === doc.cursorId;
           return (
             <div
@@ -720,7 +726,7 @@ export function EditorView({
                 (isCursor ? " nodeSelected" : "") +
                 (mode === "insert" && isCursor ? " nodeEditing" : "")
               }
-              style={{ left: pos.x, top: pos.y, width: NODE_WIDTH, height: NODE_HEIGHT }}
+              style={{ left: pos.x, top: pos.y, width: size.width, height: size.height }}
             >
               {node.note ? (
                 <div className="nodeNoteBadge" aria-hidden="true">
@@ -770,51 +776,64 @@ export function EditorView({
         })}
 
         {!disabled && mode === "insert" && cursorPos && cursorNode ? (
-          <input
+          <textarea
             ref={inputRef}
             className="nodeInput"
+            rows={1}
             value={cursorNode.text}
             onChange={(e) => onChangeText(e.currentTarget.value)}
             onCompositionStart={() => {
-              isComposingRef.current = true;
-              resetCompositionEnter();
+              applyEditorEnterEvent({ type: "compositionStart" });
             }}
             onCompositionEnd={(e) => {
-              isComposingRef.current = false;
-              commitPendingCompositionEnter(e.currentTarget.value);
+              onChangeText(e.currentTarget.value);
+              applyEditorEnterEvent({
+                type: "compositionEnd",
+                timeStamp: e.timeStamp,
+              });
             }}
             onBlur={() => {
-              isComposingRef.current = false;
-              resetCompositionEnter();
+              applyEditorEnterEvent({ type: "reset" });
+            }}
+            onKeyUp={(e) => {
+              if (e.key !== "Enter") return;
+              applyEditorEnterEvent({ type: "enterKeyUp" });
             }}
             onKeyDown={(e) => {
               if (e.key === "Escape") {
                 e.preventDefault();
                 e.stopPropagation();
-                resetCompositionEnter();
+                applyEditorEnterEvent({ type: "reset" });
                 onEsc();
                 return;
               }
 
               if (e.key === "Enter") {
                 const native = e.nativeEvent;
-                const imeComposing =
-                  isComposingRef.current || native.isComposing || native.keyCode === 229;
-                if (imeComposing) {
-                  // Let the IME receive Enter, then commit this edit when composition ends.
+                const decision = applyEditorEnterEvent({
+                  type: "enterKeyDown",
+                  timeStamp: e.timeStamp,
+                  shiftKey: e.shiftKey,
+                  nativeIsComposing: native.isComposing,
+                  keyCode: native.keyCode,
+                  repeat: e.repeat,
+                });
+                if (decision === "passToIme") {
                   e.stopPropagation();
-                  pendingCompositionEnterRef.current = true;
-                  pendingCompositionTextRef.current = e.currentTarget.value;
-                  clearCompositionEnterTimer();
-                  compositionEnterTimerRef.current = window.setTimeout(() => {
-                    compositionEnterTimerRef.current = null;
-                    if (isComposingRef.current) return;
-                    commitPendingCompositionEnter(pendingCompositionTextRef.current);
-                  }, 0);
                   return;
                 }
 
-                resetCompositionEnter();
+                if (decision === "ignoreEnter") {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  return;
+                }
+
+                if (decision === "lineBreak") {
+                  e.stopPropagation();
+                  return;
+                }
+
                 e.preventDefault();
                 e.stopPropagation();
                 onEnterCommit();
@@ -829,8 +848,8 @@ export function EditorView({
             style={{
               left: cursorPos.x,
               top: cursorPos.y,
-              width: NODE_WIDTH,
-              height: NODE_HEIGHT,
+              width: layout.sizes[cursorNode.id]?.width,
+              height: layout.sizes[cursorNode.id]?.height,
             }}
           />
         ) : null}

@@ -8,7 +8,10 @@ const {
 } = require("../../.tmp-tests/src/editor/domain/freeLayout.js");
 const {
   computeLayout,
+  computeTreePositions,
   getEdgeEndpoints,
+  getNodeSize,
+  NODE_MAX_WIDTH,
   sanitizeNodePositions,
   svgPathForEdge,
 } = require("../../.tmp-tests/src/editor/layout.js");
@@ -70,6 +73,29 @@ test("computeLayout keeps enough trailing canvas space to center nodes", () => {
   assert.equal(layout.contentHeight - viewport.height >= desiredScroll.y, true);
 });
 
+test("node size keeps short text compact and expands long or multiline text", () => {
+  assert.deepEqual(getNodeSize({ text: "short" }), { width: 180, height: 34 });
+
+  const long = getNodeSize({
+    text: "This is a long node label that should wrap across multiple lines without truncation.",
+  });
+  assert.equal(long.width, NODE_MAX_WIDTH);
+  assert.equal(long.height > 34, true);
+
+  const multiline = getNodeSize({ text: "first line\nsecond line\nthird line" });
+  assert.equal(multiline.height, 74);
+});
+
+test("tree layout uses the widest node in each depth and variable node heights", () => {
+  const doc = makeDoc();
+  doc.nodes.root.text = "R".repeat(80);
+  doc.nodes.a.text = "line 1\nline 2\nline 3";
+  const positions = computeTreePositions(doc);
+
+  assert.equal(positions.a.x, NODE_MAX_WIDTH + 80);
+  assert.equal(positions.b.y >= positions.a.y + getNodeSize(doc.nodes.a).height + 16, true);
+});
+
 test("autoLayoutBranch keeps branch root anchored and recalculates descendants", () => {
   const doc = makeDoc();
   const next = autoLayoutBranch(doc, "a");
@@ -120,6 +146,19 @@ test("manual edge anchors override automatic endpoint sides independently", () =
   assert.deepEqual(endpoints.to, { x: 390, y: 44 });
 });
 
+test("edge endpoints use each node's variable dimensions", () => {
+  const endpoints = getEdgeEndpoints(
+    { x: 0, y: 0 },
+    { x: 500, y: 20 },
+    undefined,
+    { width: 320, height: 74 },
+    { width: 220, height: 54 },
+  );
+
+  assert.deepEqual(endpoints.from, { x: 320, y: 37 });
+  assert.deepEqual(endpoints.to, { x: 500, y: 47 });
+});
+
 test("long connector curves cap their control distance", () => {
   const path = svgPathForEdge(
     { x: 180, y: 17 },
@@ -138,12 +177,14 @@ test("moving, collision avoidance, and alignment snapping are deterministic", ()
   const available = findAvailablePosition(
     { x: 0, y: 0 },
     { occupied: { x: 0, y: 0 } },
+    { occupied: { width: 320, height: 74 } },
+    { width: 220, height: 54 },
   );
-  assert.notDeepEqual(available, { x: 0, y: 0 });
+  assert.deepEqual(available, { x: 0, y: -70 });
 
   const snap = computeSnapAdjustment(
-    [{ x: 98, y: 48 }],
-    [{ x: 100, y: 50 }],
+    [{ x: 48, y: 28, width: 100, height: 40 }],
+    [{ x: 100, y: 50, width: 200, height: 80 }],
     3,
   );
   assert.deepEqual({ dx: snap.dx, dy: snap.dy }, { dx: 2, dy: 2 });

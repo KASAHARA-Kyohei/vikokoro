@@ -1,6 +1,10 @@
 import { generateId } from "../../editor/domain/id";
 import { findAvailablePosition } from "../../editor/domain/freeLayout";
-import { H_GAP, NODE_WIDTH, sanitizeNodePositions } from "../../editor/layout";
+import {
+  getNodeSizes,
+  H_GAP,
+  sanitizeNodePositions,
+} from "../../editor/layout";
 import type {
   CanvasPoint,
   Document,
@@ -332,6 +336,7 @@ export function applyImproveOperationsToDocument(
     existingPositions,
   );
   const originalIds = new Set(Object.keys(document.nodes));
+  const nodeSizes = getNodeSizes(nodes);
   for (const id of Object.keys(nodes)) {
     if (originalIds.has(id) && existingPositions[id]) {
       nextState.nodePositions[id] = { ...fallbackPositions[id] };
@@ -341,11 +346,18 @@ export function applyImproveOperationsToDocument(
     const parentPoint = parentId
       ? nextState.nodePositions[parentId] ?? fallbackPositions[parentId]
       : fallbackPositions[id];
+    const preferred =
+      parentId && parentPoint
+        ? {
+            x: parentPoint.x + (nodeSizes[parentId]?.width ?? 0) + H_GAP,
+            y: parentPoint.y,
+          }
+        : fallbackPositions[id];
     nextState.nodePositions[id] = findAvailablePosition(
-      parentPoint
-        ? { x: parentPoint.x + NODE_WIDTH + H_GAP, y: parentPoint.y }
-        : fallbackPositions[id],
+      preferred,
       nextState.nodePositions,
+      nodeSizes,
+      nodeSizes[id],
     );
   }
   const integrityErrors = validateResultState(nextState);
