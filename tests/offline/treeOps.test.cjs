@@ -65,3 +65,26 @@ test("addSibling: root cursor falls back to addChild", () => {
   assert.equal(updated.nodes[newNodeId].parentId, "root");
   assert.equal(updated.nodes.root.childrenIds.includes(newNodeId), true);
 });
+
+test("addSibling keeps the preferred position and moves an overlapping lower branch", () => {
+  const doc = {
+    ...makeDoc(),
+    cursorId: "a1",
+    nodePositions: {
+      root: { x: 0, y: 0 },
+      a: { x: 260, y: 0 },
+      a1: { x: 520, y: 0 },
+      b: { x: 260, y: 50 },
+    },
+  };
+  doc.nodes.b.text = "横幅の大きいノード".repeat(10);
+
+  const updated = addSibling(doc).updated;
+  const newNodeId = updated.cursorId;
+
+  assert.deepEqual(updated.nodePositions[newNodeId], { x: 520, y: 50 });
+  assert.equal(updated.nodePositions.b.y > 50, true);
+  assert.deepEqual(updated.nodePositions.root, doc.nodePositions.root);
+  assert.deepEqual(updated.nodePositions.a, doc.nodePositions.a);
+  assert.deepEqual(updated.nodePositions.a1, doc.nodePositions.a1);
+});

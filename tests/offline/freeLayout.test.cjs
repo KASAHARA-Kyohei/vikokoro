@@ -4,6 +4,7 @@ const {
   autoLayoutBranch,
   computeSnapAdjustment,
   findAvailablePosition,
+  makeSpaceForNode,
   moveNodePositions,
 } = require("../../.tmp-tests/src/editor/domain/freeLayout.js");
 const {
@@ -189,4 +190,63 @@ test("moving, collision avoidance, and alignment snapping are deterministic", ()
   );
   assert.deepEqual({ dx: snap.dx, dy: snap.dy }, { dx: 2, dy: 2 });
   assert.equal(snap.guides.length, 2);
+});
+
+test("makeSpaceForNode moves a colliding branch with its descendants", () => {
+  const doc = makeDoc();
+  doc.nodePositions = {
+    root: { x: 0, y: 0 },
+    a: { x: 260, y: 0 },
+    a1: { x: 520, y: 0 },
+    b: { x: 260, y: 50 },
+  };
+  const sizes = {
+    root: { width: 180, height: 34 },
+    a: { width: 180, height: 34 },
+    a1: { width: 180, height: 34 },
+    b: { width: 320, height: 34 },
+  };
+  const next = makeSpaceForNode(
+    doc,
+    { x: 260, y: 50 },
+    sizes,
+    { width: 180, height: 34 },
+    ["root", "a"],
+  );
+
+  assert.deepEqual(next.root, doc.nodePositions.root);
+  assert.deepEqual(next.a, doc.nodePositions.a);
+  assert.deepEqual(next.a1, doc.nodePositions.a1);
+  assert.deepEqual(next.b, { x: 260, y: 96 });
+});
+
+test("makeSpaceForNode cascades displacement into a lower branch", () => {
+  const doc = makeDoc();
+  doc.nodes.b.childrenIds = ["b1"];
+  doc.nodes.b1 = { id: "b1", text: "b1", parentId: "b", childrenIds: [] };
+  doc.nodes.c = { id: "c", text: "c", parentId: "root", childrenIds: [] };
+  doc.nodes.root.childrenIds.push("c");
+  doc.nodePositions = {
+    root: { x: 0, y: 0 },
+    a: { x: 260, y: 0 },
+    a1: { x: 520, y: 0 },
+    b: { x: 260, y: 50 },
+    b1: { x: 520, y: 50 },
+    c: { x: 260, y: 100 },
+  };
+  const sizes = Object.fromEntries(
+    Object.keys(doc.nodes).map((id) => [id, { width: 180, height: 34 }]),
+  );
+  const next = makeSpaceForNode(
+    doc,
+    { x: 260, y: 50 },
+    sizes,
+    { width: 180, height: 34 },
+    ["root", "a"],
+  );
+
+  assert.equal(next.b.y, 96);
+  assert.equal(next.b1.y, 96);
+  assert.equal(next.c.y, 142);
+  assert.deepEqual(next.root, doc.nodePositions.root);
 });

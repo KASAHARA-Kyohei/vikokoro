@@ -1,6 +1,6 @@
 import type { Document, Node, NodeId } from "../types";
 import { getNodeSize, getNodeSizes, H_GAP, V_GAP } from "../layout";
-import { findAvailablePosition } from "./freeLayout";
+import { findAvailablePosition, makeSpaceForNode } from "./freeLayout";
 import { generateId } from "./id";
 
 export function moveCursor(
@@ -173,18 +173,29 @@ export function addSibling(doc: Document): { updated: Document; newNodeId: NodeI
   const sizes = getNodeSizes(doc.nodes);
   const cursorSize = sizes[cursor.id] ?? getNodeSize(cursor);
   const newNodeSize = getNodeSize(newNode);
-  const point = findAvailablePosition(
-    { x: cursorPoint.x, y: cursorPoint.y + cursorSize.height + V_GAP },
-    currentPositions,
+  const point = {
+    x: cursorPoint.x,
+    y: cursorPoint.y + cursorSize.height + V_GAP,
+  };
+  const protectedNodeIds: NodeId[] = [];
+  let protectedId: NodeId | null = cursor.id;
+  while (protectedId) {
+    protectedNodeIds.push(protectedId);
+    protectedId = doc.nodes[protectedId]?.parentId ?? null;
+  }
+  const nextPositions = makeSpaceForNode(
+    doc,
+    point,
     sizes,
     newNodeSize,
+    protectedNodeIds,
   );
 
   return {
     updated: {
       ...doc,
       cursorId: newId,
-      nodePositions: { ...currentPositions, [newId]: point },
+      nodePositions: { ...nextPositions, [newId]: point },
       nodes: {
         ...doc.nodes,
         [newId]: newNode,
