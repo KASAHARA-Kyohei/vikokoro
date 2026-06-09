@@ -36,6 +36,170 @@ export function moveNodePositions(
   return next;
 }
 
+const COLLISION_GAP_X = 16;
+const COLLISION_GAP_Y = 12;
+
+type NodeRect = CanvasPoint & NodeSize;
+
+function rectanglesOverlap(a: NodeRect, b: NodeRect): boolean {
+  return (
+    a.x < b.x + b.width + COLLISION_GAP_X &&
+    a.x + a.width + COLLISION_GAP_X > b.x &&
+    a.y < b.y + b.height + COLLISION_GAP_Y &&
+    a.y + a.height + COLLISION_GAP_Y > b.y
+  );
+}
+
+function findMovableBranchRoot(
+  doc: DocumentState,
+  nodeId: NodeId,
+  protectedIds: ReadonlySet<NodeId>,
+): NodeId | null {
+  if (protectedIds.has(nodeId)) return null;
+  let currentId = nodeId;
+  const visited = new Set<NodeId>();
+  while (!visited.has(currentId)) {
+    visited.add(currentId);
+    const parentId = doc.nodes[currentId]?.parentId;
+    if (!parentId || protectedIds.has(parentId) || !doc.nodes[parentId]) {
+      return currentId;
+    }
+    currentId = parentId;
+    if (protectedIds.has(currentId)) return null;
+  }
+  return null;
+}
+
+export function makeSpaceForNode(
+  doc: DocumentState,
+  preferred: CanvasPoint,
+  sizes: Record<NodeId, NodeSize>,
+  candidateSize: NodeSize,
+  protectedNodeIds: readonly NodeId[],
+): Record<NodeId, CanvasPoint> {
+  let positions = { ...doc.nodePositions };
+  const protectedIds = new Set(protectedNodeIds);
+  const candidateRect = { ...preferred, ...candidateSize };
+  const branchRootFor = (nodeId: NodeId) =>
+    findMovableBranchRoot(doc, nodeId, protectedIds);
+  const branchIdsFor = (rootId: NodeId) => collectSubtreeNodeIds(doc, rootId);
+  const rectFor = (nodeId: NodeId): NodeRect | null => {
+    const point = positions[nodeId];
+    if (!point) return null;
+    return {
+      ...point,
+      ...(sizes[nodeId] ?? { width: NODE_WIDTH, height: NODE_HEIGHT }),
+    };
+  };
+  const branchTop = (rootId: NodeId) =>
+    Math.min(
+      ...branchIdsFor(rootId)
+        .map((id) => positions[id]?.y)
+        .filter((value): value is number => value !== undefined),
+    );
+
+  const pushBranchBelow = (
+    rootId: NodeId,
+    blockers: readonly NodeRect[],
+    activeRoots: ReadonlySet<NodeId>,
+  ) => {
+    if (activeRoots.has(rootId)) return;
+    const nextActiveRoots = new Set(activeRoots).add(rootId);
+    const branchIds = branchIdsFor(rootId);
+    const branchSet = new Set(branchIds);
+    let currentBlockers = [...blockers];
+
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      let dy = 0;
+      for (const nodeId of branchIds) {
+        const rect = rectFor(nodeId);
+        if (!rect) continue;
+        for (const blocker of currentBlockers) {
+          if (!rectanglesOverlap(rect, blocker)) continue;
+          dy = Math.max(dy, blocker.y + blocker.height + COLLISION_GAP_Y - rect.y);
+        }
+      }
+      if (dy > 0) {
+        positions = moveNodePositions(positions, branchIds, 0, dy);
+      }
+
+      const collisions = Object.keys(positions)
+        .filter((nodeId) => !branchSet.has(nodeId))
+        .map((nodeId) => {
+          const rect = rectFor(nodeId);
+          if (!rect) return null;
+          const overlaps = branchIds.some((branchId) => {
+            const branchRect = rectFor(branchId);
+            return branchRect ? rectanglesOverlap(branchRect, rect) : false;
+          });
+          return overlaps ? { nodeId, rect } : null;
+        })
+        .filter(
+          (collision): collision is { nodeId: NodeId; rect: NodeRect } =>
+            collision !== null,
+        )
+        .sort(
+          (a, b) =>
+            a.rect.y - b.rect.y ||
+            a.rect.x - b.rect.x ||
+            a.nodeId.localeCompare(b.nodeId),
+        );
+
+      if (collisions.length === 0) return;
+      let addedBlocker = false;
+      for (const collision of collisions) {
+        const otherRoot = branchRootFor(collision.nodeId);
+        if (
+          !otherRoot ||
+          activeRoots.has(otherRoot) ||
+          branchTop(otherRoot) < branchTop(rootId)
+        ) {
+          currentBlockers.push(collision.rect);
+          addedBlocker = true;
+          continue;
+        }
+        const branchRects = branchIds
+          .map(rectFor)
+          .filter((rect): rect is NodeRect => rect !== null);
+        pushBranchBelow(otherRoot, branchRects, nextActiveRoots);
+      }
+      if (!addedBlocker) {
+        const stillOverlaps = collisions.some(({ nodeId }) => {
+          const rect = rectFor(nodeId);
+          return (
+            rect !== null &&
+            branchIds.some((branchId) => {
+              const branchRect = rectFor(branchId);
+              return branchRect ? rectanglesOverlap(branchRect, rect) : false;
+            })
+          );
+        });
+        if (!stillOverlaps) return;
+      }
+    }
+  };
+
+  const initialRoots = Object.keys(positions)
+    .filter((nodeId) => {
+      const rect = rectFor(nodeId);
+      return rect ? rectanglesOverlap(candidateRect, rect) : false;
+    })
+    .map(branchRootFor)
+    .filter((rootId): rootId is NodeId => rootId !== null)
+    .filter((rootId, index, roots) => roots.indexOf(rootId) === index)
+    .sort(
+      (a, b) =>
+        branchTop(a) - branchTop(b) ||
+        (positions[a]?.x ?? 0) - (positions[b]?.x ?? 0) ||
+        a.localeCompare(b),
+    );
+
+  for (const rootId of initialRoots) {
+    pushBranchBelow(rootId, [candidateRect], new Set());
+  }
+  return positions;
+}
+
 export function autoLayoutBranch(
   doc: DocumentState,
   rootId: NodeId,
@@ -66,10 +230,10 @@ function overlapsAny(
     if (id === ignoredId) return false;
     const otherSize = sizes[id] ?? { width: NODE_WIDTH, height: NODE_HEIGHT };
     return (
-      point.x < other.x + otherSize.width + 16 &&
-      point.x + candidateSize.width + 16 > other.x &&
-      point.y < other.y + otherSize.height + 12 &&
-      point.y + candidateSize.height + 12 > other.y
+      point.x < other.x + otherSize.width + COLLISION_GAP_X &&
+      point.x + candidateSize.width + COLLISION_GAP_X > other.x &&
+      point.y < other.y + otherSize.height + COLLISION_GAP_Y &&
+      point.y + candidateSize.height + COLLISION_GAP_Y > other.y
     );
   });
 }
