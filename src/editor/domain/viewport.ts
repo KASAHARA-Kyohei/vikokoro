@@ -1,4 +1,6 @@
 import type { CanvasPoint } from "../types";
+import { PADDING_X } from "../layout";
+import type { NodeSize } from "../layout";
 
 type Rect = {
   left: number;
@@ -6,6 +8,19 @@ type Rect = {
   width: number;
   height: number;
 };
+
+type ViewportSize = { width: number; height: number };
+
+export function isUsableViewportSize(viewportSize: ViewportSize): boolean {
+  return viewportSize.width > 0 && viewportSize.height > 0;
+}
+
+export function shouldResetViewportSession(
+  previousSessionKey: string | null,
+  nextSessionKey: string,
+): boolean {
+  return previousSessionKey !== null && previousSessionKey !== nextSessionKey;
+}
 
 export function computeCenteredScrollFromRects(
   currentScroll: CanvasPoint,
@@ -26,6 +41,21 @@ export function computeCenteredScrollFromRects(
         targetRect.top +
         targetRect.height / 2 -
         (viewportRect.top + viewportRect.height / 2),
+    ),
+  };
+}
+
+export function computeInitialScrollForRoot(
+  rootPoint: CanvasPoint,
+  rootSize: NodeSize,
+  viewportSize: ViewportSize,
+  zoom: number,
+): CanvasPoint {
+  return {
+    x: Math.max(0, rootPoint.x * zoom - PADDING_X),
+    y: Math.max(
+      0,
+      (rootPoint.y + rootSize.height / 2) * zoom - viewportSize.height / 2,
     ),
   };
 }

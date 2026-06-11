@@ -935,6 +935,7 @@ function App() {
           zoom={zoomPan.zoom}
           viewportRef={viewportRef}
           panGestureActive={zoomPan.panGestureActive}
+          viewSessionKey={`${state.workspace.activeDocId}:${visibleProjection.state.rootId}`}
           highlightedNodeIds={highlightedNodeIds}
           activeHighlightedNodeId={activeSearchNodeId}
           jumpHints={jumpSession?.nodeToHint ?? null}
