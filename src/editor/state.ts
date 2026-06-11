@@ -15,6 +15,7 @@ import { cloneDocumentState, documentStateEquals } from "./domain/snapshot";
 import {
   autoLayoutBranch,
   collectSubtreeNodeIds,
+  makeSpaceForNode,
   moveNodePositions,
 } from "./domain/freeLayout";
 import {
@@ -32,7 +33,7 @@ import {
   isDescendantOrSelf,
   sanitizeCollapsedNodeIds,
 } from "./domain/visibleTree";
-import { sanitizeNodePositions } from "./layout";
+import { getNodeSize, getNodeSizes, sanitizeNodePositions } from "./layout";
 
 export type EditorAppState = {
   workspace: Workspace;
@@ -264,6 +265,16 @@ function updateDocById(
 
 function updateActiveDoc(state: EditorAppState, updater: (doc: Document) => Document): EditorAppState {
   return updateDocById(state, state.workspace.activeDocId, updater);
+}
+
+function collectProtectedNodeIds(doc: Document, nodeId: NodeId): NodeId[] {
+  const protectedIds: NodeId[] = [];
+  let currentId: NodeId | null = nodeId;
+  while (currentId) {
+    protectedIds.push(currentId);
+    currentId = doc.nodes[currentId]?.parentId ?? null;
+  }
+  return protectedIds;
 }
 
 export function editorReducer(state: EditorAppState, action: EditorAction): EditorAppState {
@@ -677,12 +688,40 @@ export function editorReducer(state: EditorAppState, action: EditorAction): Edit
       return updateActiveDoc(state, (doc) => {
         const cursor = doc.nodes[doc.cursorId];
         if (!cursor) return doc;
-        return {
+        if (cursor.text === action.text) return doc;
+        const previousSize = getNodeSize(cursor);
+        const nextCursor = { ...cursor, text: action.text };
+        const nodes = {
+          ...doc.nodes,
+          [cursor.id]: nextCursor,
+        };
+        const nextDoc = {
           ...doc,
-          nodes: {
-            ...doc.nodes,
-            [cursor.id]: { ...cursor, text: action.text },
-          },
+          nodes,
+        };
+        const nextSize = getNodeSize(nextCursor);
+        if (
+          nextSize.width <= previousSize.width &&
+          nextSize.height <= previousSize.height
+        ) {
+          return nextDoc;
+        }
+        const nodePositions = sanitizeNodePositions(doc, doc.nodePositions);
+        const preferred = nodePositions[cursor.id];
+        if (!preferred) return { ...nextDoc, nodePositions };
+        const sizes = getNodeSizes(nodes);
+        return {
+          ...nextDoc,
+          nodePositions: makeSpaceForNode(
+            {
+              ...nextDoc,
+              nodePositions,
+            },
+            preferred,
+            sizes,
+            nextSize,
+            collectProtectedNodeIds(doc, cursor.id),
+          ),
         };
       });
     }
