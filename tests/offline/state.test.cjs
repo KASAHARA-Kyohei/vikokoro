@@ -187,6 +187,28 @@ test("branch auto-layout keeps branch root position", () => {
   assert.equal(doc.undoStack.length, 1);
 });
 
+test("insert text growth pushes down a colliding lower branch", () => {
+  let state = withTree(makeReadyState());
+  const docId = state.workspace.activeDocId;
+
+  state = editorReducer(state, { type: "enterInsert" });
+  state = editorReducer(state, {
+    type: "setCursorText",
+    text: "line 1\nline 2\nline 3",
+  });
+
+  let doc = state.workspace.documents[docId];
+  assert.equal(state.mode, "insert");
+  assert.deepEqual(doc.nodePositions.a, { x: 260, y: 0 });
+  assert.deepEqual(doc.nodePositions.b, { x: 260, y: 86 });
+  assert.equal(doc.undoStack.length, 0);
+
+  state = editorReducer(state, { type: "commitInsert" });
+  doc = state.workspace.documents[docId];
+  assert.equal(state.mode, "normal");
+  assert.equal(doc.undoStack.length, 1);
+});
+
 test("blank-canvas child creation stores the requested position", () => {
   let state = withTree(makeReadyState());
   const docId = state.workspace.activeDocId;
