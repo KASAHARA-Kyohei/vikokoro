@@ -9,6 +9,7 @@ import { collectSubtreeNodeIds, computeSnapAdjustment, moveNodePositions } from 
 import {
   computeInitialScrollForRoot,
   isUsableViewportSize,
+  shouldFollowCursor,
   shouldResetViewportSession,
 } from "./domain/viewport";
 import type { AnchorSide, CanvasPoint, DocumentState, Mode, Node, NodeId } from "./types";
@@ -71,7 +72,6 @@ type DragPreview = {
 };
 
 type SelectionRect = { x: number; y: number; width: number; height: number };
-const REQUIRED_STABLE_VIEWPORT_FRAMES = 2;
 
 function getJumpHintState(
   jumpHints: Record<NodeId, string> | null,
@@ -138,16 +138,15 @@ export function EditorView({
   const prevPositionsRef = useRef<Record<NodeId, NodePosition> | null>(null);
   const prevSizesRef = useRef<Record<NodeId, NodeSize> | null>(null);
   const initialViewPositionedRef = useRef(false);
-  const initialCursorIdRef = useRef<NodeId | null>(null);
-  const initialCenterFrameRef = useRef<number | null>(null);
+  const previousCursorIdRef = useRef<NodeId | null>(null);
   const previousViewSessionKeyRef = useRef<string | null>(null);
-  const stableViewportFramesRef = useRef(0);
-  const previousViewportSizeRef = useRef<{ width: number; height: number } | null>(null);
   const [exitingNodes, setExitingNodes] = useState<Record<NodeId, ExitingNode>>({});
   const interactionDisabled = disabled || mode === "insert" || panGestureActive;
 
   const cursorPos = layout.positions[doc.cursorId];
   const cursorNode = doc.nodes[doc.cursorId];
+  const rootPoint = layout.positions[doc.rootId];
+  const rootSize = layout.sizes[doc.rootId];
 
   useLayoutEffect(() => {
     if (!shouldResetViewportSession(previousViewSessionKeyRef.current, viewSessionKey)) {
@@ -155,92 +154,35 @@ export function EditorView({
       return;
     }
 
-    if (initialCenterFrameRef.current !== null) {
-      cancelAnimationFrame(initialCenterFrameRef.current);
-      initialCenterFrameRef.current = null;
-    }
     initialViewPositionedRef.current = false;
-    initialCursorIdRef.current = null;
-    stableViewportFramesRef.current = 0;
-    previousViewportSizeRef.current = null;
+    previousCursorIdRef.current = null;
     previousViewSessionKeyRef.current = viewSessionKey;
   }, [viewSessionKey]);
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     if (initialViewPositionedRef.current) return;
     const viewport = viewportRef.current;
-    const rootPoint = layout.positions[doc.rootId];
-    const rootSize = layout.sizes[doc.rootId];
     if (!viewport || !rootPoint || !rootSize) return;
-    initialCursorIdRef.current = doc.cursorId;
-    let disposed = false;
-
-    const scheduleAlignment = () => {
-      if (disposed || initialCenterFrameRef.current !== null) return;
-      initialCenterFrameRef.current = requestAnimationFrame(alignRootForOpen);
+    const viewportSize = {
+      width: viewport.clientWidth,
+      height: viewport.clientHeight,
     };
+    if (!isUsableViewportSize(viewportSize)) return;
 
-    const alignRootForOpen = () => {
-      initialCenterFrameRef.current = null;
-      if (disposed) return;
-
-      const viewportSize = {
-        width: viewport.clientWidth,
-        height: viewport.clientHeight,
-      };
-      if (!isUsableViewportSize(viewportSize)) {
-        stableViewportFramesRef.current = 0;
-        scheduleAlignment();
-        return;
-      }
-
-      const previousSize = previousViewportSizeRef.current;
-      const sizeIsStable =
-        previousSize?.width === viewportSize.width &&
-        previousSize?.height === viewportSize.height;
-      stableViewportFramesRef.current = sizeIsStable
-        ? stableViewportFramesRef.current + 1
-        : 0;
-      previousViewportSizeRef.current = viewportSize;
-
-      const scroll = computeInitialScrollForRoot(
-        rootPoint,
-        rootSize,
-        viewportSize,
-        zoom,
-      );
-      viewport.scrollLeft = scroll.x;
-      viewport.scrollTop = scroll.y;
-
-      if (stableViewportFramesRef.current >= REQUIRED_STABLE_VIEWPORT_FRAMES) {
-        initialViewPositionedRef.current = true;
-        return;
-      }
-      scheduleAlignment();
-    };
-
-    const resizeObserver = new ResizeObserver(() => {
-      if (initialViewPositionedRef.current) return;
-      stableViewportFramesRef.current = 0;
-      previousViewportSizeRef.current = null;
-      scheduleAlignment();
-    });
-    resizeObserver.observe(viewport);
-    scheduleAlignment();
-
-    return () => {
-      disposed = true;
-      resizeObserver.disconnect();
-      if (initialCenterFrameRef.current !== null) {
-        cancelAnimationFrame(initialCenterFrameRef.current);
-        initialCenterFrameRef.current = null;
-      }
-    };
+    const scroll = computeInitialScrollForRoot(
+      rootPoint,
+      rootSize,
+      viewportSize,
+      zoom,
+    );
+    viewport.scrollLeft = scroll.x;
+    viewport.scrollTop = scroll.y;
+    initialViewPositionedRef.current = true;
   }, [
-    doc.cursorId,
-    doc.rootId,
-    layout.positions,
-    layout.sizes,
+    rootPoint?.x,
+    rootPoint?.y,
+    rootSize?.height,
+    rootSize?.width,
     viewSessionKey,
     viewportRef,
     zoom,
@@ -263,8 +205,13 @@ export function EditorView({
   }, [disabled, mode, doc.cursorId]);
 
   useEffect(() => {
-    if (doc.cursorId === initialCursorIdRef.current) return;
-    initialCursorIdRef.current = null;
+    const shouldFollow = shouldFollowCursor(
+      initialViewPositionedRef.current,
+      previousCursorIdRef.current,
+      doc.cursorId,
+    );
+    previousCursorIdRef.current = doc.cursorId;
+    if (!shouldFollow) return;
     const root = canvasRef.current;
     if (!root) return;
     const el = root.querySelector<HTMLElement>(`[data-node-id="${doc.cursorId}"]`);

@@ -4,6 +4,7 @@ const {
   computeCenteredScrollFromRects,
   computeInitialScrollForRoot,
   isUsableViewportSize,
+  shouldFollowCursor,
   shouldResetViewportSession,
 } = require("../../.tmp-tests/src/editor/domain/viewport.js");
 
@@ -21,6 +22,17 @@ test("isUsableViewportSize waits for a measurable viewport", () => {
   assert.equal(isUsableViewportSize({ width: 0, height: 600 }), false);
   assert.equal(isUsableViewportSize({ width: 800, height: 0 }), false);
   assert.equal(isUsableViewportSize({ width: 800, height: 600 }), true);
+});
+
+test("shouldFollowCursor ignores initial observation and initial positioning", () => {
+  assert.equal(shouldFollowCursor(false, null, "root"), false);
+  assert.equal(shouldFollowCursor(false, "root", "child"), false);
+  assert.equal(shouldFollowCursor(true, null, "root"), false);
+});
+
+test("shouldFollowCursor follows only a cursor change after initial positioning", () => {
+  assert.equal(shouldFollowCursor(true, "root", "root"), false);
+  assert.equal(shouldFollowCursor(true, "root", "child"), true);
 });
 
 test("computeCenteredScrollFromRects centers the rendered target", () => {
