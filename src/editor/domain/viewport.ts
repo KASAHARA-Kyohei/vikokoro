@@ -22,6 +22,18 @@ export function shouldResetViewportSession(
   return previousSessionKey !== null && previousSessionKey !== nextSessionKey;
 }
 
+export function shouldFollowCursor(
+  initialViewPositioned: boolean,
+  previousCursorId: string | null,
+  nextCursorId: string,
+): boolean {
+  return (
+    initialViewPositioned &&
+    previousCursorId !== null &&
+    previousCursorId !== nextCursorId
+  );
+}
+
 export function computeCenteredScrollFromRects(
   currentScroll: CanvasPoint,
   targetRect: Rect,
