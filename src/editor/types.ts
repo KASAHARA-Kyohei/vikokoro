@@ -10,6 +10,11 @@ export type EdgeAnchor = {
   from: AnchorSide | null;
   to: AnchorSide | null;
 };
+export type CustomLink = {
+  id: string;
+  fromId: NodeId;
+  toId: NodeId;
+};
 
 export type Node = {
   id: NodeId;
@@ -26,6 +31,7 @@ export type DocumentState = {
   nodes: Record<NodeId, Node>;
   nodePositions: Record<NodeId, CanvasPoint>;
   edgeAnchors: Record<string, EdgeAnchor>;
+  customLinks: Record<string, CustomLink>;
 };
 
 export type Document = DocumentState & {

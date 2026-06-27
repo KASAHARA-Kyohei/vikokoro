@@ -87,12 +87,16 @@ function normalizeJumpKey(key: string): string | null {
   return (JUMP_HINT_KEYS as readonly string[]).includes(normalized) ? normalized : null;
 }
 
-export function buildJumpSession(doc: DocumentState): JumpSession {
+export function buildJumpSession(
+  doc: DocumentState,
+  candidateNodeIds?: ReadonlySet<NodeId>,
+): JumpSession {
   const layout = computeLayout(doc);
   const cursorPos = layout.positions[doc.cursorId];
 
   const orderedNodeIds = (Object.keys(doc.nodes) as NodeId[])
     .filter((nodeId) => Boolean(layout.positions[nodeId]))
+    .filter((nodeId) => !candidateNodeIds || candidateNodeIds.has(nodeId))
     .sort((a, b) => {
       const posA = layout.positions[a]!;
       const posB = layout.positions[b]!;

@@ -16,6 +16,9 @@ function makeState() {
     edgeAnchors: {
       "root->a": { from: "right", to: "left" },
     },
+    customLinks: {
+      "a<->root": { id: "a<->root", fromId: "a", toId: "root" },
+    },
     nodes: {
       root: {
         id: "root",
@@ -49,6 +52,8 @@ test("cloneDocumentState: deep clone", () => {
   assert.notEqual(cloned.nodePositions.a, src.nodePositions.a);
   assert.notEqual(cloned.edgeAnchors, src.edgeAnchors);
   assert.notEqual(cloned.edgeAnchors["root->a"], src.edgeAnchors["root->a"]);
+  assert.notEqual(cloned.customLinks, src.customLinks);
+  assert.notEqual(cloned.customLinks["a<->root"], src.customLinks["a<->root"]);
 
   cloned.nodes.root.childrenIds.push("x");
   cloned.edgeAnchors["root->a"].from = "bottom";
@@ -80,4 +85,8 @@ test("documentStateEquals: detect differences", () => {
   const anchored = cloneDocumentState(a);
   anchored.edgeAnchors["root->a"].from = "bottom";
   assert.equal(documentStateEquals(a, anchored), false);
+
+  const linked = cloneDocumentState(a);
+  linked.customLinks["a<->root"].toId = "z";
+  assert.equal(documentStateEquals(a, linked), false);
 });

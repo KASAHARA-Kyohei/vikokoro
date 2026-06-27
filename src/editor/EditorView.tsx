@@ -39,9 +39,11 @@ type Props = {
   hiddenDescendantCounts: Record<NodeId, number>;
   selectedNodeIds: Set<NodeId>;
   selectedEdgeKey: string | null;
+  selectedCustomLinkId: string | null;
   onSelectNode: (nodeId: NodeId) => void;
   onSelectionChange: (nodeIds: Set<NodeId>) => void;
   onSelectEdge: (edgeKey: string) => void;
+  onSelectCustomLink: (linkId: string) => void;
   onChangeEdgeAnchor: (
     edgeKey: string,
     endpoint: "from" | "to",
@@ -104,9 +106,11 @@ export function EditorView({
   hiddenDescendantCounts,
   selectedNodeIds,
   selectedEdgeKey,
+  selectedCustomLinkId,
   onSelectNode,
   onSelectionChange,
   onSelectEdge,
+  onSelectCustomLink,
   onChangeEdgeAnchor,
   onResetEdgeAnchors,
   onMoveNodes,
@@ -285,6 +289,8 @@ export function EditorView({
     }
     return list;
   }, [doc.nodes]);
+
+  const customLinkEdges = useMemo(() => Object.values(doc.customLinks), [doc.customLinks]);
 
   const highlightedEdgeKeys = useMemo(() => {
     const set = new Set<string>();
@@ -530,6 +536,43 @@ export function EditorView({
                     event.preventDefault();
                     event.stopPropagation();
                     onSelectEdge(key);
+                  }}
+                />
+              </g>
+            );
+          })}
+          {customLinkEdges.map((link) => {
+            const from = layout.positions[link.fromId];
+            const to = layout.positions[link.toId];
+            if (!from || !to) return null;
+            const endpoints = getEdgeEndpoints(
+              from,
+              to,
+              undefined,
+              layout.sizes[link.fromId],
+              layout.sizes[link.toId],
+            );
+            const isSelected = selectedCustomLinkId === link.id;
+            const path = svgPathForEdge(
+              endpoints.from,
+              endpoints.to,
+              endpoints.fromSide,
+              endpoints.toSide,
+            );
+            return (
+              <g key={link.id}>
+                <path
+                  d={path}
+                  className={"edgePath edgePathCustom" + (isSelected ? " edgePathSelected" : "")}
+                />
+                <path
+                  d={path}
+                  className="edgeHitPath"
+                  onMouseDown={(event) => {
+                    if (interactionDisabled || event.button !== 0) return;
+                    event.preventDefault();
+                    event.stopPropagation();
+                    onSelectCustomLink(link.id);
                   }}
                 />
               </g>

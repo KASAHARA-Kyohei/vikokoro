@@ -95,3 +95,10 @@ test("buildJumpSession: excludes nodes hidden by collapse", () => {
 
   assert.deepEqual(Object.values(session.hintToNode), ["root"]);
 });
+
+test("buildJumpSession: can restrict candidates", () => {
+  const session = buildJumpSession(makeDoc(5), new Set(["n1", "n3"]));
+
+  assert.deepEqual(Object.values(session.hintToNode).sort(), ["n1", "n3"]);
+  assert.deepEqual(Object.keys(session.nodeToHint).sort(), ["n1", "n3"]);
+});

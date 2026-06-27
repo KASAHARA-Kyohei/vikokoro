@@ -18,6 +18,10 @@ function makeDoc() {
       "root->a": { from: "right", to: "left" },
       "a->a1": { from: "bottom", to: "top" },
     },
+    customLinks: {
+      "a1<->b": { id: "a1<->b", fromId: "a1", toId: "b" },
+      "a2<->b": { id: "a2<->b", fromId: "a2", toId: "b" },
+    },
     nodes: {
       root: { id: "root", text: "root", parentId: null, childrenIds: ["a", "b"] },
       a: { id: "a", text: "a", parentId: "root", childrenIds: ["a1", "a2"] },
@@ -40,6 +44,7 @@ test("collapsed branch hides descendants and reports their count", () => {
   assert.deepEqual(projection.state.edgeAnchors, {
     "root->a": { from: "right", to: "left" },
   });
+  assert.deepEqual(projection.state.customLinks, {});
 });
 
 test("focused branch becomes layout root at depth zero", () => {
@@ -55,6 +60,17 @@ test("focused branch becomes layout root at depth zero", () => {
   assert.deepEqual(projection.state.edgeAnchors["a->a1"], {
     from: "bottom",
     to: "top",
+  });
+  assert.deepEqual(projection.state.customLinks, {});
+});
+
+test("custom links are visible only when both endpoints are visible", () => {
+  const doc = { ...makeDoc(), collapsedNodeIds: [] };
+  const projection = buildVisibleTreeProjection(doc, null);
+
+  assert.deepEqual(projection.state.customLinks, {
+    "a1<->b": { id: "a1<->b", fromId: "a1", toId: "b" },
+    "a2<->b": { id: "a2<->b", fromId: "a2", toId: "b" },
   });
 });
 
