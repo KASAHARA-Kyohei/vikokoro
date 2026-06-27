@@ -19,6 +19,7 @@ function makeDoc() {
     edgeAnchors: {
       "root->a": { from: "right", to: "left" },
     },
+    customLinks: {},
     nodes: {
       root: {
         id: "root",
@@ -63,6 +64,7 @@ test("buildDocumentStateFromGeneratedTree: builds node links", () => {
   assert.equal(child.parentId, root.id);
   assert.equal(Boolean(state.nodePositions[state.rootId]), true);
   assert.deepEqual(state.edgeAnchors, {});
+  assert.deepEqual(state.customLinks, {});
   assert.equal(
     state.nodePositions[child.id].x > state.nodePositions[root.id].x,
     true,
@@ -108,6 +110,7 @@ test("applyImproveOperationsToDocument: add/update/move/delete", () => {
   assert.deepEqual(applied.value.nodePositions.a, source.nodePositions.a);
   assert.deepEqual(applied.value.nodePositions.b, source.nodePositions.b);
   assert.deepEqual(applied.value.edgeAnchors, {});
+  assert.deepEqual(applied.value.customLinks, {});
 });
 
 test("applyImproveOperationsToDocument: rejects invalid move", () => {

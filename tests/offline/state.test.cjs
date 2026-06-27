@@ -72,6 +72,7 @@ function withTree(state) {
             b: { x: 260, y: 50 },
           },
           edgeAnchors: {},
+          customLinks: {},
           nodes: {
             root: { id: "root", text: "root", parentId: null, childrenIds: ["a", "b"] },
             a: { id: "a", text: "a", parentId: "root", childrenIds: ["a1"] },
@@ -124,6 +125,7 @@ test("legacy hydration defaults and sanitizes collapsed node IDs", () => {
   const docId = legacy.activeDocId;
   delete legacy.documents[docId].collapsedNodeIds;
   delete legacy.documents[docId].edgeAnchors;
+  delete legacy.documents[docId].customLinks;
 
   const state = editorReducer(initial, {
     type: "finishHydration",
@@ -132,6 +134,7 @@ test("legacy hydration defaults and sanitizes collapsed node IDs", () => {
 
   assert.deepEqual(state.workspace.documents[docId].collapsedNodeIds, []);
   assert.deepEqual(state.workspace.documents[docId].edgeAnchors, {});
+  assert.deepEqual(state.workspace.documents[docId].customLinks, {});
 });
 
 test("adding a sibling outside the focused branch exits focus", () => {
@@ -305,6 +308,61 @@ test("node deletion removes invalid connector anchors", () => {
 
   const doc = state.workspace.documents[docId];
   assert.deepEqual(doc.edgeAnchors, {});
+});
+
+test("custom links are undoable and redoable", () => {
+  let state = withTree(makeReadyState());
+  const docId = state.workspace.activeDocId;
+
+  state = editorReducer(state, { type: "addCustomLink", fromId: "a1", toId: "b" });
+
+  let doc = state.workspace.documents[docId];
+  assert.deepEqual(doc.customLinks["a1<->b"], {
+    id: "a1<->b",
+    fromId: "a1",
+    toId: "b",
+  });
+  assert.equal(doc.undoStack.length, 1);
+
+  state = editorReducer(state, { type: "undo" });
+  doc = state.workspace.documents[docId];
+  assert.deepEqual(doc.customLinks, {});
+
+  state = editorReducer(state, { type: "redo" });
+  doc = state.workspace.documents[docId];
+  assert.deepEqual(doc.customLinks["a1<->b"], {
+    id: "a1<->b",
+    fromId: "a1",
+    toId: "b",
+  });
+});
+
+test("custom links reject self, parent-child, and duplicate pairs", () => {
+  let state = withTree(makeReadyState());
+  const docId = state.workspace.activeDocId;
+
+  state = editorReducer(state, { type: "addCustomLink", fromId: "a", toId: "a" });
+  state = editorReducer(state, { type: "addCustomLink", fromId: "root", toId: "a" });
+  state = editorReducer(state, { type: "addCustomLink", fromId: "b", toId: "a1" });
+  state = editorReducer(state, { type: "addCustomLink", fromId: "a1", toId: "b" });
+
+  const doc = state.workspace.documents[docId];
+  assert.deepEqual(Object.keys(doc.customLinks), ["a1<->b"]);
+  assert.equal(doc.undoStack.length, 1);
+});
+
+test("node deletion removes invalid custom links", () => {
+  let state = withTree(makeReadyState());
+  const docId = state.workspace.activeDocId;
+  state.workspace.documents[docId].customLinks = {
+    "a1<->b": { id: "a1<->b", fromId: "a1", toId: "b" },
+  };
+  state.workspace.documents[docId].cursorId = "a1";
+
+  state = editorReducer(state, { type: "deleteNode" });
+
+  const doc = state.workspace.documents[docId];
+  assert.deepEqual(doc.customLinks, {});
 });
 
 test("reparent removes connector anchors for edges that no longer exist", () => {

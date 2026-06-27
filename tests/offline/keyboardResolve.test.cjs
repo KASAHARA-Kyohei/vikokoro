@@ -36,6 +36,33 @@ test("m opens node memo from normal mode", () => {
   ]);
 });
 
+test("r opens related-link jump from normal mode", () => {
+  const resolution = resolveKeyboardCommand(baseContext(), {
+    key: "r",
+    ctrlKey: false,
+    metaKey: false,
+    altKey: false,
+    shiftKey: false,
+  });
+
+  assert.equal(resolution.preventDefault, true);
+  assert.deepEqual(resolution.command, { type: "openRelatedLinkJump" });
+});
+
+test("Ctrl+r still redoes from normal mode", () => {
+  const resolution = resolveKeyboardCommand(baseContext(), {
+    key: "r",
+    ctrlKey: true,
+    metaKey: false,
+    altKey: false,
+    shiftKey: false,
+  });
+
+  assert.equal(resolution.preventDefault, true);
+  assert.deepEqual(resolution.command, { type: "dispatch", action: { type: "redo" } });
+});
+
+
 test("F enters focus and Escape exits focus", () => {
   const enter = resolveKeyboardCommand(baseContext(), {
     key: "F",

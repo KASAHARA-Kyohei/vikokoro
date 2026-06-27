@@ -19,6 +19,7 @@ export function createInitialDocument(title: string): { docId: DocId; doc: Docum
     nodes: { [rootId]: rootNode },
     nodePositions: { [rootId]: { x: 0, y: 0 } },
     edgeAnchors: {},
+    customLinks: {},
     collapsedNodeIds: [],
     undoStack: [],
     redoStack: [],

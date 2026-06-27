@@ -14,7 +14,9 @@ type CommandExecutor = {
   setLlmAssistOpen: (open: boolean) => void;
   setJumpPrefix: (prefix: string) => void;
   openJump: () => void;
+  openRelatedLinkJump: () => void;
   closeJump: () => void;
+  selectNode: (nodeId: string) => void;
   nudgeSelection: (dx: number, dy: number) => void;
 };
 
@@ -32,7 +34,7 @@ export function executeKeyboardCommand(command: KeyboardCommand, executor: Comma
       executor.dispatch(command.action);
       return;
     case "selectNode":
-      executor.dispatch({ type: "selectNode", nodeId: command.nodeId });
+      executor.selectNode(command.nodeId);
       return;
     case "setCursorColor":
       executor.dispatch({ type: "setCursorColor", color: command.color });
@@ -69,6 +71,9 @@ export function executeKeyboardCommand(command: KeyboardCommand, executor: Comma
       return;
     case "openJump":
       executor.openJump();
+      return;
+    case "openRelatedLinkJump":
+      executor.openRelatedLinkJump();
       return;
     case "closeJump":
       executor.closeJump();

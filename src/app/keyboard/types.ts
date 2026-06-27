@@ -43,6 +43,7 @@ export type KeyboardCommand =
   | { type: "setCursorColor"; color: NodeColor | null }
   | { type: "setJumpPrefix"; prefix: string }
   | { type: "openJump" }
+  | { type: "openRelatedLinkJump" }
   | { type: "closeJump" }
   | { type: "nudgeSelection"; dx: number; dy: number }
   | { type: "multi"; commands: KeyboardCommand[] };

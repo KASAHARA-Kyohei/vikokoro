@@ -33,6 +33,8 @@ struct Document {
     #[serde(default)]
     edge_anchors: HashMap<String, EdgeAnchor>,
     #[serde(default)]
+    custom_links: HashMap<String, CustomLink>,
+    #[serde(default)]
     collapsed_node_ids: Vec<String>,
     undo_stack: Vec<DocumentState>,
     redo_stack: Vec<DocumentState>,
@@ -48,6 +50,8 @@ struct DocumentState {
     node_positions: HashMap<String, CanvasPoint>,
     #[serde(default)]
     edge_anchors: HashMap<String, EdgeAnchor>,
+    #[serde(default)]
+    custom_links: HashMap<String, CustomLink>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -71,6 +75,14 @@ enum AnchorSide {
 struct EdgeAnchor {
     from: Option<AnchorSide>,
     to: Option<AnchorSide>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+struct CustomLink {
+    id: String,
+    from_id: String,
+    to_id: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -189,6 +201,7 @@ mod tests {
         assert!(document.collapsed_node_ids.is_empty());
         assert!(document.node_positions.is_empty());
         assert!(document.edge_anchors.is_empty());
+        assert!(document.custom_links.is_empty());
         assert_eq!(root.note, None);
     }
 
@@ -207,6 +220,14 @@ mod tests {
                 to: Some(AnchorSide::Left),
             },
         );
+        document.custom_links.insert(
+            "root<->other".to_string(),
+            super::CustomLink {
+                id: "root<->other".to_string(),
+                from_id: "other".to_string(),
+                to_id: "root".to_string(),
+            },
+        );
         document.nodes.get_mut("root").unwrap().note = Some("memo".to_string());
         document.undo_stack.push(DocumentState {
             root_id: document.root_id.clone(),
@@ -214,6 +235,7 @@ mod tests {
             nodes: document.nodes.clone(),
             node_positions: document.node_positions.clone(),
             edge_anchors: document.edge_anchors.clone(),
+            custom_links: document.custom_links.clone(),
         });
 
         let json = serde_json::to_string(&workspace).unwrap();
@@ -237,10 +259,26 @@ mod tests {
             })
         );
         assert_eq!(
+            restored_document.custom_links.get("root<->other"),
+            Some(&super::CustomLink {
+                id: "root<->other".to_string(),
+                from_id: "other".to_string(),
+                to_id: "root".to_string(),
+            })
+        );
+        assert_eq!(
             restored_document.undo_stack[0].edge_anchors.get("root->child"),
             Some(&EdgeAnchor {
                 from: Some(AnchorSide::Right),
                 to: Some(AnchorSide::Left),
+            })
+        );
+        assert_eq!(
+            restored_document.undo_stack[0].custom_links.get("root<->other"),
+            Some(&super::CustomLink {
+                id: "root<->other".to_string(),
+                from_id: "other".to_string(),
+                to_id: "root".to_string(),
             })
         );
         assert_eq!(

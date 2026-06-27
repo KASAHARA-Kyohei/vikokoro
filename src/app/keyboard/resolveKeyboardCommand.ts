@@ -238,6 +238,10 @@ export function resolveKeyboardCommand(
     return { preventDefault: true, command: { type: "openJump" } };
   }
 
+  if (!ctrlKey && !metaKey && !altKey && key === "r") {
+    return { preventDefault: true, command: { type: "openRelatedLinkJump" } };
+  }
+
   if (!ctrlKey && !metaKey && !altKey && key === "c") {
     return { preventDefault: true, command: { type: "setNodeColorOpen", open: true } };
   }

@@ -1,5 +1,13 @@
 import { makeEdgeKey } from "./edgeAnchors";
-import type { CanvasPoint, Document, DocumentState, EdgeAnchor, Node, NodeId } from "../types";
+import type {
+  CanvasPoint,
+  CustomLink,
+  Document,
+  DocumentState,
+  EdgeAnchor,
+  Node,
+  NodeId,
+} from "../types";
 
 export type VisibleTreeProjection = {
   state: DocumentState;
@@ -83,6 +91,7 @@ export function buildVisibleTreeProjection(
   const nodes: Record<NodeId, Node> = {};
   const nodePositions: Record<NodeId, CanvasPoint> = {};
   const edgeAnchors: Record<string, EdgeAnchor> = {};
+  const customLinks: Record<string, CustomLink> = {};
   const hiddenDescendantCounts: Record<NodeId, number> = {};
 
   const visit = (nodeId: NodeId, parentId: NodeId | null) => {
@@ -118,10 +127,15 @@ export function buildVisibleTreeProjection(
   };
 
   visit(rootId, null);
+  for (const link of Object.values(doc.customLinks ?? {})) {
+    if (visibleNodeIds.has(link.fromId) && visibleNodeIds.has(link.toId)) {
+      customLinks[link.id] = { id: link.id, fromId: link.fromId, toId: link.toId };
+    }
+  }
   const cursorId = visibleNodeIds.has(doc.cursorId) ? doc.cursorId : rootId;
 
   return {
-    state: { rootId, cursorId, nodes, nodePositions, edgeAnchors },
+    state: { rootId, cursorId, nodes, nodePositions, edgeAnchors, customLinks },
     visibleNodeIds,
     hiddenDescendantCounts,
   };

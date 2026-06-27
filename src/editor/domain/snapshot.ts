@@ -1,9 +1,10 @@
-import type { CanvasPoint, DocumentState, EdgeAnchor, Node, NodeId } from "../types";
+import type { CanvasPoint, CustomLink, DocumentState, EdgeAnchor, Node, NodeId } from "../types";
 
 export function cloneDocumentState(doc: DocumentState): DocumentState {
   const nodes: Record<NodeId, Node> = {};
   const nodePositions: Record<NodeId, CanvasPoint> = {};
   const edgeAnchors: Record<string, EdgeAnchor> = {};
+  const customLinks: Record<string, CustomLink> = {};
   for (const [id, node] of Object.entries(doc.nodes)) {
     nodes[id] = {
       id: node.id,
@@ -21,18 +22,34 @@ export function cloneDocumentState(doc: DocumentState): DocumentState {
   for (const [key, anchor] of Object.entries(doc.edgeAnchors ?? {})) {
     edgeAnchors[key] = { from: anchor.from, to: anchor.to };
   }
+  for (const [id, link] of Object.entries(doc.customLinks ?? {})) {
+    customLinks[id] = { id: link.id, fromId: link.fromId, toId: link.toId };
+  }
   return {
     rootId: doc.rootId,
     cursorId: doc.cursorId,
     nodes,
     nodePositions,
     edgeAnchors,
+    customLinks,
   };
 }
 
 export function documentStateEquals(a: DocumentState, b: DocumentState): boolean {
   if (a.rootId !== b.rootId) return false;
   if (a.cursorId !== b.cursorId) return false;
+  const aCustomLinkKeys = Object.keys(a.customLinks ?? {}).sort();
+  const bCustomLinkKeys = Object.keys(b.customLinks ?? {}).sort();
+  if (aCustomLinkKeys.length !== bCustomLinkKeys.length) return false;
+  for (let i = 0; i < aCustomLinkKeys.length; i += 1) {
+    const key = aCustomLinkKeys[i];
+    if (key !== bCustomLinkKeys[i]) return false;
+    const al = a.customLinks?.[key];
+    const bl = b.customLinks?.[key];
+    if (al?.id !== bl?.id || al?.fromId !== bl?.fromId || al?.toId !== bl?.toId) {
+      return false;
+    }
+  }
   const aEdgeKeys = Object.keys(a.edgeAnchors ?? {}).sort();
   const bEdgeKeys = Object.keys(b.edgeAnchors ?? {}).sort();
   if (aEdgeKeys.length !== bEdgeKeys.length) return false;

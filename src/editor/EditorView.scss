@@ -33,6 +33,17 @@
   stroke-width: 2.4;
 }
 
+.edgePathCustom {
+  stroke: color-mix(in srgb, var(--edgeSelected), transparent 28%);
+  stroke-width: 1.6;
+  stroke-dasharray: 6 5;
+}
+
+.edgePathCustom.edgePathSelected {
+  stroke: var(--accent);
+  stroke-width: 2.4;
+}
+
 .edgeHitPath {
   fill: none;
   stroke: transparent;

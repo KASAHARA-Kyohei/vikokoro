@@ -16,6 +16,10 @@ type Props = {
   results: SearchResultItem[];
   activeIndex: number;
   activeNodeId: NodeId | null;
+  title?: string;
+  placeholder?: string;
+  prevLabel?: string;
+  nextLabel?: string;
   onChangeQuery: (value: string) => void;
   onSelectNode: (nodeId: NodeId) => void;
   onMoveNext: () => void;
@@ -30,6 +34,10 @@ export function SearchModal({
   results,
   activeIndex,
   activeNodeId,
+  title,
+  placeholder,
+  prevLabel,
+  nextLabel,
   onChangeQuery,
   onSelectNode,
   onMoveNext,
@@ -92,14 +100,14 @@ export function SearchModal({
           e.stopPropagation();
         }}
       >
-        <div className="modalTitle">{text.title}</div>
+        <div className="modalTitle">{title ?? text.title}</div>
         <div className="modalBody">
           <div className="searchBar">
             <input
               ref={inputRef}
               className="searchInput"
               value={query}
-              placeholder={text.placeholder}
+              placeholder={placeholder ?? text.placeholder}
               onChange={(e) => onChangeQuery(e.currentTarget.value)}
               onKeyDown={(e) => {
                 if (e.key === "Escape") {
@@ -158,7 +166,7 @@ export function SearchModal({
             }}
             disabled={results.length === 0}
           >
-            {text.prev}
+            {prevLabel ?? text.prev}
           </button>
           <button
             type="button"
@@ -169,7 +177,7 @@ export function SearchModal({
             }}
             disabled={results.length === 0}
           >
-            {text.next}
+            {nextLabel ?? text.next}
           </button>
           <button
             type="button"

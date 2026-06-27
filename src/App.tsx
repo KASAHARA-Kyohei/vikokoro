@@ -7,6 +7,7 @@ import { useFoldChord } from "./app/keyboard/useFoldChord";
 import { useEditorUiSession } from "./app/session/useEditorUiSession";
 import { EditorView } from "./editor/EditorView";
 import { TabBar } from "./editor/TabBar";
+import { canCreateCustomLink, sanitizeCustomLinks } from "./editor/domain/customLinks";
 import { makeEdgeKey } from "./editor/domain/edgeAnchors";
 import { createInitialAppState, editorReducer } from "./editor/state";
 import type { AnchorSide, Document, DocumentState, NodeId } from "./editor/types";
@@ -146,13 +147,34 @@ function App() {
   const [reviewResult, setReviewResult] = useState<LlmReviewResult | null>(null);
   const [selectedNodeIds, setSelectedNodeIds] = useState<Set<NodeId>>(new Set());
   const [selectedEdgeKey, setSelectedEdgeKey] = useState<string | null>(null);
+  const [selectedCustomLinkId, setSelectedCustomLinkId] = useState<string | null>(null);
+  const [relatedLinkSourceNodeId, setRelatedLinkSourceNodeId] = useState<NodeId | null>(null);
+  const [relatedLinkJumpSourceNodeId, setRelatedLinkJumpSourceNodeId] = useState<NodeId | null>(null);
 
   const openJump = useCallback(() => {
     const session = buildJumpSession(visibleDoc);
     if (Object.keys(session.hintToNode).length === 0) return;
+    setRelatedLinkJumpSourceNodeId(null);
     setJumpSession(session);
     setJumpPrefix("");
   }, [setJumpPrefix, setJumpSession, visibleDoc]);
+
+  const openRelatedLinkJump = useCallback(() => {
+    const sourceNodeId = activeDoc.cursorId;
+    const candidateNodeIds = new Set(
+      Object.keys(visibleDoc.nodes).filter((nodeId) =>
+        canCreateCustomLink(activeDoc, sourceNodeId, nodeId),
+      ),
+    );
+    if (candidateNodeIds.size === 0) return;
+    const session = buildJumpSession(visibleDoc, candidateNodeIds);
+    if (Object.keys(session.hintToNode).length === 0) return;
+    setSelectedEdgeKey(null);
+    setSelectedCustomLinkId(null);
+    setRelatedLinkJumpSourceNodeId(sourceNodeId);
+    setJumpSession(session);
+    setJumpPrefix("");
+  }, [activeDoc, setJumpPrefix, setJumpSession, visibleDoc]);
 
   const zoomPan = useZoomPan({
     activeDocId: state.workspace.activeDocId,
@@ -173,6 +195,9 @@ function App() {
   useEffect(() => {
     setSelectedNodeIds(new Set());
     setSelectedEdgeKey(null);
+    setSelectedCustomLinkId(null);
+    setRelatedLinkSourceNodeId(null);
+    setRelatedLinkJumpSourceNodeId(null);
   }, [state.workspace.activeDocId, state.focusRootId]);
 
   useEffect(() => {
@@ -182,6 +207,35 @@ function App() {
     );
     if (!exists) setSelectedEdgeKey(null);
   }, [selectedEdgeKey, visibleDoc.nodes]);
+
+  useEffect(() => {
+    if (!selectedCustomLinkId) return;
+    if (!visibleDoc.customLinks[selectedCustomLinkId]) setSelectedCustomLinkId(null);
+  }, [selectedCustomLinkId, visibleDoc.customLinks]);
+
+  useEffect(() => {
+    if (!relatedLinkSourceNodeId) return;
+    if (!activeDoc.nodes[relatedLinkSourceNodeId]) {
+      setRelatedLinkSourceNodeId(null);
+      setSearchOpen(false);
+    }
+  }, [activeDoc.nodes, relatedLinkSourceNodeId, setSearchOpen]);
+
+  useEffect(() => {
+    if (!searchOpen) setRelatedLinkSourceNodeId(null);
+  }, [searchOpen]);
+
+  useEffect(() => {
+    if (!jumpSession) setRelatedLinkJumpSourceNodeId(null);
+  }, [jumpSession]);
+
+  useEffect(() => {
+    if (!relatedLinkJumpSourceNodeId) return;
+    if (!activeDoc.nodes[relatedLinkJumpSourceNodeId]) {
+      setRelatedLinkJumpSourceNodeId(null);
+      closeJump();
+    }
+  }, [activeDoc.nodes, closeJump, relatedLinkJumpSourceNodeId]);
 
   const changeEdgeAnchor = useCallback(
     (edgeKey: string, endpoint: "from" | "to", side: AnchorSide) => {
@@ -197,8 +251,12 @@ function App() {
   const modeLabel = getModeLabel(state.mode, language);
 
   const searchResults = useMemo(() => {
-    return buildSearchResults(activeDoc, searchQuery, language);
-  }, [activeDoc, language, searchQuery]);
+    const results = buildSearchResults(activeDoc, searchQuery, language);
+    if (!relatedLinkSourceNodeId) return results;
+    return results.filter((result) =>
+      canCreateCustomLink(activeDoc, relatedLinkSourceNodeId, result.nodeId),
+    );
+  }, [activeDoc, language, relatedLinkSourceNodeId, searchQuery]);
 
   const activeSearchNodeId =
     searchResults.length > 0 ? searchResults[searchIndex]?.nodeId ?? null : null;
@@ -377,6 +435,10 @@ function App() {
         if (!applied.ok) {
           throw new Error(formatLlmValidationErrors(applied.errors, language));
         }
+        const nextState: DocumentState = {
+          ...applied.value,
+          customLinks: sanitizeCustomLinks(applied.value, doc.customLinks),
+        };
 
         const preview = buildImprovePreview(
           improveResponse.summary,
@@ -387,7 +449,7 @@ function App() {
         );
         setPendingImproveApply({
           docId,
-          nextState: applied.value,
+          nextState,
           preview,
         });
       } catch (error) {
@@ -425,6 +487,7 @@ function App() {
         title: paletteText.searchTitle,
         subtitle: paletteText.searchSubtitle,
         run: () => {
+          setRelatedLinkSourceNodeId(null);
           setSearchOpen(true);
           setPaletteOpen(false);
         },
@@ -477,6 +540,31 @@ function App() {
           setPaletteOpen(false);
         },
       },
+      {
+        id: "add-related-link",
+        title: paletteText.addRelatedLinkTitle,
+        subtitle: paletteText.addRelatedLinkSubtitle,
+        run: () => {
+          setRelatedLinkSourceNodeId(activeDoc.cursorId);
+          setSearchQuery("");
+          setSearchIndex(0);
+          setSelectedEdgeKey(null);
+          setSelectedCustomLinkId(null);
+          setSearchOpen(true);
+          setPaletteOpen(false);
+        },
+      },
+      ...(selectedCustomLinkId
+        ? [{
+            id: "delete-related-link",
+            title: paletteText.deleteRelatedLinkTitle,
+            subtitle: paletteText.deleteRelatedLinkSubtitle,
+            run: () => {
+              dispatch({ type: "deleteCustomLink" as const, linkId: selectedCustomLinkId });
+              setSelectedCustomLinkId(null);
+            },
+          }]
+        : []),
       {
         id: "move-node-left",
         title: paletteText.moveNodeLeftTitle,
@@ -557,12 +645,16 @@ function App() {
 
     return filterPaletteCommands(commands, paletteQuery);
   }, [
+    activeDoc.cursorId,
     dispatch,
     paletteQuery,
+    selectedCustomLinkId,
     selectedEdgeKey,
     setHelpOpen,
     setLlmAssistOpen,
+    setSearchIndex,
     setPaletteOpen,
+    setSearchQuery,
     setSearchOpen,
     setSettingsOpen,
     state.focusRootId,
@@ -684,6 +776,26 @@ function App() {
     dispatch({ type: "selectNodeReveal", nodeId });
   };
 
+  const moveRelatedLinkSearch = (delta: number) => {
+    if (searchResults.length === 0) return;
+    const len = searchResults.length;
+    setSearchIndex((index) => (index + delta + len) % len);
+  };
+
+  const addRelatedLinkToNode = (nodeId: NodeId) => {
+    if (!relatedLinkSourceNodeId) return;
+    dispatch({ type: "addCustomLink", fromId: relatedLinkSourceNodeId, toId: nodeId });
+    setRelatedLinkSourceNodeId(null);
+    setSearchOpen(false);
+    setSearchQuery("");
+  };
+
+  const runRelatedLinkSearchActive = () => {
+    const nodeId = searchResults[searchIndex]?.nodeId;
+    if (!nodeId) return;
+    addRelatedLinkToNode(nodeId);
+  };
+
   const runPaletteSelected = () => {
     const item = paletteItems[paletteIndex];
     if (!item) return;
@@ -747,10 +859,26 @@ function App() {
         resetDeleteChord();
       }
 
+      if (
+        commandLayerActive &&
+        selectedCustomLinkId &&
+        (event.key === "Delete" || event.key === "Backspace")
+      ) {
+        event.preventDefault();
+        dispatch({ type: "deleteCustomLink", linkId: selectedCustomLinkId });
+        setSelectedCustomLinkId(null);
+        return;
+      }
+
       if (commandLayerActive && event.key === "d") {
         event.preventDefault();
         if (consumeDeleteChord()) {
-          dispatch({ type: "deleteNode" });
+          if (selectedCustomLinkId) {
+            dispatch({ type: "deleteCustomLink", linkId: selectedCustomLinkId });
+            setSelectedCustomLinkId(null);
+          } else {
+            dispatch({ type: "deleteNode" });
+          }
         }
         return;
       }
@@ -801,7 +929,20 @@ function App() {
         setLlmAssistOpen,
         setJumpPrefix,
         openJump,
+        openRelatedLinkJump,
         closeJump,
+        selectNode: (nodeId) => {
+          if (relatedLinkJumpSourceNodeId) {
+            dispatch({
+              type: "addCustomLink",
+              fromId: relatedLinkJumpSourceNodeId,
+              toId: nodeId,
+            });
+            setRelatedLinkJumpSourceNodeId(null);
+            return;
+          }
+          dispatch({ type: "selectNode", nodeId });
+        },
         nudgeSelection: (dx, dy) => {
           const selected = selectedNodeIds.has(activeDoc.cursorId)
             ? [...selectedNodeIds].filter((id) => Boolean(activeDoc.nodes[id]))
@@ -829,7 +970,9 @@ function App() {
     nodeMemoOpen,
     nodeColorOpen,
     openJump,
+    openRelatedLinkJump,
     paletteOpen,
+    relatedLinkJumpSourceNodeId,
     resetDeleteChord,
     resetFoldChord,
     searchOpen,
@@ -847,6 +990,7 @@ function App() {
     state.hydrated,
     state.focusRootId,
     state.mode,
+    selectedCustomLinkId,
     selectedNodeIds,
     activeDoc,
   ]);
@@ -945,14 +1089,22 @@ function App() {
           hiddenDescendantCounts={visibleProjection.hiddenDescendantCounts}
           selectedNodeIds={selectedNodeIds}
           selectedEdgeKey={selectedEdgeKey}
+          selectedCustomLinkId={selectedCustomLinkId}
           onSelectNode={(nodeId) => {
             setSelectedEdgeKey(null);
+            setSelectedCustomLinkId(null);
             dispatch({ type: "selectNode", nodeId });
           }}
           onSelectionChange={setSelectedNodeIds}
           onSelectEdge={(edgeKey) => {
             setSelectedNodeIds(new Set());
             setSelectedEdgeKey(edgeKey);
+            setSelectedCustomLinkId(null);
+          }}
+          onSelectCustomLink={(linkId) => {
+            setSelectedNodeIds(new Set());
+            setSelectedEdgeKey(null);
+            setSelectedCustomLinkId(linkId);
           }}
           onChangeEdgeAnchor={changeEdgeAnchor}
           onResetEdgeAnchors={(edgeKey) =>
@@ -964,6 +1116,7 @@ function App() {
           onCreateChildAt={(point) => {
             setSelectedNodeIds(new Set());
             setSelectedEdgeKey(null);
+            setSelectedCustomLinkId(null);
             dispatch({ type: "addChildAtPosition", point });
           }}
           onToggleCollapse={(nodeId) =>
@@ -983,6 +1136,34 @@ function App() {
           open={searchOpen}
           language={language}
           query={searchQuery}
+          title={
+            relatedLinkSourceNodeId
+              ? language === "ja"
+                ? "補助線の接続先を選択"
+                : "Select related link target"
+              : undefined
+          }
+          placeholder={
+            relatedLinkSourceNodeId
+              ? language === "ja"
+                ? "接続先ノードを検索..."
+                : "Search target node..."
+              : undefined
+          }
+          prevLabel={
+            relatedLinkSourceNodeId
+              ? language === "ja"
+                ? "前の候補"
+                : "Previous target"
+              : undefined
+          }
+          nextLabel={
+            relatedLinkSourceNodeId
+              ? language === "ja"
+                ? "この候補に接続 (Enter)"
+                : "Connect to target (Enter)"
+              : undefined
+          }
           results={searchResults.map((r) => ({
             nodeId: r.nodeId,
             title: r.title,
@@ -994,11 +1175,22 @@ function App() {
           onSelectNode={(nodeId) => {
             const nextIndex = searchResults.findIndex((r) => r.nodeId === nodeId);
             if (nextIndex >= 0) setSearchIndex(nextIndex);
+            if (relatedLinkSourceNodeId) {
+              addRelatedLinkToNode(nodeId);
+              return;
+            }
             dispatch({ type: "selectNodeReveal", nodeId });
           }}
-          onMoveNext={() => moveSearch(1)}
-          onMovePrev={() => moveSearch(-1)}
-          onClose={() => setSearchOpen(false)}
+          onMoveNext={() =>
+            relatedLinkSourceNodeId ? runRelatedLinkSearchActive() : moveSearch(1)
+          }
+          onMovePrev={() =>
+            relatedLinkSourceNodeId ? moveRelatedLinkSearch(-1) : moveSearch(-1)
+          }
+          onClose={() => {
+            setRelatedLinkSourceNodeId(null);
+            setSearchOpen(false);
+          }}
         />
         <CommandPaletteModal
           open={paletteOpen}

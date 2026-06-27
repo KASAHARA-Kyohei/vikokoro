@@ -10,6 +10,11 @@ import type {
   Workspace,
 } from "./types";
 import { createInitialDocument } from "./domain/documentFactory";
+import {
+  canCreateCustomLink,
+  makeCustomLinkId,
+  sanitizeCustomLinks,
+} from "./domain/customLinks";
 import { sanitizeEdgeAnchors } from "./domain/edgeAnchors";
 import { cloneDocumentState, documentStateEquals } from "./domain/snapshot";
 import {
@@ -83,6 +88,8 @@ export type EditorAction =
   | { type: "exitFocus" }
   | { type: "focusParent" }
   | { type: "moveNodes"; nodeIds: NodeId[]; dx: number; dy: number }
+  | { type: "addCustomLink"; fromId: NodeId; toId: NodeId }
+  | { type: "deleteCustomLink"; linkId: string }
   | { type: "autoLayout"; scope: "branch" | "all" }
   | {
       type: "setEdgeAnchor";
@@ -156,15 +163,18 @@ function sanitizeWorkspace(workspace: Workspace): Workspace {
         doc.nodePositions,
       ),
       edgeAnchors: sanitizeEdgeAnchors({ nodes }, doc.edgeAnchors),
+      customLinks: sanitizeCustomLinks({ nodes }, doc.customLinks),
       undoStack: (doc.undoStack ?? []).map((snapshot) => ({
         ...snapshot,
         nodePositions: sanitizeNodePositions(snapshot, snapshot.nodePositions),
         edgeAnchors: sanitizeEdgeAnchors(snapshot, snapshot.edgeAnchors),
+        customLinks: sanitizeCustomLinks(snapshot, snapshot.customLinks),
       })),
       redoStack: (doc.redoStack ?? []).map((snapshot) => ({
         ...snapshot,
         nodePositions: sanitizeNodePositions(snapshot, snapshot.nodePositions),
         edgeAnchors: sanitizeEdgeAnchors(snapshot, snapshot.edgeAnchors),
+        customLinks: sanitizeCustomLinks(snapshot, snapshot.customLinks),
       })),
       collapsedNodeIds: sanitizeCollapsedNodeIds(doc, doc.collapsedNodeIds),
     });
@@ -196,6 +206,7 @@ function sanitizeWorkspace(workspace: Workspace): Workspace {
 function sanitizeDocumentViewState(doc: Document): Document {
   const nodePositions = sanitizeNodePositions(doc, doc.nodePositions);
   const edgeAnchors = sanitizeEdgeAnchors(doc, doc.edgeAnchors);
+  const customLinks = sanitizeCustomLinks(doc, doc.customLinks);
   const cursorAncestors = new Set(getAncestorIds(doc, doc.cursorId));
   const collapsedNodeIds = sanitizeCollapsedNodeIds(
     doc,
@@ -209,6 +220,8 @@ function sanitizeDocumentViewState(doc: Document): Document {
     const currentPositionIds = Object.keys(doc.nodePositions ?? {});
     const edgeAnchorIds = Object.keys(edgeAnchors);
     const currentEdgeAnchorIds = Object.keys(doc.edgeAnchors ?? {});
+    const customLinkIds = Object.keys(customLinks);
+    const currentCustomLinkIds = Object.keys(doc.customLinks ?? {});
     const positionsEqual =
       positionIds.length === currentPositionIds.length &&
       positionIds.every((id) => {
@@ -223,9 +236,20 @@ function sanitizeDocumentViewState(doc: Document): Document {
         const next = edgeAnchors[id];
         return current?.from === next.from && current?.to === next.to;
       });
-    if (positionsEqual && edgeAnchorsEqual) return doc;
+    const customLinksEqual =
+      customLinkIds.length === currentCustomLinkIds.length &&
+      customLinkIds.every((id) => {
+        const current = doc.customLinks?.[id];
+        const next = customLinks[id];
+        return (
+          current?.id === next.id &&
+          current?.fromId === next.fromId &&
+          current?.toId === next.toId
+        );
+      });
+    if (positionsEqual && edgeAnchorsEqual && customLinksEqual) return doc;
   }
-  return { ...doc, collapsedNodeIds, nodePositions, edgeAnchors };
+  return { ...doc, collapsedNodeIds, nodePositions, edgeAnchors, customLinks };
 }
 
 function normalizeFocusRoot(state: EditorAppState): EditorAppState {
@@ -409,6 +433,7 @@ export function editorReducer(state: EditorAppState, action: EditorAction): Edit
             ...doc.edgeAnchors,
             ...(action.nextState.edgeAnchors ?? {}),
           }),
+          customLinks: sanitizeCustomLinks(action.nextState, action.nextState.customLinks),
         });
         const currentSnapshot = cloneDocumentState(doc);
         if (documentStateEquals(currentSnapshot, normalizedNext)) return doc;
@@ -809,6 +834,44 @@ export function editorReducer(state: EditorAppState, action: EditorAction): Edit
             action.dx,
             action.dy,
           ),
+          undoStack: [...doc.undoStack, snapshot],
+          redoStack: [],
+        };
+      });
+      return next === state ? state : bumpSaveRevision(next);
+    }
+    case "addCustomLink": {
+      if (state.mode === "insert") return state;
+      const next = updateActiveDoc(state, (doc) => {
+        const customLinks = sanitizeCustomLinks(doc, doc.customLinks);
+        if (!canCreateCustomLink({ ...doc, customLinks }, action.fromId, action.toId)) {
+          return doc;
+        }
+        const id = makeCustomLinkId(action.fromId, action.toId);
+        const [fromId, toId] = [action.fromId, action.toId].sort();
+        const snapshot = cloneDocumentState(doc);
+        return {
+          ...doc,
+          customLinks: {
+            ...customLinks,
+            [id]: { id, fromId, toId },
+          },
+          undoStack: [...doc.undoStack, snapshot],
+          redoStack: [],
+        };
+      });
+      return next === state ? state : bumpSaveRevision(next);
+    }
+    case "deleteCustomLink": {
+      if (state.mode === "insert") return state;
+      const next = updateActiveDoc(state, (doc) => {
+        const customLinks = sanitizeCustomLinks(doc, doc.customLinks);
+        if (!customLinks[action.linkId]) return doc;
+        const { [action.linkId]: _, ...rest } = customLinks;
+        const snapshot = cloneDocumentState(doc);
+        return {
+          ...doc,
+          customLinks: rest,
           undoStack: [...doc.undoStack, snapshot],
           redoStack: [],
         };
