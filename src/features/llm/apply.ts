@@ -174,6 +174,7 @@ export function buildDocumentStateFromGeneratedTree(root: GeneratedTreeNode): Do
     nodePositions: sanitizeNodePositions({ rootId, nodes }, undefined),
     edgeAnchors: {},
     customLinks: {},
+    stickyNotes: {},
   };
 }
 
@@ -332,6 +333,7 @@ export function applyImproveOperationsToDocument(
     nodePositions: {},
     edgeAnchors: {},
     customLinks: {},
+    stickyNotes: {},
   };
   const fallbackPositions = sanitizeNodePositions(
     { rootId: document.rootId, nodes },

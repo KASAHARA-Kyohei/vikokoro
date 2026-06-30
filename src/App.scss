@@ -161,6 +161,12 @@
   color: var(--text);
 }
 
+.statusPillSticky {
+  border-color: color-mix(in srgb, #d6a500 64%, var(--border));
+  background: color-mix(in srgb, #f7d66a 36%, var(--surface));
+  color: var(--text);
+}
+
 .statusPillLlm {
   border-color: var(--accentBorder);
   background: color-mix(in srgb, var(--accentBg), var(--surface) 20%);

@@ -15,6 +15,11 @@ export type CustomLink = {
   fromId: NodeId;
   toId: NodeId;
 };
+export type StickyNote = {
+  id: string;
+  text: string;
+  position: CanvasPoint;
+};
 
 export type Node = {
   id: NodeId;
@@ -32,6 +37,7 @@ export type DocumentState = {
   nodePositions: Record<NodeId, CanvasPoint>;
   edgeAnchors: Record<string, EdgeAnchor>;
   customLinks: Record<string, CustomLink>;
+  stickyNotes: Record<string, StickyNote>;
 };
 
 export type Document = DocumentState & {

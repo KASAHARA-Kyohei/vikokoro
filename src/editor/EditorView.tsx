@@ -17,6 +17,8 @@ import "./EditorView.scss";
 import {
   computeLayout,
   getEdgeEndpoints,
+  STICKY_NOTE_HEIGHT,
+  STICKY_NOTE_WIDTH,
   svgPathForEdge,
 } from "./layout";
 import type { NodePosition, NodeSize } from "./layout";
@@ -40,10 +42,18 @@ type Props = {
   selectedNodeIds: Set<NodeId>;
   selectedEdgeKey: string | null;
   selectedCustomLinkId: string | null;
+  selectedStickyNoteId: string | null;
+  editingStickyNoteId: string | null;
+  stickyPlacementActive: boolean;
   onSelectNode: (nodeId: NodeId) => void;
   onSelectionChange: (nodeIds: Set<NodeId>) => void;
   onSelectEdge: (edgeKey: string) => void;
   onSelectCustomLink: (linkId: string) => void;
+  onSelectStickyNote: (noteId: string) => void;
+  onClearSelection: () => void;
+  onBeginStickyEdit: (noteId: string) => void;
+  onChangeStickyText: (noteId: string, text: string) => void;
+  onCommitStickyEdit: (noteId: string) => void;
   onChangeEdgeAnchor: (
     edgeKey: string,
     endpoint: "from" | "to",
@@ -52,6 +62,8 @@ type Props = {
   onResetEdgeAnchors: (edgeKey: string) => void;
   onMoveNodes: (nodeIds: NodeId[], dx: number, dy: number) => void;
   onCreateChildAt: (point: CanvasPoint) => void;
+  onCreateStickyNoteAt: (point: CanvasPoint) => void;
+  onMoveStickyNote: (noteId: string, dx: number, dy: number) => void;
   onToggleCollapse: (nodeId: NodeId) => void;
   onChangeText: (text: string) => void;
   onEnterCommit: () => void;
@@ -71,6 +83,12 @@ type DragPreview = {
   dx: number;
   dy: number;
   guides: Array<{ axis: "x" | "y"; value: number }>;
+};
+
+type StickyDragPreview = {
+  noteId: string;
+  dx: number;
+  dy: number;
 };
 
 type SelectionRect = { x: number; y: number; width: number; height: number };
@@ -107,20 +125,31 @@ export function EditorView({
   selectedNodeIds,
   selectedEdgeKey,
   selectedCustomLinkId,
+  selectedStickyNoteId,
+  editingStickyNoteId,
+  stickyPlacementActive,
   onSelectNode,
   onSelectionChange,
   onSelectEdge,
   onSelectCustomLink,
+  onSelectStickyNote,
+  onClearSelection,
+  onBeginStickyEdit,
+  onChangeStickyText,
+  onCommitStickyEdit,
   onChangeEdgeAnchor,
   onResetEdgeAnchors,
   onMoveNodes,
   onCreateChildAt,
+  onCreateStickyNoteAt,
+  onMoveStickyNote,
   onToggleCollapse,
   onChangeText,
   onEnterCommit,
   onEsc,
 }: Props) {
   const [dragPreview, setDragPreview] = useState<DragPreview | null>(null);
+  const [stickyDragPreview, setStickyDragPreview] = useState<StickyDragPreview | null>(null);
   const [selectionRect, setSelectionRect] = useState<SelectionRect | null>(null);
   const previewDoc = useMemo<DocumentState>(() => {
     if (!dragPreview) return doc;
@@ -426,11 +455,49 @@ export function EditorView({
     window.addEventListener("mouseup", handleMouseUp);
   };
 
+  const beginStickyInteraction = (event: React.MouseEvent, noteId: string) => {
+    if (interactionDisabled || event.button !== 0 || editingStickyNoteId === noteId) return;
+    event.preventDefault();
+    event.stopPropagation();
+
+    const start = { x: event.clientX, y: event.clientY };
+    let moved = false;
+    let latestDx = 0;
+    let latestDy = 0;
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      const rawDx = (moveEvent.clientX - start.x) / zoom;
+      const rawDy = (moveEvent.clientY - start.y) / zoom;
+      if (!moved && Math.hypot(rawDx, rawDy) < 4 / zoom) return;
+      moved = true;
+      latestDx = rawDx;
+      latestDy = rawDy;
+      setStickyDragPreview({ noteId, dx: latestDx, dy: latestDy });
+    };
+
+    const handleMouseUp = () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+      setStickyDragPreview(null);
+      onSelectStickyNote(noteId);
+      if (moved) {
+        onMoveStickyNote(noteId, latestDx, latestDy);
+      }
+    };
+
+    window.addEventListener("mousemove", handleMouseMove, { passive: false });
+    window.addEventListener("mouseup", handleMouseUp);
+  };
+
   const beginMarqueeSelection = (event: React.MouseEvent<HTMLDivElement>) => {
     if (event.target !== event.currentTarget || interactionDisabled || event.button !== 0) return;
     const start = clientToCanvas(event.clientX, event.clientY);
     if (!start) return;
     event.preventDefault();
+    if (!event.shiftKey) {
+      onSelectionChange(new Set());
+      onClearSelection();
+    }
     const baseSelection = event.shiftKey ? new Set(selectedNodeIds) : new Set<NodeId>();
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
@@ -474,17 +541,24 @@ export function EditorView({
     >
       <div
         ref={canvasRef}
-        className="editorCanvas"
+        className={
+          "editorCanvas" + (stickyPlacementActive ? " editorCanvasStickyPlacement" : "")
+        }
         onMouseDown={beginMarqueeSelection}
         onDoubleClick={(event) => {
           if (event.target !== event.currentTarget || interactionDisabled) return;
           const point = clientToCanvas(event.clientX, event.clientY);
           if (!point) return;
           event.preventDefault();
-          onCreateChildAt({
+          const worldPoint = {
             x: point.x - layout.offset.x,
             y: point.y - layout.offset.y,
-          });
+          };
+          if (stickyPlacementActive) {
+            onCreateStickyNoteAt(worldPoint);
+          } else {
+            onCreateChildAt(worldPoint);
+          }
         }}
         style={{
           width: layout.contentWidth,
@@ -745,6 +819,61 @@ export function EditorView({
                 </div>
               ) : null}
               <div className="nodeText">{node.text || " "}</div>
+            </div>
+          );
+        })}
+
+        {Object.values(doc.stickyNotes).map((note) => {
+          const drag =
+            stickyDragPreview?.noteId === note.id
+              ? { dx: stickyDragPreview.dx, dy: stickyDragPreview.dy }
+              : { dx: 0, dy: 0 };
+          const isSelected = selectedStickyNoteId === note.id;
+          const isEditing = editingStickyNoteId === note.id;
+          return (
+            <div
+              key={note.id}
+              className={
+                "stickyNote" +
+                (isSelected ? " stickyNoteSelected" : "") +
+                (isEditing ? " stickyNoteEditing" : "") +
+                (stickyDragPreview?.noteId === note.id ? " stickyNoteDragging" : "")
+              }
+              style={{
+                left: note.position.x + layout.offset.x + drag.dx,
+                top: note.position.y + layout.offset.y + drag.dy,
+                width: STICKY_NOTE_WIDTH,
+                height: STICKY_NOTE_HEIGHT,
+              }}
+              onMouseDown={(event) => beginStickyInteraction(event, note.id)}
+              onDoubleClick={(event) => {
+                if (interactionDisabled) return;
+                event.preventDefault();
+                event.stopPropagation();
+                onBeginStickyEdit(note.id);
+              }}
+            >
+              {isEditing ? (
+                <textarea
+                  className="stickyNoteInput"
+                  value={note.text}
+                  autoFocus
+                  onFocus={(event) => event.currentTarget.select()}
+                  onMouseDown={(event) => {
+                    event.stopPropagation();
+                  }}
+                  onChange={(event) => onChangeStickyText(note.id, event.currentTarget.value)}
+                  onBlur={() => onCommitStickyEdit(note.id)}
+                  onKeyDown={(event) => {
+                    if (event.key !== "Escape") return;
+                    event.preventDefault();
+                    event.stopPropagation();
+                    onCommitStickyEdit(note.id);
+                  }}
+                />
+              ) : (
+                <div className="stickyNoteText">{note.text}</div>
+              )}
             </div>
           );
         })}

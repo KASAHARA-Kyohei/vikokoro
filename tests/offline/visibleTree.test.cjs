@@ -22,6 +22,9 @@ function makeDoc() {
       "a1<->b": { id: "a1<->b", fromId: "a1", toId: "b" },
       "a2<->b": { id: "a2<->b", fromId: "a2", toId: "b" },
     },
+    stickyNotes: {
+      "note-1": { id: "note-1", text: "memo", position: { x: 900, y: -120 } },
+    },
     nodes: {
       root: { id: "root", text: "root", parentId: null, childrenIds: ["a", "b"] },
       a: { id: "a", text: "a", parentId: "root", childrenIds: ["a1", "a2"] },
@@ -45,6 +48,9 @@ test("collapsed branch hides descendants and reports their count", () => {
     "root->a": { from: "right", to: "left" },
   });
   assert.deepEqual(projection.state.customLinks, {});
+  assert.deepEqual(projection.state.stickyNotes, {
+    "note-1": { id: "note-1", text: "memo", position: { x: 900, y: -120 } },
+  });
 });
 
 test("focused branch becomes layout root at depth zero", () => {
@@ -62,6 +68,9 @@ test("focused branch becomes layout root at depth zero", () => {
     to: "top",
   });
   assert.deepEqual(projection.state.customLinks, {});
+  assert.deepEqual(projection.state.stickyNotes, {
+    "note-1": { id: "note-1", text: "memo", position: { x: 900, y: -120 } },
+  });
 });
 
 test("custom links are visible only when both endpoints are visible", () => {

@@ -15,6 +15,8 @@ const {
   NODE_MAX_WIDTH,
   sanitizeNodePositions,
   svgPathForEdge,
+  STICKY_NOTE_HEIGHT,
+  STICKY_NOTE_WIDTH,
 } = require("../../.tmp-tests/src/editor/layout.js");
 
 function makeDoc() {
@@ -33,6 +35,9 @@ function makeDoc() {
       a1: { x: 700, y: 510 },
       b: { x: 260, y: 80 },
     },
+    edgeAnchors: {},
+    customLinks: {},
+    stickyNotes: {},
   };
 }
 
@@ -72,6 +77,24 @@ test("computeLayout keeps enough trailing canvas space to center nodes", () => {
 
   assert.equal(layout.contentWidth - viewport.width >= desiredScroll.x, true);
   assert.equal(layout.contentHeight - viewport.height >= desiredScroll.y, true);
+});
+
+test("computeLayout includes sticky notes in canvas bounds", () => {
+  const doc = makeDoc();
+  doc.stickyNotes = {
+    "note-1": { id: "note-1", text: "memo", position: { x: 1600, y: 950 } },
+  };
+  const layout = computeLayout(doc);
+  const note = doc.stickyNotes["note-1"];
+
+  assert.equal(
+    layout.contentWidth >= note.position.x + layout.offset.x + STICKY_NOTE_WIDTH + 360,
+    true,
+  );
+  assert.equal(
+    layout.contentHeight >= note.position.y + layout.offset.y + STICKY_NOTE_HEIGHT + 240,
+    true,
+  );
 });
 
 test("node size keeps short text compact and expands long or multiline text", () => {

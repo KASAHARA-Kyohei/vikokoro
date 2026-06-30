@@ -19,6 +19,9 @@ function makeState() {
     customLinks: {
       "a<->root": { id: "a<->root", fromId: "a", toId: "root" },
     },
+    stickyNotes: {
+      "note-1": { id: "note-1", text: "memo", position: { x: 30, y: -10 } },
+    },
     nodes: {
       root: {
         id: "root",
@@ -54,11 +57,16 @@ test("cloneDocumentState: deep clone", () => {
   assert.notEqual(cloned.edgeAnchors["root->a"], src.edgeAnchors["root->a"]);
   assert.notEqual(cloned.customLinks, src.customLinks);
   assert.notEqual(cloned.customLinks["a<->root"], src.customLinks["a<->root"]);
+  assert.notEqual(cloned.stickyNotes, src.stickyNotes);
+  assert.notEqual(cloned.stickyNotes["note-1"], src.stickyNotes["note-1"]);
+  assert.notEqual(cloned.stickyNotes["note-1"].position, src.stickyNotes["note-1"].position);
 
   cloned.nodes.root.childrenIds.push("x");
   cloned.edgeAnchors["root->a"].from = "bottom";
+  cloned.stickyNotes["note-1"].position.x = 99;
   assert.deepEqual(src.nodes.root.childrenIds, ["a"]);
   assert.deepEqual(src.edgeAnchors["root->a"], { from: "right", to: "left" });
+  assert.deepEqual(src.stickyNotes["note-1"].position, { x: 30, y: -10 });
 });
 
 test("documentStateEquals: detect differences", () => {
@@ -89,4 +97,12 @@ test("documentStateEquals: detect differences", () => {
   const linked = cloneDocumentState(a);
   linked.customLinks["a<->root"].toId = "z";
   assert.equal(documentStateEquals(a, linked), false);
+
+  const stickyChanged = cloneDocumentState(a);
+  stickyChanged.stickyNotes["note-1"].text = "changed";
+  assert.equal(documentStateEquals(a, stickyChanged), false);
+
+  const stickyMoved = cloneDocumentState(a);
+  stickyMoved.stickyNotes["note-1"].position.x += 1;
+  assert.equal(documentStateEquals(a, stickyMoved), false);
 });

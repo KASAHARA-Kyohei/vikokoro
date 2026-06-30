@@ -73,6 +73,7 @@ function withTree(state) {
           },
           edgeAnchors: {},
           customLinks: {},
+          stickyNotes: {},
           nodes: {
             root: { id: "root", text: "root", parentId: null, childrenIds: ["a", "b"] },
             a: { id: "a", text: "a", parentId: "root", childrenIds: ["a1"] },
@@ -126,6 +127,7 @@ test("legacy hydration defaults and sanitizes collapsed node IDs", () => {
   delete legacy.documents[docId].collapsedNodeIds;
   delete legacy.documents[docId].edgeAnchors;
   delete legacy.documents[docId].customLinks;
+  delete legacy.documents[docId].stickyNotes;
 
   const state = editorReducer(initial, {
     type: "finishHydration",
@@ -135,6 +137,7 @@ test("legacy hydration defaults and sanitizes collapsed node IDs", () => {
   assert.deepEqual(state.workspace.documents[docId].collapsedNodeIds, []);
   assert.deepEqual(state.workspace.documents[docId].edgeAnchors, {});
   assert.deepEqual(state.workspace.documents[docId].customLinks, {});
+  assert.deepEqual(state.workspace.documents[docId].stickyNotes, {});
 });
 
 test("adding a sibling outside the focused branch exits focus", () => {
@@ -363,6 +366,90 @@ test("node deletion removes invalid custom links", () => {
 
   const doc = state.workspace.documents[docId];
   assert.deepEqual(doc.customLinks, {});
+});
+
+test("sticky notes are undoable and redoable", () => {
+  let state = withTree(makeReadyState());
+  const docId = state.workspace.activeDocId;
+
+  state = editorReducer(state, {
+    type: "addStickyNote",
+    note: { id: "note-1", text: "memo", position: { x: -20, y: 40 } },
+  });
+
+  let doc = state.workspace.documents[docId];
+  assert.deepEqual(doc.stickyNotes["note-1"], {
+    id: "note-1",
+    text: "memo",
+    position: { x: -20, y: 40 },
+  });
+  assert.equal(doc.undoStack.length, 1);
+
+  state = editorReducer(state, { type: "moveStickyNote", noteId: "note-1", dx: 30, dy: -10 });
+  doc = state.workspace.documents[docId];
+  assert.deepEqual(doc.stickyNotes["note-1"].position, { x: 10, y: 30 });
+  assert.equal(doc.undoStack.length, 2);
+
+  state = editorReducer(state, { type: "deleteStickyNote", noteId: "note-1" });
+  doc = state.workspace.documents[docId];
+  assert.deepEqual(doc.stickyNotes, {});
+  assert.equal(doc.undoStack.length, 3);
+
+  state = editorReducer(state, { type: "undo" });
+  doc = state.workspace.documents[docId];
+  assert.deepEqual(doc.stickyNotes["note-1"].position, { x: 10, y: 30 });
+
+  state = editorReducer(state, { type: "undo" });
+  doc = state.workspace.documents[docId];
+  assert.deepEqual(doc.stickyNotes["note-1"].position, { x: -20, y: 40 });
+
+  state = editorReducer(state, { type: "redo" });
+  doc = state.workspace.documents[docId];
+  assert.deepEqual(doc.stickyNotes["note-1"].position, { x: 10, y: 30 });
+});
+
+test("sticky text edit commits as one undo step and removes blank notes", () => {
+  let state = withTree(makeReadyState());
+  const docId = state.workspace.activeDocId;
+  state.workspace.documents[docId].stickyNotes = {
+    "note-1": { id: "note-1", text: "memo", position: { x: 10, y: 20 } },
+  };
+
+  state = editorReducer(state, { type: "beginStickyEdit" });
+  state = editorReducer(state, { type: "setStickyNoteText", noteId: "note-1", text: "memo 1" });
+  state = editorReducer(state, { type: "setStickyNoteText", noteId: "note-1", text: "memo 2" });
+  assert.equal(state.workspace.documents[docId].undoStack.length, 0);
+
+  state = editorReducer(state, { type: "commitStickyEdit", noteId: "note-1" });
+  let doc = state.workspace.documents[docId];
+  assert.equal(doc.stickyNotes["note-1"].text, "memo 2");
+  assert.equal(doc.undoStack.length, 1);
+
+  state = editorReducer(state, { type: "beginStickyEdit" });
+  state = editorReducer(state, { type: "setStickyNoteText", noteId: "note-1", text: "   " });
+  state = editorReducer(state, { type: "commitStickyEdit", noteId: "note-1" });
+  doc = state.workspace.documents[docId];
+  assert.deepEqual(doc.stickyNotes, {});
+  assert.equal(doc.undoStack.length, 2);
+
+  state = editorReducer(state, { type: "undo" });
+  doc = state.workspace.documents[docId];
+  assert.equal(doc.stickyNotes["note-1"].text, "memo 2");
+});
+
+test("sticky text edit without changes does not add undo entry", () => {
+  let state = withTree(makeReadyState());
+  const docId = state.workspace.activeDocId;
+  state.workspace.documents[docId].stickyNotes = {
+    "note-1": { id: "note-1", text: "memo", position: { x: 10, y: 20 } },
+  };
+
+  state = editorReducer(state, { type: "beginStickyEdit" });
+  state = editorReducer(state, { type: "commitStickyEdit", noteId: "note-1" });
+
+  const doc = state.workspace.documents[docId];
+  assert.equal(doc.undoStack.length, 0);
+  assert.equal(state.stickyEditOrigin, null);
 });
 
 test("reparent removes connector anchors for edges that no longer exist", () => {
