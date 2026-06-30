@@ -1,10 +1,19 @@
-import type { CanvasPoint, CustomLink, DocumentState, EdgeAnchor, Node, NodeId } from "../types";
+import type {
+  CanvasPoint,
+  CustomLink,
+  DocumentState,
+  EdgeAnchor,
+  Node,
+  NodeId,
+  StickyNote,
+} from "../types";
 
 export function cloneDocumentState(doc: DocumentState): DocumentState {
   const nodes: Record<NodeId, Node> = {};
   const nodePositions: Record<NodeId, CanvasPoint> = {};
   const edgeAnchors: Record<string, EdgeAnchor> = {};
   const customLinks: Record<string, CustomLink> = {};
+  const stickyNotes: Record<string, StickyNote> = {};
   for (const [id, node] of Object.entries(doc.nodes)) {
     nodes[id] = {
       id: node.id,
@@ -25,6 +34,13 @@ export function cloneDocumentState(doc: DocumentState): DocumentState {
   for (const [id, link] of Object.entries(doc.customLinks ?? {})) {
     customLinks[id] = { id: link.id, fromId: link.fromId, toId: link.toId };
   }
+  for (const [id, note] of Object.entries(doc.stickyNotes ?? {})) {
+    stickyNotes[id] = {
+      id: note.id,
+      text: note.text,
+      position: { x: note.position.x, y: note.position.y },
+    };
+  }
   return {
     rootId: doc.rootId,
     cursorId: doc.cursorId,
@@ -32,12 +48,26 @@ export function cloneDocumentState(doc: DocumentState): DocumentState {
     nodePositions,
     edgeAnchors,
     customLinks,
+    stickyNotes,
   };
 }
 
 export function documentStateEquals(a: DocumentState, b: DocumentState): boolean {
   if (a.rootId !== b.rootId) return false;
   if (a.cursorId !== b.cursorId) return false;
+  const aStickyKeys = Object.keys(a.stickyNotes ?? {}).sort();
+  const bStickyKeys = Object.keys(b.stickyNotes ?? {}).sort();
+  if (aStickyKeys.length !== bStickyKeys.length) return false;
+  for (let i = 0; i < aStickyKeys.length; i += 1) {
+    const key = aStickyKeys[i];
+    if (key !== bStickyKeys[i]) return false;
+    const an = a.stickyNotes?.[key];
+    const bn = b.stickyNotes?.[key];
+    if (an?.id !== bn?.id || an?.text !== bn?.text) return false;
+    if (an?.position.x !== bn?.position.x || an?.position.y !== bn?.position.y) {
+      return false;
+    }
+  }
   const aCustomLinkKeys = Object.keys(a.customLinks ?? {}).sort();
   const bCustomLinkKeys = Object.keys(b.customLinks ?? {}).sort();
   if (aCustomLinkKeys.length !== bCustomLinkKeys.length) return false;

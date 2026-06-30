@@ -4,6 +4,10 @@
   min-height: 100%;
 }
 
+.editorCanvasStickyPlacement {
+  cursor: crosshair;
+}
+
 .editorCanvasOuter {
   position: relative;
   min-width: 100%;
@@ -177,6 +181,75 @@
 
 .node:hover {
   background: var(--surfaceHover);
+}
+
+.stickyNote {
+  animation: nodeIn 160ms ease both;
+  position: absolute;
+  z-index: 2;
+  box-sizing: border-box;
+  border: 1px solid color-mix(in srgb, #d6a500 54%, var(--border));
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.18), transparent 42%),
+    #f7d66a;
+  box-shadow:
+    0 10px 22px color-mix(in srgb, #000 18%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  color: #382900;
+  cursor: default;
+  padding: 12px;
+  user-select: none;
+  transition:
+    left 140ms ease,
+    top 140ms ease,
+    border-color 120ms ease,
+    box-shadow 120ms ease,
+    transform 120ms ease;
+}
+
+.stickyNote:hover {
+  box-shadow:
+    0 12px 26px color-mix(in srgb, #000 22%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.42);
+}
+
+.stickyNoteSelected,
+.stickyNoteEditing {
+  border-color: var(--accent);
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--accent), transparent 64%),
+    0 12px 26px color-mix(in srgb, #000 22%, transparent);
+}
+
+.stickyNoteDragging {
+  transition: none;
+  cursor: grabbing;
+}
+
+.stickyNoteText {
+  overflow: hidden;
+  width: 100%;
+  height: 100%;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.stickyNoteInput {
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  border: 0;
+  outline: none;
+  resize: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.45;
+  padding: 0;
 }
 
 .nodeColor-blue {

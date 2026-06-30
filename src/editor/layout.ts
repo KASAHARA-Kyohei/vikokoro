@@ -3,6 +3,8 @@ import type { AnchorSide, CanvasPoint, DocumentState, EdgeAnchor, Node, NodeId }
 export const NODE_WIDTH = 180;
 export const NODE_HEIGHT = 34;
 export const NODE_MAX_WIDTH = 320;
+export const STICKY_NOTE_WIDTH = 180;
+export const STICKY_NOTE_HEIGHT = 120;
 export const H_GAP = 80;
 export const V_GAP = 16;
 export const PADDING_X = 48;
@@ -232,13 +234,22 @@ export function computeLayout(doc: DocumentState): LayoutResult {
     };
   }
 
-  const minX = Math.min(...ids.map((id) => source[id].x));
-  const minY = Math.min(...ids.map((id) => source[id].y));
+  const stickyNotes = Object.values(doc.stickyNotes ?? {});
+  const minX = Math.min(
+    ...ids.map((id) => source[id].x),
+    ...stickyNotes.map((note) => note.position.x),
+  );
+  const minY = Math.min(
+    ...ids.map((id) => source[id].y),
+    ...stickyNotes.map((note) => note.position.y),
+  );
   const maxX = Math.max(
     ...ids.map((id) => source[id].x + (sizes[id]?.width ?? NODE_WIDTH)),
+    ...stickyNotes.map((note) => note.position.x + STICKY_NOTE_WIDTH),
   );
   const maxY = Math.max(
     ...ids.map((id) => source[id].y + (sizes[id]?.height ?? NODE_HEIGHT)),
+    ...stickyNotes.map((note) => note.position.y + STICKY_NOTE_HEIGHT),
   );
   const offset = {
     x: Math.max(CANVAS_ORIGIN_X, PADDING_X - minX),

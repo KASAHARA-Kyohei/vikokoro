@@ -35,6 +35,8 @@ struct Document {
     #[serde(default)]
     custom_links: HashMap<String, CustomLink>,
     #[serde(default)]
+    sticky_notes: HashMap<String, StickyNote>,
+    #[serde(default)]
     collapsed_node_ids: Vec<String>,
     undo_stack: Vec<DocumentState>,
     redo_stack: Vec<DocumentState>,
@@ -52,6 +54,8 @@ struct DocumentState {
     edge_anchors: HashMap<String, EdgeAnchor>,
     #[serde(default)]
     custom_links: HashMap<String, CustomLink>,
+    #[serde(default)]
+    sticky_notes: HashMap<String, StickyNote>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -83,6 +87,14 @@ struct CustomLink {
     id: String,
     from_id: String,
     to_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+struct StickyNote {
+    id: String,
+    text: String,
+    position: CanvasPoint,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -202,6 +214,7 @@ mod tests {
         assert!(document.node_positions.is_empty());
         assert!(document.edge_anchors.is_empty());
         assert!(document.custom_links.is_empty());
+        assert!(document.sticky_notes.is_empty());
         assert_eq!(root.note, None);
     }
 
@@ -228,6 +241,14 @@ mod tests {
                 to_id: "root".to_string(),
             },
         );
+        document.sticky_notes.insert(
+            "note-1".to_string(),
+            super::StickyNote {
+                id: "note-1".to_string(),
+                text: "memo".to_string(),
+                position: CanvasPoint { x: 12.0, y: 34.5 },
+            },
+        );
         document.nodes.get_mut("root").unwrap().note = Some("memo".to_string());
         document.undo_stack.push(DocumentState {
             root_id: document.root_id.clone(),
@@ -236,6 +257,7 @@ mod tests {
             node_positions: document.node_positions.clone(),
             edge_anchors: document.edge_anchors.clone(),
             custom_links: document.custom_links.clone(),
+            sticky_notes: document.sticky_notes.clone(),
         });
 
         let json = serde_json::to_string(&workspace).unwrap();
@@ -267,6 +289,14 @@ mod tests {
             })
         );
         assert_eq!(
+            restored_document.sticky_notes.get("note-1"),
+            Some(&super::StickyNote {
+                id: "note-1".to_string(),
+                text: "memo".to_string(),
+                position: CanvasPoint { x: 12.0, y: 34.5 },
+            })
+        );
+        assert_eq!(
             restored_document.undo_stack[0].edge_anchors.get("root->child"),
             Some(&EdgeAnchor {
                 from: Some(AnchorSide::Right),
@@ -279,6 +309,14 @@ mod tests {
                 id: "root<->other".to_string(),
                 from_id: "other".to_string(),
                 to_id: "root".to_string(),
+            })
+        );
+        assert_eq!(
+            restored_document.undo_stack[0].sticky_notes.get("note-1"),
+            Some(&super::StickyNote {
+                id: "note-1".to_string(),
+                text: "memo".to_string(),
+                position: CanvasPoint { x: 12.0, y: 34.5 },
             })
         );
         assert_eq!(

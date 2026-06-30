@@ -7,6 +7,7 @@ import type {
   CanvasPoint,
   NodeColor,
   NodeId,
+  StickyNote,
   Workspace,
 } from "./types";
 import { createInitialDocument } from "./domain/documentFactory";
@@ -16,6 +17,7 @@ import {
   sanitizeCustomLinks,
 } from "./domain/customLinks";
 import { sanitizeEdgeAnchors } from "./domain/edgeAnchors";
+import { sanitizeStickyNotes } from "./domain/stickyNotes";
 import { cloneDocumentState, documentStateEquals } from "./domain/snapshot";
 import {
   autoLayoutBranch,
@@ -45,6 +47,7 @@ export type EditorAppState = {
   mode: Mode;
   insertOrigin: { docId: DocId; snapshot: DocumentState } | null;
   noteEditOrigin: { docId: DocId; snapshot: DocumentState } | null;
+  stickyEditOrigin: { docId: DocId; snapshot: DocumentState } | null;
   hydrated: boolean;
   saveRevision: number;
   closeConfirmDocId: DocId | null;
@@ -77,6 +80,9 @@ export type EditorAction =
   | { type: "beginNoteEdit" }
   | { type: "setCursorNote"; note: string }
   | { type: "commitNoteEdit" }
+  | { type: "beginStickyEdit" }
+  | { type: "setStickyNoteText"; noteId: string; text: string }
+  | { type: "commitStickyEdit"; noteId: string }
   | { type: "setCursorColor"; color: NodeColor | null }
   | { type: "toggleNodeCollapsed"; nodeId?: NodeId }
   | { type: "collapseNode"; nodeId?: NodeId }
@@ -88,6 +94,9 @@ export type EditorAction =
   | { type: "exitFocus" }
   | { type: "focusParent" }
   | { type: "moveNodes"; nodeIds: NodeId[]; dx: number; dy: number }
+  | { type: "addStickyNote"; note: StickyNote }
+  | { type: "moveStickyNote"; noteId: string; dx: number; dy: number }
+  | { type: "deleteStickyNote"; noteId: string }
   | { type: "addCustomLink"; fromId: NodeId; toId: NodeId }
   | { type: "deleteCustomLink"; linkId: string }
   | { type: "autoLayout"; scope: "branch" | "all" }
@@ -119,6 +128,7 @@ export function createInitialAppState(): EditorAppState {
     mode: "normal",
     insertOrigin: null,
     noteEditOrigin: null,
+    stickyEditOrigin: null,
     hydrated: false,
     saveRevision: 0,
     closeConfirmDocId: null,
@@ -164,17 +174,20 @@ function sanitizeWorkspace(workspace: Workspace): Workspace {
       ),
       edgeAnchors: sanitizeEdgeAnchors({ nodes }, doc.edgeAnchors),
       customLinks: sanitizeCustomLinks({ nodes }, doc.customLinks),
+      stickyNotes: sanitizeStickyNotes(doc.stickyNotes),
       undoStack: (doc.undoStack ?? []).map((snapshot) => ({
         ...snapshot,
         nodePositions: sanitizeNodePositions(snapshot, snapshot.nodePositions),
         edgeAnchors: sanitizeEdgeAnchors(snapshot, snapshot.edgeAnchors),
         customLinks: sanitizeCustomLinks(snapshot, snapshot.customLinks),
+        stickyNotes: sanitizeStickyNotes(snapshot.stickyNotes),
       })),
       redoStack: (doc.redoStack ?? []).map((snapshot) => ({
         ...snapshot,
         nodePositions: sanitizeNodePositions(snapshot, snapshot.nodePositions),
         edgeAnchors: sanitizeEdgeAnchors(snapshot, snapshot.edgeAnchors),
         customLinks: sanitizeCustomLinks(snapshot, snapshot.customLinks),
+        stickyNotes: sanitizeStickyNotes(snapshot.stickyNotes),
       })),
       collapsedNodeIds: sanitizeCollapsedNodeIds(doc, doc.collapsedNodeIds),
     });
@@ -207,6 +220,7 @@ function sanitizeDocumentViewState(doc: Document): Document {
   const nodePositions = sanitizeNodePositions(doc, doc.nodePositions);
   const edgeAnchors = sanitizeEdgeAnchors(doc, doc.edgeAnchors);
   const customLinks = sanitizeCustomLinks(doc, doc.customLinks);
+  const stickyNotes = sanitizeStickyNotes(doc.stickyNotes);
   const cursorAncestors = new Set(getAncestorIds(doc, doc.cursorId));
   const collapsedNodeIds = sanitizeCollapsedNodeIds(
     doc,
@@ -222,6 +236,8 @@ function sanitizeDocumentViewState(doc: Document): Document {
     const currentEdgeAnchorIds = Object.keys(doc.edgeAnchors ?? {});
     const customLinkIds = Object.keys(customLinks);
     const currentCustomLinkIds = Object.keys(doc.customLinks ?? {});
+    const stickyNoteIds = Object.keys(stickyNotes);
+    const currentStickyNoteIds = Object.keys(doc.stickyNotes ?? {});
     const positionsEqual =
       positionIds.length === currentPositionIds.length &&
       positionIds.every((id) => {
@@ -247,9 +263,21 @@ function sanitizeDocumentViewState(doc: Document): Document {
           current?.toId === next.toId
         );
       });
-    if (positionsEqual && edgeAnchorsEqual && customLinksEqual) return doc;
+    const stickyNotesEqual =
+      stickyNoteIds.length === currentStickyNoteIds.length &&
+      stickyNoteIds.every((id) => {
+        const current = doc.stickyNotes?.[id];
+        const next = stickyNotes[id];
+        return (
+          current?.id === next.id &&
+          current?.text === next.text &&
+          current?.position.x === next.position.x &&
+          current?.position.y === next.position.y
+        );
+      });
+    if (positionsEqual && edgeAnchorsEqual && customLinksEqual && stickyNotesEqual) return doc;
   }
-  return { ...doc, collapsedNodeIds, nodePositions, edgeAnchors, customLinks };
+  return { ...doc, collapsedNodeIds, nodePositions, edgeAnchors, customLinks, stickyNotes };
 }
 
 function normalizeFocusRoot(state: EditorAppState): EditorAppState {
@@ -434,6 +462,7 @@ export function editorReducer(state: EditorAppState, action: EditorAction): Edit
             ...(action.nextState.edgeAnchors ?? {}),
           }),
           customLinks: sanitizeCustomLinks(action.nextState, action.nextState.customLinks),
+          stickyNotes: sanitizeStickyNotes(action.nextState.stickyNotes),
         });
         const currentSnapshot = cloneDocumentState(doc);
         if (documentStateEquals(currentSnapshot, normalizedNext)) return doc;
@@ -659,6 +688,7 @@ export function editorReducer(state: EditorAppState, action: EditorAction): Edit
         mode: "insert",
         insertOrigin: { docId, snapshot },
         noteEditOrigin: null,
+        stickyEditOrigin: null,
       };
     }
     case "addChildAndInsert": {
@@ -673,6 +703,7 @@ export function editorReducer(state: EditorAppState, action: EditorAction): Edit
         mode: "insert",
         insertOrigin: { docId, snapshot: before },
         noteEditOrigin: null,
+        stickyEditOrigin: null,
       });
     }
     case "addChildAtPosition": {
@@ -694,6 +725,7 @@ export function editorReducer(state: EditorAppState, action: EditorAction): Edit
         mode: "insert",
         insertOrigin: { docId, snapshot: before },
         noteEditOrigin: null,
+        stickyEditOrigin: null,
       });
     }
     case "addSiblingAndInsert": {
@@ -706,6 +738,7 @@ export function editorReducer(state: EditorAppState, action: EditorAction): Edit
         mode: "insert",
         insertOrigin: { docId, snapshot: before },
         noteEditOrigin: null,
+        stickyEditOrigin: null,
       });
     }
     case "setCursorText": {
@@ -794,6 +827,61 @@ export function editorReducer(state: EditorAppState, action: EditorAction): Edit
       }));
       return bumpSaveRevision(next);
     }
+    case "beginStickyEdit": {
+      if (state.mode === "insert") return state;
+      const docId = state.workspace.activeDocId;
+      const doc = state.workspace.documents[docId];
+      return {
+        ...state,
+        stickyEditOrigin: { docId, snapshot: cloneDocumentState(doc) },
+      };
+    }
+    case "setStickyNoteText": {
+      if (state.mode === "insert") return state;
+      return updateActiveDoc(state, (doc) => {
+        const note = doc.stickyNotes[action.noteId];
+        if (!note || note.text === action.text) return doc;
+        return {
+          ...doc,
+          stickyNotes: {
+            ...doc.stickyNotes,
+            [note.id]: { ...note, text: action.text },
+          },
+        };
+      });
+    }
+    case "commitStickyEdit": {
+      if (state.mode === "insert") return state;
+      const origin = state.stickyEditOrigin;
+      const docId = state.workspace.activeDocId;
+      if (!origin || origin.docId !== docId) {
+        return { ...state, stickyEditOrigin: null };
+      }
+
+      const currentDoc = state.workspace.documents[docId];
+      const note = currentDoc.stickyNotes[action.noteId];
+      let stickyNotes = currentDoc.stickyNotes;
+      if (note && note.text.trim() === "") {
+        const { [action.noteId]: _, ...rest } = stickyNotes;
+        stickyNotes = rest;
+      }
+      const updatedDoc =
+        stickyNotes === currentDoc.stickyNotes
+          ? currentDoc
+          : { ...currentDoc, stickyNotes };
+      if (documentStateEquals(origin.snapshot, updatedDoc)) {
+        return { ...state, stickyEditOrigin: null };
+      }
+
+      const next = updateActiveDoc({ ...state, stickyEditOrigin: null }, (doc) => {
+        return {
+          ...updatedDoc,
+          undoStack: [...doc.undoStack, origin.snapshot],
+          redoStack: [],
+        };
+      });
+      return next === state ? state : bumpSaveRevision(next);
+    }
     case "setCursorColor": {
       if (state.mode === "insert") return state;
       const next = updateActiveDoc(state, (doc) => {
@@ -834,6 +922,72 @@ export function editorReducer(state: EditorAppState, action: EditorAction): Edit
             action.dx,
             action.dy,
           ),
+          undoStack: [...doc.undoStack, snapshot],
+          redoStack: [],
+        };
+      });
+      return next === state ? state : bumpSaveRevision(next);
+    }
+    case "addStickyNote": {
+      if (state.mode === "insert") return state;
+      if (action.note.text.trim() === "") return state;
+      if (!Number.isFinite(action.note.position.x) || !Number.isFinite(action.note.position.y)) {
+        return state;
+      }
+      const next = updateActiveDoc(state, (doc) => {
+        if (doc.stickyNotes[action.note.id]) return doc;
+        const snapshot = cloneDocumentState(doc);
+        return {
+          ...doc,
+          stickyNotes: {
+            ...doc.stickyNotes,
+            [action.note.id]: {
+              id: action.note.id,
+              text: action.note.text,
+              position: { ...action.note.position },
+            },
+          },
+          undoStack: [...doc.undoStack, snapshot],
+          redoStack: [],
+        };
+      });
+      return next === state ? state : bumpSaveRevision(next);
+    }
+    case "moveStickyNote": {
+      if (state.mode === "insert") return state;
+      if (!Number.isFinite(action.dx) || !Number.isFinite(action.dy)) return state;
+      if (action.dx === 0 && action.dy === 0) return state;
+      const next = updateActiveDoc(state, (doc) => {
+        const note = doc.stickyNotes[action.noteId];
+        if (!note) return doc;
+        const snapshot = cloneDocumentState(doc);
+        return {
+          ...doc,
+          stickyNotes: {
+            ...doc.stickyNotes,
+            [note.id]: {
+              ...note,
+              position: {
+                x: note.position.x + action.dx,
+                y: note.position.y + action.dy,
+              },
+            },
+          },
+          undoStack: [...doc.undoStack, snapshot],
+          redoStack: [],
+        };
+      });
+      return next === state ? state : bumpSaveRevision(next);
+    }
+    case "deleteStickyNote": {
+      if (state.mode === "insert") return state;
+      const next = updateActiveDoc(state, (doc) => {
+        if (!doc.stickyNotes[action.noteId]) return doc;
+        const { [action.noteId]: _, ...stickyNotes } = doc.stickyNotes;
+        const snapshot = cloneDocumentState(doc);
+        return {
+          ...doc,
+          stickyNotes,
           undoStack: [...doc.undoStack, snapshot],
           redoStack: [],
         };

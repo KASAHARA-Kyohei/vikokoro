@@ -7,6 +7,7 @@ import type {
   EdgeAnchor,
   Node,
   NodeId,
+  StickyNote,
 } from "../types";
 
 export type VisibleTreeProjection = {
@@ -92,6 +93,7 @@ export function buildVisibleTreeProjection(
   const nodePositions: Record<NodeId, CanvasPoint> = {};
   const edgeAnchors: Record<string, EdgeAnchor> = {};
   const customLinks: Record<string, CustomLink> = {};
+  const stickyNotes: Record<string, StickyNote> = {};
   const hiddenDescendantCounts: Record<NodeId, number> = {};
 
   const visit = (nodeId: NodeId, parentId: NodeId | null) => {
@@ -132,10 +134,17 @@ export function buildVisibleTreeProjection(
       customLinks[link.id] = { id: link.id, fromId: link.fromId, toId: link.toId };
     }
   }
+  for (const note of Object.values(doc.stickyNotes ?? {})) {
+    stickyNotes[note.id] = {
+      id: note.id,
+      text: note.text,
+      position: { x: note.position.x, y: note.position.y },
+    };
+  }
   const cursorId = visibleNodeIds.has(doc.cursorId) ? doc.cursorId : rootId;
 
   return {
-    state: { rootId, cursorId, nodes, nodePositions, edgeAnchors, customLinks },
+    state: { rootId, cursorId, nodes, nodePositions, edgeAnchors, customLinks, stickyNotes },
     visibleNodeIds,
     hiddenDescendantCounts,
   };

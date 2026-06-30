@@ -20,6 +20,9 @@ function makeDoc() {
       "root->a": { from: "right", to: "left" },
     },
     customLinks: {},
+    stickyNotes: {
+      "note-1": { id: "note-1", text: "memo", position: { x: 40, y: 80 } },
+    },
     nodes: {
       root: {
         id: "root",
@@ -65,6 +68,7 @@ test("buildDocumentStateFromGeneratedTree: builds node links", () => {
   assert.equal(Boolean(state.nodePositions[state.rootId]), true);
   assert.deepEqual(state.edgeAnchors, {});
   assert.deepEqual(state.customLinks, {});
+  assert.deepEqual(state.stickyNotes, {});
   assert.equal(
     state.nodePositions[child.id].x > state.nodePositions[root.id].x,
     true,
@@ -111,6 +115,7 @@ test("applyImproveOperationsToDocument: add/update/move/delete", () => {
   assert.deepEqual(applied.value.nodePositions.b, source.nodePositions.b);
   assert.deepEqual(applied.value.edgeAnchors, {});
   assert.deepEqual(applied.value.customLinks, {});
+  assert.deepEqual(applied.value.stickyNotes, {});
 });
 
 test("applyImproveOperationsToDocument: rejects invalid move", () => {

@@ -9,8 +9,9 @@ import { EditorView } from "./editor/EditorView";
 import { TabBar } from "./editor/TabBar";
 import { canCreateCustomLink, sanitizeCustomLinks } from "./editor/domain/customLinks";
 import { makeEdgeKey } from "./editor/domain/edgeAnchors";
+import { generateId } from "./editor/domain/id";
 import { createInitialAppState, editorReducer } from "./editor/state";
-import type { AnchorSide, Document, DocumentState, NodeId } from "./editor/types";
+import type { AnchorSide, CanvasPoint, Document, DocumentState, NodeId } from "./editor/types";
 import {
   buildVisibleTreeProjection,
   getBreadcrumbNodeIds,
@@ -148,6 +149,9 @@ function App() {
   const [selectedNodeIds, setSelectedNodeIds] = useState<Set<NodeId>>(new Set());
   const [selectedEdgeKey, setSelectedEdgeKey] = useState<string | null>(null);
   const [selectedCustomLinkId, setSelectedCustomLinkId] = useState<string | null>(null);
+  const [selectedStickyNoteId, setSelectedStickyNoteId] = useState<string | null>(null);
+  const [editingStickyNoteId, setEditingStickyNoteId] = useState<string | null>(null);
+  const [stickyPlacementActive, setStickyPlacementActive] = useState(false);
   const [relatedLinkSourceNodeId, setRelatedLinkSourceNodeId] = useState<NodeId | null>(null);
   const [relatedLinkJumpSourceNodeId, setRelatedLinkJumpSourceNodeId] = useState<NodeId | null>(null);
 
@@ -196,6 +200,9 @@ function App() {
     setSelectedNodeIds(new Set());
     setSelectedEdgeKey(null);
     setSelectedCustomLinkId(null);
+    setSelectedStickyNoteId(null);
+    setEditingStickyNoteId(null);
+    setStickyPlacementActive(false);
     setRelatedLinkSourceNodeId(null);
     setRelatedLinkJumpSourceNodeId(null);
   }, [state.workspace.activeDocId, state.focusRootId]);
@@ -212,6 +219,15 @@ function App() {
     if (!selectedCustomLinkId) return;
     if (!visibleDoc.customLinks[selectedCustomLinkId]) setSelectedCustomLinkId(null);
   }, [selectedCustomLinkId, visibleDoc.customLinks]);
+
+  useEffect(() => {
+    if (selectedStickyNoteId && !activeDoc.stickyNotes[selectedStickyNoteId]) {
+      setSelectedStickyNoteId(null);
+    }
+    if (editingStickyNoteId && !activeDoc.stickyNotes[editingStickyNoteId]) {
+      setEditingStickyNoteId(null);
+    }
+  }, [activeDoc.stickyNotes, editingStickyNoteId, selectedStickyNoteId]);
 
   useEffect(() => {
     if (!relatedLinkSourceNodeId) return;
@@ -342,7 +358,10 @@ function App() {
             );
           }
 
-          const nextState = buildDocumentStateFromGeneratedTree(parsedResponse.value.root);
+          const nextState: DocumentState = {
+            ...buildDocumentStateFromGeneratedTree(parsedResponse.value.root),
+            stickyNotes: doc.stickyNotes,
+          };
           dispatch({ type: "applyDocumentState", docId, nextState });
           setPendingImproveApply(null);
           setLlmAssistOpen(false);
@@ -438,6 +457,7 @@ function App() {
         const nextState: DocumentState = {
           ...applied.value,
           customLinks: sanitizeCustomLinks(applied.value, doc.customLinks),
+          stickyNotes: doc.stickyNotes,
         };
 
         const preview = buildImprovePreview(
@@ -551,6 +571,19 @@ function App() {
           setSelectedEdgeKey(null);
           setSelectedCustomLinkId(null);
           setSearchOpen(true);
+          setPaletteOpen(false);
+        },
+      },
+      {
+        id: "add-sticky-note",
+        title: paletteText.addStickyNoteTitle,
+        subtitle: paletteText.addStickyNoteSubtitle,
+        run: () => {
+          setStickyPlacementActive(true);
+          setSelectedNodeIds(new Set());
+          setSelectedEdgeKey(null);
+          setSelectedCustomLinkId(null);
+          setSelectedStickyNoteId(null);
           setPaletteOpen(false);
         },
       },
@@ -796,6 +829,25 @@ function App() {
     addRelatedLinkToNode(nodeId);
   };
 
+  const createStickyNoteAt = (point: CanvasPoint) => {
+    const noteId = generateId();
+    const noteText = language === "ja" ? "付箋メモ" : "Sticky note";
+    dispatch({
+      type: "addStickyNote",
+      note: {
+        id: noteId,
+        text: noteText,
+        position: point,
+      },
+    });
+    setSelectedNodeIds(new Set());
+    setSelectedEdgeKey(null);
+    setSelectedCustomLinkId(null);
+    setSelectedStickyNoteId(noteId);
+    setEditingStickyNoteId(noteId);
+    dispatch({ type: "beginStickyEdit" });
+  };
+
   const runPaletteSelected = () => {
     const item = paletteItems[paletteIndex];
     if (!item) return;
@@ -831,7 +883,8 @@ function App() {
         !settingsOpen &&
         !llmAssistOpen &&
         !closeConfirmOpen &&
-        !jumpActive;
+        !jumpActive &&
+        !editingStickyNoteId;
 
       if (state.mode === "insert") {
         resetDeleteChord();
@@ -840,6 +893,12 @@ function App() {
 
       if (!commandLayerActive) {
         resetFoldChord();
+      }
+
+      if (commandLayerActive && stickyPlacementActive && event.key === "Escape") {
+        event.preventDefault();
+        setStickyPlacementActive(false);
+        return;
       }
 
       if (commandLayerActive && !event.ctrlKey && !event.metaKey && !event.altKey) {
@@ -861,19 +920,29 @@ function App() {
 
       if (
         commandLayerActive &&
-        selectedCustomLinkId &&
+        (selectedStickyNoteId || selectedCustomLinkId) &&
         (event.key === "Delete" || event.key === "Backspace")
       ) {
         event.preventDefault();
-        dispatch({ type: "deleteCustomLink", linkId: selectedCustomLinkId });
-        setSelectedCustomLinkId(null);
+        if (selectedStickyNoteId) {
+          dispatch({ type: "deleteStickyNote", noteId: selectedStickyNoteId });
+          setSelectedStickyNoteId(null);
+          setEditingStickyNoteId(null);
+        } else if (selectedCustomLinkId) {
+          dispatch({ type: "deleteCustomLink", linkId: selectedCustomLinkId });
+          setSelectedCustomLinkId(null);
+        }
         return;
       }
 
       if (commandLayerActive && event.key === "d") {
         event.preventDefault();
         if (consumeDeleteChord()) {
-          if (selectedCustomLinkId) {
+          if (selectedStickyNoteId) {
+            dispatch({ type: "deleteStickyNote", noteId: selectedStickyNoteId });
+            setSelectedStickyNoteId(null);
+            setEditingStickyNoteId(null);
+          } else if (selectedCustomLinkId) {
             dispatch({ type: "deleteCustomLink", linkId: selectedCustomLinkId });
             setSelectedCustomLinkId(null);
           } else {
@@ -987,10 +1056,13 @@ function App() {
     setSearchOpen,
     setSettingsOpen,
     settingsOpen,
+    stickyPlacementActive,
     state.hydrated,
     state.focusRootId,
     state.mode,
+    editingStickyNoteId,
     selectedCustomLinkId,
+    selectedStickyNoteId,
     selectedNodeIds,
     activeDoc,
   ]);
@@ -1090,9 +1162,13 @@ function App() {
           selectedNodeIds={selectedNodeIds}
           selectedEdgeKey={selectedEdgeKey}
           selectedCustomLinkId={selectedCustomLinkId}
+          selectedStickyNoteId={selectedStickyNoteId}
+          editingStickyNoteId={editingStickyNoteId}
+          stickyPlacementActive={stickyPlacementActive}
           onSelectNode={(nodeId) => {
             setSelectedEdgeKey(null);
             setSelectedCustomLinkId(null);
+            setSelectedStickyNoteId(null);
             dispatch({ type: "selectNode", nodeId });
           }}
           onSelectionChange={setSelectedNodeIds}
@@ -1100,11 +1176,39 @@ function App() {
             setSelectedNodeIds(new Set());
             setSelectedEdgeKey(edgeKey);
             setSelectedCustomLinkId(null);
+            setSelectedStickyNoteId(null);
           }}
           onSelectCustomLink={(linkId) => {
             setSelectedNodeIds(new Set());
             setSelectedEdgeKey(null);
             setSelectedCustomLinkId(linkId);
+            setSelectedStickyNoteId(null);
+          }}
+          onSelectStickyNote={(noteId) => {
+            setSelectedNodeIds(new Set());
+            setSelectedEdgeKey(null);
+            setSelectedCustomLinkId(null);
+            setSelectedStickyNoteId(noteId);
+          }}
+          onClearSelection={() => {
+            setSelectedEdgeKey(null);
+            setSelectedCustomLinkId(null);
+            setSelectedStickyNoteId(null);
+          }}
+          onBeginStickyEdit={(noteId) => {
+            setSelectedNodeIds(new Set());
+            setSelectedEdgeKey(null);
+            setSelectedCustomLinkId(null);
+            setSelectedStickyNoteId(noteId);
+            setEditingStickyNoteId(noteId);
+            dispatch({ type: "beginStickyEdit" });
+          }}
+          onChangeStickyText={(noteId, noteText) =>
+            dispatch({ type: "setStickyNoteText", noteId, text: noteText })
+          }
+          onCommitStickyEdit={(noteId) => {
+            dispatch({ type: "commitStickyEdit", noteId });
+            setEditingStickyNoteId(null);
           }}
           onChangeEdgeAnchor={changeEdgeAnchor}
           onResetEdgeAnchors={(edgeKey) =>
@@ -1117,8 +1221,13 @@ function App() {
             setSelectedNodeIds(new Set());
             setSelectedEdgeKey(null);
             setSelectedCustomLinkId(null);
+            setSelectedStickyNoteId(null);
             dispatch({ type: "addChildAtPosition", point });
           }}
+          onCreateStickyNoteAt={createStickyNoteAt}
+          onMoveStickyNote={(noteId, dx, dy) =>
+            dispatch({ type: "moveStickyNote", noteId, dx, dy })
+          }
           onToggleCollapse={(nodeId) =>
             dispatch({ type: "toggleNodeCollapsed", nodeId })
           }
@@ -1292,6 +1401,13 @@ function App() {
               <span className="statusDot">•</span>
               <span className="statusLabel">{text.status.jump}</span>
               <span className="statusPill statusPillJump">{jumpPrefix || "..."}</span>
+            </>
+          ) : null}
+          {stickyPlacementActive ? (
+            <>
+              <span className="statusDot">•</span>
+              <span className="statusLabel">{text.status.sticky}</span>
+              <span className="statusPill statusPillSticky">{text.status.stickyPlacement}</span>
             </>
           ) : null}
         </div>

@@ -29,6 +29,12 @@
   - `r` + ヒントキーで、選択ノードからヒント先ノードへ補助線を追加
   - Command Palette の `Add related link` で、選択ノードから検索した別ノードへ補助線を追加
   - 補助線クリックで選択し、`Delete` / `Backspace` / `dd` または Command Palette で削除
+- 付箋:
+  - Command Palette の `Add sticky note` で付箋配置モードに入る
+  - 配置モード中の空白ダブルクリックで、クリック位置に付箋を作成して編集開始
+  - 付箋クリックで選択し、ダブルクリックで編集
+  - 付箋選択中の `Delete` / `Backspace` / `dd` で削除
+  - 配置モードや付箋編集中の `Esc` は配置解除 / 編集確定
 - `f` + ヒントキー: 任意ノードへジャンプ
 - `F`: カーソル位置を仮ルートとしてサブツリーへフォーカス
   - `Esc`: 全体表示へ戻る
@@ -79,9 +85,14 @@
 - Manual connector anchors: 親子線ごとに親側/子側の接続辺を `top/right/bottom/left` から指定可能
 - Related links: 親子構造を変えず、任意の非親子ノード同士を点線の補助線で関連付け可能
   - 折りたたみ/フォーカス中は、両端ノードが表示されている補助線だけ表示する
+- Sticky notes: マインドマップ構造とは別レイヤーの固定サイズ黄色カード
+  - 作成、編集、ドラッグ移動、削除が可能
+  - 折りたたみ/フォーカス中も常に表示する
+  - 検索、Jump、自動整列、親子線、補助線の対象外
 - Command Palette: 主要操作を実行可能
   - `Add related link`
   - `Delete selected related link`
+  - `Add sticky note`
   - `Move node left`
   - `Move node right`
   - `New tab`, `Close tab`, `Search`, `Help`, `Cycle theme`
@@ -99,6 +110,7 @@
 - ノード座標はドキュメントとUndo/Redoスナップショットへ保存する
 - 手動接続アンカーはドキュメントとUndo/Redoスナップショットへ保存する
 - 補助線はドキュメントとUndo/Redoスナップショットへ保存する
+- 付箋はドキュメントとUndo/Redoスナップショットへ保存する
 - 旧workspaceや不足座標は右向きツリー配置で補完し、無効なノードIDを除去する
 - LLM 設定は `llm_settings.json`（AppData）に保存
 - ブラウザ起動（`npm run dev`）では永続化なし（`Local` 表示）
@@ -117,6 +129,8 @@
 - 手動接続アンカーの変更とAutoリセットはUndo/Redo対象
 - 補助線の追加/削除はUndo/Redo対象
 - 補助線は自己リンク、親子線と同じ組み合わせ、同一ペア重複を作らない
+- 付箋の作成/移動/削除はUndo/Redo対象
+- 付箋本文のUndo/Redoは「編集開始から確定まで」で1単位
 - Search はノード本文のみ対象で、詳細メモ本文は検索対象外
 - `H/L` 階層移動は「できない場合は no-op」
   - `L`: 先頭兄弟は不可
@@ -129,6 +143,7 @@
 - ノード削除・親変更・AI適用後は、存在しない親子線の手動接続アンカーを除去する
 - ノード削除・AI適用後は、存在しないノードを指す補助線を除去する
 - AI Generateは生成木を自動整列し補助線をクリアする。AI Improveは既存座標を維持して追加ノードだけを配置し、残存ノード間の補助線を維持する
+- AI Generate/Improve は既存付箋を維持する
 - LLM接続テスト/実行は Gemini API クォータを消費する
 
 ## 7. 次回開発時の運用ルール（推奨）
