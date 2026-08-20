@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { clamp } from "../utils/number";
 import type { Viewport } from "../editor/types";
-import { hasSavedViewport } from "../editor/domain/viewport";
+import {
+  computeFitViewport,
+  hasSavedViewport,
+  type ViewportBounds,
+} from "../editor/domain/viewport";
 
 type ViewState = { zoom: number };
 
@@ -41,8 +45,38 @@ export function useZoomPan({
     mouseY: number;
     zoom: number;
   } | null>(null);
+  const scrollPersistTimerRef = useRef<number | null>(null);
+  const restoringViewportRef = useRef(false);
+  const zoom = (viewByDocId[activeDocId] ?? { zoom: 1 }).zoom;
+
+  const clearScrollPersistTimer = useCallback(() => {
+    if (scrollPersistTimerRef.current === null) return;
+    window.clearTimeout(scrollPersistTimerRef.current);
+    scrollPersistTimerRef.current = null;
+  }, []);
+
+  const persistCurrentViewport = useCallback(() => {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    onViewportChange({
+      x: viewport.scrollLeft,
+      y: viewport.scrollTop,
+      zoom,
+      initialized: true,
+    });
+  }, [onViewportChange, viewportRef, zoom]);
+
+  const onViewportScroll = useCallback(() => {
+    if (restoringViewportRef.current) return;
+    clearScrollPersistTimer();
+    scrollPersistTimerRef.current = window.setTimeout(() => {
+      scrollPersistTimerRef.current = null;
+      persistCurrentViewport();
+    }, 180);
+  }, [clearScrollPersistTimer, persistCurrentViewport]);
 
   useEffect(() => {
+    clearScrollPersistTimer();
     setViewByDocId((current) => {
       if (current[activeDocId]) return current;
       return { ...current, [activeDocId]: { zoom: initialViewport.zoom } };
@@ -51,14 +85,18 @@ export function useZoomPan({
       if (!hasSavedViewport(initialViewport)) return;
       const viewport = viewportRef.current;
       if (!viewport) return;
+      restoringViewportRef.current = true;
       viewport.scrollLeft = initialViewport.x;
       viewport.scrollTop = initialViewport.y;
+      window.requestAnimationFrame(() => {
+        restoringViewportRef.current = false;
+      });
     });
   // Restore only when switching documents; continuous viewport updates must not reset scroll.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeDocId]);
+  }, [activeDocId, clearScrollPersistTimer]);
 
-  const zoom = (viewByDocId[activeDocId] ?? { zoom: 1 }).zoom;
+  useEffect(() => clearScrollPersistTimer, [clearScrollPersistTimer]);
 
   useLayoutEffect(() => {
     const pending = pendingZoomAnchorRef.current;
@@ -167,12 +205,7 @@ export function useZoomPan({
     const handleMouseUp = () => {
       const currentViewport = viewportRef.current;
       if (currentViewport) {
-        onViewportChange({
-          x: currentViewport.scrollLeft,
-          y: currentViewport.scrollTop,
-          zoom,
-          initialized: true,
-        });
+        persistCurrentViewport();
       }
       setIsPanning(false);
       panStartRef.current = null;
@@ -233,6 +266,40 @@ export function useZoomPan({
     });
   }, [activeDocId, initialViewport.x, initialViewport.y, onViewportChange, viewportRef]);
 
+  const applyViewport = useCallback((nextViewport: Viewport) => {
+    setViewByDocId((current) => ({
+      ...current,
+      [activeDocId]: { zoom: nextViewport.zoom },
+    }));
+    const viewport = viewportRef.current;
+    if (viewport) {
+      viewport.scrollLeft = nextViewport.x;
+      viewport.scrollTop = nextViewport.y;
+    }
+    onViewportChange(nextViewport);
+  }, [activeDocId, onViewportChange, viewportRef]);
+
+  const fitToWorldBounds = useCallback((bounds: ViewportBounds) => {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    applyViewport(computeFitViewport(
+      bounds,
+      { width: viewport.clientWidth, height: viewport.clientHeight },
+      zoom,
+    ));
+  }, [applyViewport, viewportRef, zoom]);
+
+  const centerOnWorldBounds = useCallback((bounds: ViewportBounds) => {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    applyViewport({
+      x: Math.max(0, (bounds.x + bounds.width / 2) * zoom - viewport.clientWidth / 2),
+      y: Math.max(0, (bounds.y + bounds.height / 2) * zoom - viewport.clientHeight / 2),
+      zoom,
+      initialized: true,
+    });
+  }, [applyViewport, viewportRef, zoom]);
+
   return {
     zoom,
     spaceDown,
@@ -241,8 +308,11 @@ export function useZoomPan({
     viewportClassName,
     onViewportMouseDown,
     onViewportWheel,
+    onViewportScroll,
     zoomIn: () => setZoom(zoom * 1.15),
     zoomOut: () => setZoom(zoom / 1.15),
     resetZoom: () => setZoom(1),
+    fitToWorldBounds,
+    centerOnWorldBounds,
   };
 }

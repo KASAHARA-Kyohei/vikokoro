@@ -3,6 +3,7 @@ const test = require("node:test");
 const {
   computeCenteredScrollFromRects,
   computeInitialScrollForRoot,
+  computeFitViewport,
   isUsableViewportSize,
   shouldFollowCursor,
   hasSavedViewport,
@@ -92,4 +93,16 @@ test("computeInitialScrollForRoot respects zoom", () => {
   );
 
   assert.deepEqual(scroll, { x: 180, y: 334 });
+});
+
+test("computeFitViewport fits the map within the viewport and preserves its center", () => {
+  const viewport = computeFitViewport(
+    { x: 100, y: 200, width: 400, height: 200 },
+    { width: 800, height: 600 },
+    1,
+  );
+  assert.equal(viewport.zoom, 1.68);
+  assert.equal(viewport.x, 104);
+  assert.equal(viewport.y, 204);
+  assert.equal(viewport.initialized, true);
 });
