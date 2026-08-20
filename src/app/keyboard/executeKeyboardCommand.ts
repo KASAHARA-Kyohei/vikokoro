@@ -11,7 +11,6 @@ type CommandExecutor = {
   setNodeColorOpen: (open: boolean) => void;
   setNodeMemoOpen: (open: boolean) => void;
   setSettingsOpen: (open: boolean) => void;
-  setLlmAssistOpen: (open: boolean) => void;
   setJumpPrefix: (prefix: string) => void;
   openJump: () => void;
   openRelatedLinkJump: () => void;
@@ -62,9 +61,6 @@ export function executeKeyboardCommand(command: KeyboardCommand, executor: Comma
       return;
     case "setSettingsOpen":
       executor.setSettingsOpen(command.open);
-      return;
-    case "setLlmAssistOpen":
-      executor.setLlmAssistOpen(command.open);
       return;
     case "setJumpPrefix":
       executor.setJumpPrefix(command.prefix);

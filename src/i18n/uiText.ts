@@ -2,13 +2,11 @@ import type { Mode } from "../editor/types";
 import type { AppLanguage, ThemeName } from "../hooks/useAppPreferences";
 
 type SaveStatusLabel = "saved" | "saving" | "unavailable";
-type AiRunningMode = "generate" | "improve" | "review";
 
 export const APP_TEXT = {
   ja: {
     loadingWorkspace: "ワークスペースを読み込み中...",
     footer: {
-      aiAssist: "AI支援",
       settings: "設定",
       help: "ヘルプ",
     },
@@ -16,7 +14,6 @@ export const APP_TEXT = {
       mode: "モード",
       doc: "文書",
       save: "保存",
-      ai: "AI",
       jump: "ジャンプ",
       sticky: "付箋",
       stickyPlacement: "配置中",
@@ -41,13 +38,7 @@ export const APP_TEXT = {
       helpTitle: "ヘルプ",
       helpSubtitle: "?",
       settingsTitle: "設定",
-      settingsSubtitle: "言語 / テーマ / AI設定",
-      aiGenerateTitle: "AIでマップ生成",
-      aiGenerateSubtitle: "トピックから現在タブを置き換える",
-      aiImproveTitle: "AIでマップ改善",
-      aiImproveSubtitle: "現在タブへ改善差分を提案する",
-      aiReviewTitle: "AIでマップレビュー",
-      aiReviewSubtitle: "漏れ・曖昧さ・次のアクションを確認する",
+      settingsSubtitle: "言語 / テーマ",
       addRelatedLinkTitle: "補助線を追加",
       addRelatedLinkSubtitle: "選択ノードから検索したノードへ接続",
       deleteRelatedLinkTitle: "選択した補助線を削除",
@@ -74,7 +65,6 @@ export const APP_TEXT = {
   en: {
     loadingWorkspace: "Loading workspace...",
     footer: {
-      aiAssist: "AI Assist",
       settings: "Settings",
       help: "Help",
     },
@@ -82,7 +72,6 @@ export const APP_TEXT = {
       mode: "Mode",
       doc: "Doc",
       save: "Save",
-      ai: "AI",
       jump: "Jump",
       sticky: "Sticky",
       stickyPlacement: "Placing",
@@ -107,13 +96,7 @@ export const APP_TEXT = {
       helpTitle: "Help",
       helpSubtitle: "?",
       settingsTitle: "Settings",
-      settingsSubtitle: "Language / Theme / AI Settings",
-      aiGenerateTitle: "Generate map with AI",
-      aiGenerateSubtitle: "Replace the current tab from a topic",
-      aiImproveTitle: "Improve map with AI",
-      aiImproveSubtitle: "Suggest improvement diffs for the current tab",
-      aiReviewTitle: "Review current map with AI",
-      aiReviewSubtitle: "Check gaps, ambiguity, and next actions",
+      settingsSubtitle: "Language / Theme",
       addRelatedLinkTitle: "Add related link",
       addRelatedLinkSubtitle: "Connect the selected node to a searched node",
       deleteRelatedLinkTitle: "Delete selected related link",
@@ -189,19 +172,6 @@ const SAVE_STATUS_LABELS: Record<AppLanguage, Record<SaveStatusLabel, string>> =
   },
 };
 
-const AI_RUNNING_LABELS: Record<AppLanguage, Record<AiRunningMode, string>> = {
-  ja: {
-    generate: "生成中",
-    improve: "改善中",
-    review: "レビュー中",
-  },
-  en: {
-    generate: "Generating",
-    improve: "Improving",
-    review: "Reviewing",
-  },
-};
-
 export function getThemeLabel(theme: ThemeName, language: AppLanguage): string {
   return THEME_LABELS[language][theme];
 }
@@ -219,10 +189,6 @@ export function getSaveStatusLabel(
   language: AppLanguage,
 ): string {
   return SAVE_STATUS_LABELS[language][saveStatus];
-}
-
-export function getAiRunningLabel(mode: AiRunningMode, language: AppLanguage): string {
-  return AI_RUNNING_LABELS[language][mode];
 }
 
 export function getEmptyNodeLabel(language: AppLanguage): string {
