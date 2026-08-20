@@ -6,63 +6,30 @@ import { useDeleteChord } from "./app/keyboard/useDeleteChord";
 import { useFoldChord } from "./app/keyboard/useFoldChord";
 import { useEditorUiSession } from "./app/session/useEditorUiSession";
 import { EditorView } from "./editor/EditorView";
+import { computeLayout } from "./editor/layout";
 import { TabBar } from "./editor/TabBar";
-import { canCreateCustomLink, sanitizeCustomLinks } from "./editor/domain/customLinks";
+import { canCreateCustomLink } from "./editor/domain/customLinks";
 import { makeEdgeKey } from "./editor/domain/edgeAnchors";
 import { generateId } from "./editor/domain/id";
 import { createInitialAppState, editorReducer } from "./editor/state";
-import type { AnchorSide, CanvasPoint, Document, DocumentState, NodeId } from "./editor/types";
+import type { AnchorSide, CanvasPoint, Document, NodeId, Viewport } from "./editor/types";
 import {
   buildVisibleTreeProjection,
   getBreadcrumbNodeIds,
 } from "./editor/domain/visibleTree";
 import { buildJumpSession } from "./features/jump/model";
-import {
-  applyImproveOperationsToDocument,
-  buildDocumentStateFromGeneratedTree,
-  documentToImproveDocumentState,
-} from "./features/llm/apply";
-import {
-  buildImprovePreview,
-  buildReviewResult,
-  type LlmImprovePreview,
-  type LlmReviewResult,
-} from "./features/llm/preview";
-import {
-  formatLlmDocumentIntegrityError,
-  formatLlmResponseValidationError,
-  formatLlmRuntimeError,
-  formatLlmValidationErrors,
-} from "./features/llm/errorFormatter";
-import {
-  parseGenerateRequest,
-  parseGenerateResponse,
-  parseAndValidateImproveResponse,
-  parseAndValidateReviewResponse,
-  parseImproveRequest,
-  parseReviewRequest,
-  validateLlmDocumentState,
-  type GenerateRequest,
-  type ImproveRequest,
-  type ReviewRequest,
-} from "./features/llm/schema";
-import {
-  parseErrorMessage,
-  runLlmGenerate,
-  runLlmImprove,
-  runLlmReview,
-} from "./features/llm/settingsRepository";
 import { filterPaletteCommands, type PaletteCommand } from "./features/palette/model";
+import { createMockThoughtOrganizer } from "./features/organizer/mockThoughtOrganizer";
+import type { OrganizePreview } from "./features/organizer/types";
 import { buildSearchResults } from "./features/search/model";
 import { useAppPreferences } from "./hooks/useAppPreferences";
 import { useWorkspacePersistence } from "./hooks/useWorkspacePersistence";
 import { useZoomPan } from "./hooks/useZoomPan";
-import { APP_TEXT, getAiRunningLabel, getModeLabel, getSaveStatusLabel } from "./i18n/uiText";
+import { APP_TEXT, getModeLabel, getSaveStatusLabel } from "./i18n/uiText";
 import { createTauriWorkspaceRepository } from "./persistence";
 import { CloseConfirmModal } from "./ui/modals/CloseConfirmModal";
 import { CommandPaletteModal } from "./ui/modals/CommandPaletteModal";
 import { HelpModal } from "./ui/modals/HelpModal";
-import { LlmAssistModal, type LlmAssistMode } from "./ui/modals/LlmAssistModal";
 import { NodeColorModal } from "./ui/modals/NodeColorModal";
 import { NodeMemoModal } from "./ui/modals/NodeMemoModal";
 import { SearchModal } from "./ui/modals/SearchModal";
@@ -76,6 +43,7 @@ function App() {
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const { reset: resetDeleteChord, consumeD: consumeDeleteChord } = useDeleteChord();
   const { reset: resetFoldChord, consume: consumeFoldChord } = useFoldChord();
+  const [centerCursorRequest, setCenterCursorRequest] = useState(0);
 
   const {
     helpOpen,
@@ -98,8 +66,6 @@ function App() {
     setNodeMemoOpen,
     settingsOpen,
     setSettingsOpen,
-    llmAssistOpen,
-    setLlmAssistOpen,
     jumpSession,
     setJumpSession,
     jumpPrefix,
@@ -137,16 +103,32 @@ function App() {
     [activeDoc, state.focusRootId],
   );
   const closeConfirmOpen = state.closeConfirmDocId !== null;
-  const [llmAssistMode, setLlmAssistMode] = useState<LlmAssistMode>("generate");
-  const [llmAssistRunning, setLlmAssistRunning] = useState(false);
-  const [llmAssistError, setLlmAssistError] = useState<string | null>(null);
-  const [pendingImproveApply, setPendingImproveApply] = useState<{
-    docId: string;
-    nextState: DocumentState;
-    preview: LlmImprovePreview;
-  } | null>(null);
-  const [reviewResult, setReviewResult] = useState<LlmReviewResult | null>(null);
   const [selectedNodeIds, setSelectedNodeIds] = useState<Set<NodeId>>(new Set());
+  const [organizePreview, setOrganizePreview] = useState<OrganizePreview | null>(null);
+  const thoughtOrganizer = useMemo(() => createMockThoughtOrganizer(), []);
+
+  const requestOrganizePreview = useCallback(async () => {
+    const cards = [...selectedNodeIds]
+      .map((id) => activeDoc.nodes[id])
+      .filter((card): card is NonNullable<typeof card> => Boolean(card))
+      .map(({ id, text: cardText }) => ({ id, text: cardText }));
+    if (cards.length === 0) return;
+    const request = { cards, instruction: "選択した思考を自然なまとまりに整理してください" };
+    const suggestion = await thoughtOrganizer.organize(request);
+    setOrganizePreview({ request, suggestion });
+  }, [activeDoc.nodes, selectedNodeIds, thoughtOrganizer]);
+
+  const applySelection = useCallback((cardIds: Iterable<NodeId>) => {
+    const nextIds = [...cardIds].filter((id) => activeDoc.nodes[id]);
+    setSelectedNodeIds(new Set(nextIds));
+    dispatch({
+      type: "setSelection",
+      selection: {
+        cardIds: nextIds,
+        lastEditedCardId: activeDoc.selection?.lastEditedCardId ?? activeDoc.cursorId,
+      },
+    });
+  }, [activeDoc.cursorId, activeDoc.nodes, activeDoc.selection?.lastEditedCardId]);
   const [selectedEdgeKey, setSelectedEdgeKey] = useState<string | null>(null);
   const [selectedCustomLinkId, setSelectedCustomLinkId] = useState<string | null>(null);
   const [selectedStickyNoteId, setSelectedStickyNoteId] = useState<string | null>(null);
@@ -180,6 +162,13 @@ function App() {
     setJumpPrefix("");
   }, [activeDoc, setJumpPrefix, setJumpSession, visibleDoc]);
 
+  const persistViewport = useCallback(
+    (viewport: Viewport) => {
+      dispatch({ type: "setViewport", viewport });
+    },
+    [],
+  );
+
   const zoomPan = useZoomPan({
     activeDocId: state.workspace.activeDocId,
     mode: state.mode,
@@ -190,14 +179,14 @@ function App() {
       nodeColorOpen ||
       nodeMemoOpen ||
       settingsOpen ||
-      llmAssistOpen ||
       closeConfirmOpen ||
       jumpActive,
     viewportRef,
+    initialViewport: activeDoc.viewport ?? { x: 0, y: 0, zoom: 1, initialized: false },
+    onViewportChange: persistViewport,
   });
 
   useEffect(() => {
-    setSelectedNodeIds(new Set());
     setSelectedEdgeKey(null);
     setSelectedCustomLinkId(null);
     setSelectedStickyNoteId(null);
@@ -206,6 +195,10 @@ function App() {
     setRelatedLinkSourceNodeId(null);
     setRelatedLinkJumpSourceNodeId(null);
   }, [state.workspace.activeDocId, state.focusRootId]);
+
+  useEffect(() => {
+    setSelectedNodeIds(new Set(activeDoc.selection?.cardIds ?? []));
+  }, [activeDoc.selection]);
 
   useEffect(() => {
     if (!selectedEdgeKey) return;
@@ -283,210 +276,6 @@ function App() {
     return new Set(searchResults.map((r) => r.nodeId));
   }, [searchOpen, searchResults]);
 
-  const clearImprovePreview = useCallback(() => {
-    setPendingImproveApply(null);
-  }, []);
-
-  const clearReviewResult = useCallback(() => {
-    setReviewResult(null);
-  }, []);
-
-  const applyImprovePreview = useCallback(() => {
-    if (!pendingImproveApply) return;
-    dispatch({
-      type: "applyDocumentState",
-      docId: pendingImproveApply.docId,
-      nextState: pendingImproveApply.nextState,
-    });
-    setPendingImproveApply(null);
-    setLlmAssistOpen(false);
-  }, [pendingImproveApply, setLlmAssistOpen]);
-
-  const runLlmAssist = useCallback(
-    async (input: string) => {
-      const docId = state.workspace.activeDocId;
-      const doc = state.workspace.documents[docId];
-      if (!doc) {
-        setLlmAssistError(
-          language === "ja"
-            ? "アクティブドキュメントが見つかりません。"
-            : "The active document could not be found.",
-        );
-        return;
-      }
-
-      setLlmAssistRunning(true);
-      setLlmAssistError(null);
-      if (llmAssistMode === "improve") {
-        setPendingImproveApply(null);
-      }
-      if (llmAssistMode === "review") {
-        setReviewResult(null);
-      }
-
-      const isRetryableRuntimeError = (message: string) => {
-        return (
-          message.startsWith("Gemini response was cut off before the JSON finished.") ||
-          message.startsWith("Gemini returned invalid JSON:")
-        );
-      };
-
-      try {
-        if (llmAssistMode === "generate") {
-          const request: GenerateRequest = {
-            version: "1",
-            mode: "generate",
-            topic: input,
-            language,
-            maxDepth: 4,
-            maxChildrenPerNode: 6,
-            style: "balanced",
-            constraints: {
-              avoidAbstractOnly: true,
-              preferActionable: true,
-            },
-          };
-          const parsedRequest = parseGenerateRequest(request);
-          if (!parsedRequest.ok) {
-            throw new Error(formatLlmValidationErrors(parsedRequest.errors, language));
-          }
-          const rawResponse = await runLlmGenerate(parsedRequest.value);
-          const parsedResponse = parseGenerateResponse(rawResponse);
-          if (!parsedResponse.ok) {
-            throw new Error(
-              formatLlmResponseValidationError("generate", parsedResponse.errors, language),
-            );
-          }
-
-          const nextState: DocumentState = {
-            ...buildDocumentStateFromGeneratedTree(parsedResponse.value.root),
-            stickyNotes: doc.stickyNotes,
-          };
-          dispatch({ type: "applyDocumentState", docId, nextState });
-          setPendingImproveApply(null);
-          setLlmAssistOpen(false);
-          return;
-        }
-
-        const improveDocument = documentToImproveDocumentState(doc);
-        const documentErrors = validateLlmDocumentState(improveDocument);
-        if (documentErrors.length > 0) {
-          throw new Error(formatLlmDocumentIntegrityError(doc, documentErrors, language));
-        }
-
-        if (llmAssistMode === "review") {
-          const request: ReviewRequest = {
-            version: "1",
-            mode: "review",
-            focus: input,
-            document: improveDocument,
-            constraints: {
-              maxFindings: 6,
-              includeStrengths: true,
-              includeNextActions: true,
-            },
-          };
-          const parsedRequest = parseReviewRequest(request);
-          if (!parsedRequest.ok) {
-            throw new Error(formatLlmValidationErrors(parsedRequest.errors, language));
-          }
-
-          const rawResponse = await runLlmReview(parsedRequest.value);
-          const parsedResponse = parseAndValidateReviewResponse(rawResponse, improveDocument);
-          if (!parsedResponse.ok) {
-            throw new Error(
-              formatLlmResponseValidationError("review", parsedResponse.errors, language),
-            );
-          }
-
-          setReviewResult(buildReviewResult(parsedResponse.value, improveDocument, language));
-          return;
-        }
-
-        const request: ImproveRequest = {
-          version: "1",
-          mode: "improve",
-          goal: input,
-          document: improveDocument,
-          constraints: {
-            maxAdditions: 20,
-            keepExistingText: true,
-            allowReparent: true,
-            allowDelete: true,
-          },
-        };
-        const parsedRequest = parseImproveRequest(request);
-        if (!parsedRequest.ok) {
-          throw new Error(formatLlmValidationErrors(parsedRequest.errors, language));
-        }
-
-        const parseImproveWithRetry = async () => {
-          let lastErrors: string[] = [];
-          for (let attempt = 0; attempt < 2; attempt += 1) {
-            let rawResponse: unknown;
-            try {
-              rawResponse = await runLlmImprove(parsedRequest.value);
-            } catch (error) {
-              const message = parseErrorMessage(error);
-              if (attempt === 0 && isRetryableRuntimeError(message)) {
-                continue;
-              }
-              throw error;
-            }
-            const parsedResponse = parseAndValidateImproveResponse(rawResponse, improveDocument);
-            if (parsedResponse.ok) {
-              return parsedResponse.value;
-            }
-            lastErrors = parsedResponse.errors;
-          }
-          throw new Error(
-            formatLlmResponseValidationError("improve", lastErrors, language),
-          );
-        };
-
-        const improveResponse = await parseImproveWithRetry();
-
-        const applied = applyImproveOperationsToDocument(
-          improveDocument,
-          improveResponse.operations,
-          doc.nodePositions,
-        );
-        if (!applied.ok) {
-          throw new Error(formatLlmValidationErrors(applied.errors, language));
-        }
-        const nextState: DocumentState = {
-          ...applied.value,
-          customLinks: sanitizeCustomLinks(applied.value, doc.customLinks),
-          stickyNotes: doc.stickyNotes,
-        };
-
-        const preview = buildImprovePreview(
-          improveResponse.summary,
-          improveResponse.warnings,
-          improveResponse.operations,
-          improveDocument,
-          language,
-        );
-        setPendingImproveApply({
-          docId,
-          nextState,
-          preview,
-        });
-      } catch (error) {
-        setLlmAssistError(formatLlmRuntimeError(parseErrorMessage(error), language));
-      } finally {
-        setLlmAssistRunning(false);
-      }
-    },
-    [
-      language,
-      llmAssistMode,
-      setLlmAssistOpen,
-      state.workspace.activeDocId,
-      state.workspace.documents,
-    ],
-  );
-
   const paletteItems = useMemo(() => {
     const paletteText = text.palette;
     const commands: PaletteCommand[] = [
@@ -531,36 +320,6 @@ function App() {
         },
       },
       {
-        id: "llm-generate",
-        title: paletteText.aiGenerateTitle,
-        subtitle: paletteText.aiGenerateSubtitle,
-        run: () => {
-          setLlmAssistMode("generate");
-          setLlmAssistOpen(true);
-          setPaletteOpen(false);
-        },
-      },
-      {
-        id: "llm-improve",
-        title: paletteText.aiImproveTitle,
-        subtitle: paletteText.aiImproveSubtitle,
-        run: () => {
-          setLlmAssistMode("improve");
-          setLlmAssistOpen(true);
-          setPaletteOpen(false);
-        },
-      },
-      {
-        id: "llm-review",
-        title: paletteText.aiReviewTitle,
-        subtitle: paletteText.aiReviewSubtitle,
-        run: () => {
-          setLlmAssistMode("review");
-          setLlmAssistOpen(true);
-          setPaletteOpen(false);
-        },
-      },
-      {
         id: "add-related-link",
         title: paletteText.addRelatedLinkTitle,
         subtitle: paletteText.addRelatedLinkSubtitle,
@@ -580,7 +339,7 @@ function App() {
         subtitle: paletteText.addStickyNoteSubtitle,
         run: () => {
           setStickyPlacementActive(true);
-          setSelectedNodeIds(new Set());
+          applySelection([]);
           setSelectedEdgeKey(null);
           setSelectedCustomLinkId(null);
           setSelectedStickyNoteId(null);
@@ -679,12 +438,12 @@ function App() {
     return filterPaletteCommands(commands, paletteQuery);
   }, [
     activeDoc.cursorId,
+    applySelection,
     dispatch,
     paletteQuery,
     selectedCustomLinkId,
     selectedEdgeKey,
     setHelpOpen,
-    setLlmAssistOpen,
     setSearchIndex,
     setPaletteOpen,
     setSearchQuery,
@@ -697,21 +456,6 @@ function App() {
   useEffect(() => {
     setSearchIndex(0);
   }, [searchQuery, setSearchIndex, state.workspace.activeDocId]);
-
-  useEffect(() => {
-    if (!llmAssistOpen) {
-      setLlmAssistError(null);
-      setLlmAssistRunning(false);
-      setPendingImproveApply(null);
-      setReviewResult(null);
-    }
-    if (llmAssistMode !== "improve") {
-      setPendingImproveApply(null);
-    }
-    if (llmAssistMode !== "review") {
-      setReviewResult(null);
-    }
-  }, [llmAssistMode, llmAssistOpen]);
 
   useEffect(() => {
     setPaletteIndex(0);
@@ -764,7 +508,6 @@ function App() {
       nodeColorOpen ||
       nodeMemoOpen ||
       settingsOpen ||
-      llmAssistOpen ||
       closeConfirmOpen
     ) {
       closeJump();
@@ -774,7 +517,6 @@ function App() {
     closeJump,
     helpOpen,
     jumpSession,
-    llmAssistOpen,
     nodeMemoOpen,
     nodeColorOpen,
     paletteOpen,
@@ -840,7 +582,7 @@ function App() {
         position: point,
       },
     });
-    setSelectedNodeIds(new Set());
+    applySelection([]);
     setSelectedEdgeKey(null);
     setSelectedCustomLinkId(null);
     setSelectedStickyNoteId(noteId);
@@ -855,11 +597,6 @@ function App() {
     setPaletteQuery("");
     item.run();
   };
-
-  const llmRunningLabel = useMemo(() => {
-    if (!llmAssistRunning) return null;
-    return getAiRunningLabel(llmAssistMode, language);
-  }, [language, llmAssistMode, llmAssistRunning]);
 
   const saveStatusLabel = getSaveStatusLabel(saveStatus, language);
 
@@ -881,7 +618,6 @@ function App() {
         !nodeColorOpen &&
         !nodeMemoOpen &&
         !settingsOpen &&
-        !llmAssistOpen &&
         !closeConfirmOpen &&
         !jumpActive &&
         !editingStickyNoteId;
@@ -901,10 +637,34 @@ function App() {
         return;
       }
 
+      const commandKey = event.metaKey || event.ctrlKey;
+      if (commandLayerActive && commandKey && event.key === "Enter") {
+        event.preventDefault();
+        const viewport = viewportRef.current;
+        if (!viewport) return;
+        const layout = computeLayout(visibleDoc);
+        dispatch({
+          type: "addChildAtPosition",
+          point: {
+            x: (viewport.scrollLeft + viewport.clientWidth / 2) / zoomPan.zoom - layout.offset.x,
+            y: (viewport.scrollTop + viewport.clientHeight / 2) / zoomPan.zoom - layout.offset.y,
+          },
+        });
+        return;
+      }
+
+      if (commandLayerActive && commandKey && event.key.toLowerCase() === "d") {
+        event.preventDefault();
+        const ids = selectedNodeIds.size > 0 ? [...selectedNodeIds] : [activeDoc.cursorId];
+        dispatch({ type: "duplicateNodes", nodeIds: ids });
+        return;
+      }
+
       if (commandLayerActive && !event.ctrlKey && !event.metaKey && !event.altKey) {
         const foldAction = consumeFoldChord(event.key);
         if (foldAction) {
           event.preventDefault();
+          if (foldAction === "center") setCenterCursorRequest((current) => current + 1);
           if (foldAction === "toggle") dispatch({ type: "toggleNodeCollapsed" });
           if (foldAction === "collapse") dispatch({ type: "collapseNode" });
           if (foldAction === "expand") dispatch({ type: "expandNode" });
@@ -935,6 +695,18 @@ function App() {
         return;
       }
 
+      if (
+        commandLayerActive &&
+        !selectedStickyNoteId &&
+        !selectedCustomLinkId &&
+        (event.key === "Delete" || event.key === "Backspace") &&
+        selectedNodeIds.size > 0
+      ) {
+        event.preventDefault();
+        dispatch({ type: "deleteNodes", nodeIds: [...selectedNodeIds] });
+        return;
+      }
+
       if (commandLayerActive && event.key === "d") {
         event.preventDefault();
         if (consumeDeleteChord()) {
@@ -961,7 +733,6 @@ function App() {
           nodeColorOpen,
           nodeMemoOpen,
           settingsOpen,
-          llmAssistOpen,
           closeConfirmOpen,
           focusActive: state.focusRootId !== null,
           jumpSession,
@@ -995,7 +766,6 @@ function App() {
         setNodeColorOpen,
         setNodeMemoOpen,
         setSettingsOpen,
-        setLlmAssistOpen,
         setJumpPrefix,
         openJump,
         openRelatedLinkJump,
@@ -1035,7 +805,6 @@ function App() {
     jumpActive,
     jumpPrefix,
     jumpSession,
-    llmAssistOpen,
     nodeMemoOpen,
     nodeColorOpen,
     openJump,
@@ -1047,7 +816,6 @@ function App() {
     searchOpen,
     setHelpOpen,
     setJumpPrefix,
-    setLlmAssistOpen,
     setNodeMemoOpen,
     setNodeColorOpen,
     setPaletteIndex,
@@ -1065,6 +833,8 @@ function App() {
     selectedStickyNoteId,
     selectedNodeIds,
     activeDoc,
+    visibleDoc,
+    zoomPan.zoom,
   ]);
 
   if (!state.hydrated) {
@@ -1087,6 +857,40 @@ function App() {
         onNew={() => dispatch({ type: "createDoc" })}
         language={language}
       />
+      <div className="canvasToolbar" aria-label="マインドマップの操作">
+        <div className="canvasToolbarRight">
+          <button
+            type="button"
+            className="organizeButton"
+            disabled={selectedNodeIds.size === 0}
+            onClick={() => void requestOrganizePreview()}
+          >
+            整理案
+          </button>
+          <span className="canvasToolbarHint">⌘Enter ノード · Space ドラッグ</span>
+          <div className="zoomControls" aria-label="ズーム">
+            <button type="button" onClick={zoomPan.zoomOut} aria-label="ズームアウト">−</button>
+            <button type="button" onClick={zoomPan.resetZoom}>{Math.round(zoomPan.zoom * 100)}%</button>
+            <button type="button" onClick={zoomPan.zoomIn} aria-label="ズームイン">＋</button>
+          </div>
+        </div>
+      </div>
+      {organizePreview ? (
+        <aside className="organizePreview" aria-label="AI整理案のプレビュー">
+          <div>
+            <strong>整理案（モック）</strong>
+            <span>{organizePreview.suggestion.summary}</span>
+          </div>
+          <div className="organizePreviewGroups">
+            {organizePreview.suggestion.groups.map((group) => (
+              <span key={`${group.title}:${group.cardIds.join("-")}`}>{group.title} · {group.cardIds.length}枚</span>
+            ))}
+          </div>
+          <div className="organizePreviewActions">
+            <button type="button" onClick={() => setOrganizePreview(null)}>閉じる</button>
+          </div>
+        </aside>
+      ) : null}
       {state.focusRootId ? (
         <div className="focusBreadcrumb" aria-label={text.focus.breadcrumbLabel}>
           <button
@@ -1145,13 +949,13 @@ function App() {
             searchOpen ||
             paletteOpen ||
             nodeColorOpen ||
-            settingsOpen ||
-            llmAssistOpen
+            settingsOpen
           }
           zoom={zoomPan.zoom}
           viewportRef={viewportRef}
           panGestureActive={zoomPan.panGestureActive}
           viewSessionKey={`${state.workspace.activeDocId}:${visibleProjection.state.rootId}`}
+          centerCursorRequest={centerCursorRequest}
           highlightedNodeIds={highlightedNodeIds}
           activeHighlightedNodeId={activeSearchNodeId}
           jumpHints={jumpSession?.nodeToHint ?? null}
@@ -1171,32 +975,37 @@ function App() {
             setSelectedStickyNoteId(null);
             dispatch({ type: "selectNode", nodeId });
           }}
-          onSelectionChange={setSelectedNodeIds}
+          onBeginCardEdit={(nodeId) => {
+            dispatch({ type: "selectNode", nodeId });
+            dispatch({ type: "enterInsert" });
+          }}
+          onSelectionChange={(nodeIds) => applySelection(nodeIds)}
           onSelectEdge={(edgeKey) => {
-            setSelectedNodeIds(new Set());
+            applySelection([]);
             setSelectedEdgeKey(edgeKey);
             setSelectedCustomLinkId(null);
             setSelectedStickyNoteId(null);
           }}
           onSelectCustomLink={(linkId) => {
-            setSelectedNodeIds(new Set());
+            applySelection([]);
             setSelectedEdgeKey(null);
             setSelectedCustomLinkId(linkId);
             setSelectedStickyNoteId(null);
           }}
           onSelectStickyNote={(noteId) => {
-            setSelectedNodeIds(new Set());
+            applySelection([]);
             setSelectedEdgeKey(null);
             setSelectedCustomLinkId(null);
             setSelectedStickyNoteId(noteId);
           }}
           onClearSelection={() => {
+            applySelection([]);
             setSelectedEdgeKey(null);
             setSelectedCustomLinkId(null);
             setSelectedStickyNoteId(null);
           }}
           onBeginStickyEdit={(noteId) => {
-            setSelectedNodeIds(new Set());
+            applySelection([]);
             setSelectedEdgeKey(null);
             setSelectedCustomLinkId(null);
             setSelectedStickyNoteId(noteId);
@@ -1218,7 +1027,7 @@ function App() {
             dispatch({ type: "moveNodes", nodeIds, dx, dy })
           }
           onCreateChildAt={(point) => {
-            setSelectedNodeIds(new Set());
+            applySelection([]);
             setSelectedEdgeKey(null);
             setSelectedCustomLinkId(null);
             setSelectedStickyNoteId(null);
@@ -1233,7 +1042,8 @@ function App() {
           }
           onChangeText={(nodeText) => dispatch({ type: "setCursorText", text: nodeText })}
           onEnterCommit={() => dispatch({ type: "commitInsert" })}
-          onEsc={() => dispatch({ type: "commitInsert" })}
+          onEsc={() => dispatch({ type: "cancelInsert" })}
+          onViewportChange={persistViewport}
         />
         <CloseConfirmModal
           open={closeConfirmOpen}
@@ -1344,21 +1154,6 @@ function App() {
             setNodeMemoOpen(false);
           }}
         />
-        <LlmAssistModal
-          open={llmAssistOpen}
-          mode={llmAssistMode}
-          language={language}
-          running={llmAssistRunning}
-          errorMessage={llmAssistError}
-          improvePreview={llmAssistMode === "improve" ? pendingImproveApply?.preview ?? null : null}
-          reviewResult={llmAssistMode === "review" ? reviewResult : null}
-          onChangeMode={setLlmAssistMode}
-          onRun={runLlmAssist}
-          onApplyImprovePreview={applyImprovePreview}
-          onClearImprovePreview={clearImprovePreview}
-          onClearReviewResult={clearReviewResult}
-          onClose={() => setLlmAssistOpen(false)}
-        />
         <SettingsModal
           open={settingsOpen}
           language={language}
@@ -1389,13 +1184,6 @@ function App() {
           <span className={"statusValue " + (saveStatus === "saving" ? "statusValueSaving" : "")}>
             {saveStatusLabel}
           </span>
-          {llmRunningLabel ? (
-            <>
-              <span className="statusDot">•</span>
-              <span className="statusLabel">{text.status.ai}</span>
-              <span className="statusPill statusPillLlm">{llmRunningLabel}</span>
-            </>
-          ) : null}
           {jumpActive ? (
             <>
               <span className="statusDot">•</span>
@@ -1412,17 +1200,6 @@ function App() {
           ) : null}
         </div>
         <div className="statusRight">
-          <button
-            type="button"
-            className="statusHelpButton"
-            onMouseDown={(e) => {
-              e.preventDefault();
-              setLlmAssistMode("generate");
-              setLlmAssistOpen(true);
-            }}
-          >
-            {text.footer.aiAssist}
-          </button>
           <button
             type="button"
             className="statusHelpButton"

@@ -74,6 +74,12 @@ function withTree(state) {
           edgeAnchors: {},
           customLinks: {},
           stickyNotes: {},
+          cardSizes: {
+            root: { width: 180, height: 34 },
+            a: { width: 180, height: 34 },
+            a1: { width: 180, height: 34 },
+            b: { width: 180, height: 34 },
+          },
           nodes: {
             root: { id: "root", text: "root", parentId: null, childrenIds: ["a", "b"] },
             a: { id: "a", text: "a", parentId: "root", childrenIds: ["a1"] },
@@ -82,6 +88,8 @@ function withTree(state) {
           },
           undoStack: [],
           redoStack: [],
+          viewport: { x: 0, y: 0, zoom: 1 },
+          selection: { cardIds: ["a"], lastEditedCardId: "a" },
         },
       },
     },
@@ -128,6 +136,13 @@ test("legacy hydration defaults and sanitizes collapsed node IDs", () => {
   delete legacy.documents[docId].edgeAnchors;
   delete legacy.documents[docId].customLinks;
   delete legacy.documents[docId].stickyNotes;
+  legacy.documents[docId].groups = {
+    old: { id: "old", title: "old", cardIds: ["a"], position: { x: 0, y: 0 }, size: { width: 1, height: 1 } },
+  };
+  legacy.documents[docId].undoStack = [{
+    ...legacy.documents[docId],
+    groups: legacy.documents[docId].groups,
+  }];
 
   const state = editorReducer(initial, {
     type: "finishHydration",
@@ -138,6 +153,8 @@ test("legacy hydration defaults and sanitizes collapsed node IDs", () => {
   assert.deepEqual(state.workspace.documents[docId].edgeAnchors, {});
   assert.deepEqual(state.workspace.documents[docId].customLinks, {});
   assert.deepEqual(state.workspace.documents[docId].stickyNotes, {});
+  assert.equal(Object.hasOwn(state.workspace.documents[docId], "groups"), false);
+  assert.equal(Object.hasOwn(state.workspace.documents[docId].undoStack[0], "groups"), false);
 });
 
 test("adding a sibling outside the focused branch exits focus", () => {
@@ -465,4 +482,35 @@ test("reparent removes connector anchors for edges that no longer exist", () => 
   const doc = state.workspace.documents[docId];
   assert.equal(doc.nodes.a1.parentId, "root");
   assert.deepEqual(doc.edgeAnchors, {});
+});
+
+test("sibling branch swap is visible and undoable", () => {
+  let state = withTree(makeReadyState());
+  const docId = state.workspace.activeDocId;
+
+  state = editorReducer(state, { type: "swapSibling", direction: "down" });
+  let doc = state.workspace.documents[docId];
+  assert.deepEqual(doc.nodes.root.childrenIds, ["b", "a"]);
+  assert.deepEqual(doc.nodePositions.a, { x: 260, y: 50 });
+  assert.deepEqual(doc.nodePositions.a1, { x: 520, y: 50 });
+  assert.deepEqual(doc.nodePositions.b, { x: 260, y: 0 });
+  assert.equal(doc.undoStack.length, 1);
+
+  state = editorReducer(state, { type: "undo" });
+  doc = state.workspace.documents[docId];
+  assert.deepEqual(doc.nodes.root.childrenIds, ["a", "b"]);
+  assert.deepEqual(doc.nodePositions.a, { x: 260, y: 0 });
+  assert.deepEqual(doc.nodePositions.a1, { x: 520, y: 0 });
+  assert.deepEqual(doc.nodePositions.b, { x: 260, y: 50 });
+});
+
+test("Escape-style cancel restores the document before a new card edit", () => {
+  let state = withTree(makeReadyState());
+  const docId = state.workspace.activeDocId;
+  const beforeIds = Object.keys(state.workspace.documents[docId].nodes);
+  state = editorReducer(state, { type: "addChildAtPosition", point: { x: 100, y: 200 } });
+  state = editorReducer(state, { type: "setCursorText", text: "取り消す" });
+  state = editorReducer(state, { type: "cancelInsert" });
+  assert.deepEqual(Object.keys(state.workspace.documents[docId].nodes), beforeIds);
+  assert.equal(state.mode, "normal");
 });

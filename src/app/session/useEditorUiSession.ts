@@ -12,7 +12,6 @@ export function useEditorUiSession() {
   const [nodeColorOpen, setNodeColorOpen] = useState(false);
   const [nodeMemoOpen, setNodeMemoOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [llmAssistOpen, setLlmAssistOpen] = useState(false);
   const [jumpSession, setJumpSession] = useState<JumpSession | null>(null);
   const [jumpPrefix, setJumpPrefix] = useState("");
 
@@ -26,7 +25,6 @@ export function useEditorUiSession() {
     setPaletteOpen(false);
     setNodeColorOpen(false);
     setSettingsOpen(false);
-    setLlmAssistOpen(false);
     closeJump();
   }, [closeJump]);
 
@@ -51,8 +49,6 @@ export function useEditorUiSession() {
     setNodeMemoOpen,
     settingsOpen,
     setSettingsOpen,
-    llmAssistOpen,
-    setLlmAssistOpen,
     jumpSession,
     setJumpSession,
     jumpPrefix,

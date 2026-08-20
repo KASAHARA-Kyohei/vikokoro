@@ -104,16 +104,6 @@ export function resolveKeyboardCommand(
     return { preventDefault: true, command: { type: "preventOnly" } };
   }
 
-  if (ctx.llmAssistOpen) {
-    if (key === "Escape") {
-      return { preventDefault: true, command: { type: "setLlmAssistOpen", open: false } };
-    }
-    if (ctrlKey && (key === "w" || key === "t" || key === "Tab")) {
-      return { preventDefault: true, command: { type: "preventOnly" } };
-    }
-    return { preventDefault: true, command: { type: "preventOnly" } };
-  }
-
   if (ctx.closeConfirmOpen) {
     if (key === "y" || key === "Y") {
       return { preventDefault: true, command: { type: "dispatch", action: { type: "closeActiveDoc" } } };
@@ -192,7 +182,7 @@ export function resolveKeyboardCommand(
 
   if (ctx.mode === "insert") {
     if (key === "Escape") {
-      return { preventDefault: true, command: { type: "dispatch", action: { type: "commitInsert" } } };
+      return { preventDefault: true, command: { type: "dispatch", action: { type: "cancelInsert" } } };
     }
     if (key === "Tab" || (ctrlKey && key === "Tab")) {
       return { preventDefault: true, command: { type: "preventOnly" } };
@@ -201,6 +191,13 @@ export function resolveKeyboardCommand(
       return { preventDefault: true, command: { type: "preventOnly" } };
     }
     return { preventDefault: false, command: { type: "none" } };
+  }
+
+  if ((metaKey || ctrlKey) && !altKey && key.toLowerCase() === "z") {
+    return {
+      preventDefault: true,
+      command: { type: "dispatch", action: { type: shiftKey ? "redo" : "undo" } },
+    };
   }
 
   if (altKey && !ctrlKey && !metaKey) {

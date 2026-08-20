@@ -1,5 +1,7 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { clamp } from "../utils/number";
+import type { Viewport } from "../editor/types";
+import { hasSavedViewport } from "../editor/domain/viewport";
 
 type ViewState = { zoom: number };
 
@@ -8,9 +10,18 @@ type Params = {
   mode: "normal" | "insert";
   disabled: boolean;
   viewportRef: React.RefObject<HTMLDivElement | null>;
+  initialViewport: Viewport;
+  onViewportChange: (viewport: Viewport) => void;
 };
 
-export function useZoomPan({ activeDocId, mode, disabled, viewportRef }: Params) {
+export function useZoomPan({
+  activeDocId,
+  mode,
+  disabled,
+  viewportRef,
+  initialViewport,
+  onViewportChange,
+}: Params) {
   const [spaceDown, setSpaceDown] = useState(false);
   const [isPanning, setIsPanning] = useState(false);
   const [viewByDocId, setViewByDocId] = useState<Record<string, ViewState>>({});
@@ -34,8 +45,17 @@ export function useZoomPan({ activeDocId, mode, disabled, viewportRef }: Params)
   useEffect(() => {
     setViewByDocId((current) => {
       if (current[activeDocId]) return current;
-      return { ...current, [activeDocId]: { zoom: 1 } };
+      return { ...current, [activeDocId]: { zoom: initialViewport.zoom } };
     });
+    window.requestAnimationFrame(() => {
+      if (!hasSavedViewport(initialViewport)) return;
+      const viewport = viewportRef.current;
+      if (!viewport) return;
+      viewport.scrollLeft = initialViewport.x;
+      viewport.scrollTop = initialViewport.y;
+    });
+  // Restore only when switching documents; continuous viewport updates must not reset scroll.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeDocId]);
 
   const zoom = (viewByDocId[activeDocId] ?? { zoom: 1 }).zoom;
@@ -118,8 +138,8 @@ export function useZoomPan({ activeDocId, mode, disabled, viewportRef }: Params)
 
     if (disabled) return;
     if (mode !== "normal") return;
-    if (!spaceDown) return;
-    if (event.button !== 0) return;
+    if (!spaceDown && event.button !== 1) return;
+    if (event.button !== 0 && event.button !== 1) return;
 
     event.preventDefault();
     const viewport = viewportRef.current;
@@ -145,6 +165,15 @@ export function useZoomPan({ activeDocId, mode, disabled, viewportRef }: Params)
     };
 
     const handleMouseUp = () => {
+      const currentViewport = viewportRef.current;
+      if (currentViewport) {
+        onViewportChange({
+          x: currentViewport.scrollLeft,
+          y: currentViewport.scrollTop,
+          zoom,
+          initialized: true,
+        });
+      }
       setIsPanning(false);
       panStartRef.current = null;
       window.removeEventListener("mousemove", handleMouseMove);
@@ -179,12 +208,30 @@ export function useZoomPan({ activeDocId, mode, disabled, viewportRef }: Params)
       mouseY,
       zoom: nextZoom,
     };
+    onViewportChange({
+      x: Math.max(0, worldX * nextZoom - mouseX),
+      y: Math.max(0, worldY * nextZoom - mouseY),
+      zoom: nextZoom,
+      initialized: true,
+    });
 
     setViewByDocId((current) => ({
       ...current,
       [activeDocId]: { zoom: nextZoom },
     }));
   };
+
+  const setZoom = useCallback((nextZoom: number) => {
+    const viewport = viewportRef.current;
+    const clamped = clamp(nextZoom, 0.5, 2);
+    setViewByDocId((current) => ({ ...current, [activeDocId]: { zoom: clamped } }));
+    onViewportChange({
+      x: viewport?.scrollLeft ?? initialViewport.x,
+      y: viewport?.scrollTop ?? initialViewport.y,
+      zoom: clamped,
+      initialized: true,
+    });
+  }, [activeDocId, initialViewport.x, initialViewport.y, onViewportChange, viewportRef]);
 
   return {
     zoom,
@@ -194,5 +241,8 @@ export function useZoomPan({ activeDocId, mode, disabled, viewportRef }: Params)
     viewportClassName,
     onViewportMouseDown,
     onViewportWheel,
+    zoomIn: () => setZoom(zoom * 1.15),
+    zoomOut: () => setZoom(zoom / 1.15),
+    resetZoom: () => setZoom(1),
   };
 }

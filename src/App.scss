@@ -17,7 +17,93 @@
   flex: 1;
   overflow: auto;
   outline: none;
+  background-color: color-mix(in srgb, var(--panel), #c9b98f 7%);
+  background-image:
+    radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--muted), transparent 82%) 1px, transparent 0);
+  background-size: 22px 22px;
 }
+
+.canvasToolbar {
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 5px 10px;
+  border-bottom: 1px solid var(--divider);
+  background: color-mix(in srgb, var(--panel), #d9cdaa 8%);
+}
+
+.canvasToolbarHint {
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+
+.canvasToolbarRight,
+.zoomControls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.zoomControls {
+  gap: 2px;
+}
+
+.zoomControls button {
+  min-width: 28px;
+  height: 25px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.zoomControls button:first-child { border-radius: 7px 0 0 7px; }
+.zoomControls button:last-child { border-radius: 0 7px 7px 0; }
+
+.organizeButton,
+.organizePreview button {
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--text);
+  padding: 5px 9px;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.organizeButton:disabled { opacity: 0.42; cursor: default; }
+
+.organizePreview {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--divider);
+  background: color-mix(in srgb, var(--accentBg), var(--panel) 76%);
+  color: var(--text);
+  font-size: 12px;
+}
+
+.organizePreview > div:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.organizePreviewGroups {
+  display: flex;
+  flex: 1;
+  gap: 6px;
+  color: var(--muted);
+}
+
+.organizePreviewActions { display: flex; gap: 6px; }
 
 .focusBreadcrumb {
   min-height: 34px;

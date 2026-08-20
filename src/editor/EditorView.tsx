@@ -7,12 +7,21 @@ import {
 import type { EditorEnterEvent } from "./domain/editorEnter";
 import { collectSubtreeNodeIds, computeSnapAdjustment, moveNodePositions } from "./domain/freeLayout";
 import {
+  computeCenteredScrollFromRects,
   computeInitialScrollForRoot,
   isUsableViewportSize,
   shouldFollowCursor,
   shouldResetViewportSession,
 } from "./domain/viewport";
-import type { AnchorSide, CanvasPoint, DocumentState, Mode, Node, NodeId } from "./types";
+import type {
+  AnchorSide,
+  CanvasPoint,
+  DocumentState,
+  Mode,
+  Node,
+  NodeId,
+  Viewport,
+} from "./types";
 import "./EditorView.scss";
 import {
   computeLayout,
@@ -32,6 +41,7 @@ type Props = {
   viewportRef: React.RefObject<HTMLDivElement | null>;
   panGestureActive: boolean;
   viewSessionKey: string;
+  centerCursorRequest: number;
   highlightedNodeIds: Set<NodeId> | null;
   activeHighlightedNodeId: NodeId | null;
   jumpHints: Record<NodeId, string> | null;
@@ -46,6 +56,7 @@ type Props = {
   editingStickyNoteId: string | null;
   stickyPlacementActive: boolean;
   onSelectNode: (nodeId: NodeId) => void;
+  onBeginCardEdit: (nodeId: NodeId) => void;
   onSelectionChange: (nodeIds: Set<NodeId>) => void;
   onSelectEdge: (edgeKey: string) => void;
   onSelectCustomLink: (linkId: string) => void;
@@ -68,6 +79,7 @@ type Props = {
   onChangeText: (text: string) => void;
   onEnterCommit: () => void;
   onEsc: () => void;
+  onViewportChange: (viewport: Viewport) => void;
 };
 
 type ExitingNode = { node: Node; pos: NodePosition; size: NodeSize };
@@ -115,6 +127,7 @@ export function EditorView({
   viewportRef,
   panGestureActive,
   viewSessionKey,
+  centerCursorRequest,
   highlightedNodeIds,
   activeHighlightedNodeId,
   jumpHints,
@@ -129,6 +142,7 @@ export function EditorView({
   editingStickyNoteId,
   stickyPlacementActive,
   onSelectNode,
+  onBeginCardEdit,
   onSelectionChange,
   onSelectEdge,
   onSelectCustomLink,
@@ -147,6 +161,7 @@ export function EditorView({
   onChangeText,
   onEnterCommit,
   onEsc,
+  onViewportChange,
 }: Props) {
   const [dragPreview, setDragPreview] = useState<DragPreview | null>(null);
   const [stickyDragPreview, setStickyDragPreview] = useState<StickyDragPreview | null>(null);
@@ -211,6 +226,8 @@ export function EditorView({
     viewport.scrollLeft = scroll.x;
     viewport.scrollTop = scroll.y;
     initialViewPositionedRef.current = true;
+  // Root positioning is intentionally keyed by primitive geometry values.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     rootPoint?.x,
     rootPoint?.y,
@@ -250,6 +267,33 @@ export function EditorView({
     const el = root.querySelector<HTMLElement>(`[data-node-id="${doc.cursorId}"]`);
     el?.scrollIntoView({ block: "nearest", inline: "nearest" });
   }, [doc.cursorId]);
+
+  useEffect(() => {
+    if (centerCursorRequest === 0) return;
+    const frame = requestAnimationFrame(() => {
+      const viewport = viewportRef.current;
+      const root = canvasRef.current;
+      if (!viewport || !root) return;
+      const element = root.querySelector<HTMLElement>(
+        `[data-node-id="${doc.cursorId}"]`,
+      );
+      if (!element) return;
+      const scroll = computeCenteredScrollFromRects(
+        { x: viewport.scrollLeft, y: viewport.scrollTop },
+        element.getBoundingClientRect(),
+        viewport.getBoundingClientRect(),
+      );
+      viewport.scrollLeft = scroll.x;
+      viewport.scrollTop = scroll.y;
+      onViewportChange({
+        x: viewport.scrollLeft,
+        y: viewport.scrollTop,
+        zoom,
+        initialized: true,
+      });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [centerCursorRequest, doc.cursorId, onViewportChange, viewportRef, zoom]);
 
   useEffect(() => {
     const prevNodes = prevNodesRef.current;
@@ -342,7 +386,7 @@ export function EditorView({
     }
 
     return set;
-  }, [doc.cursorId, edges]);
+  }, [doc.cursorId, doc.nodes, edges]);
 
   const selectedEdge = useMemo(() => {
     if (!selectedEdgeKey) return null;
@@ -383,7 +427,7 @@ export function EditorView({
     event.stopPropagation();
 
     const start = { x: event.clientX, y: event.clientY };
-    const moveIds = event.shiftKey
+    const moveIds = event.altKey
       ? collectSubtreeNodeIds(sourceDoc, nodeId)
       : selectedNodeIds.has(nodeId) && selectedNodeIds.size > 1
         ? [...selectedNodeIds]
@@ -440,7 +484,7 @@ export function EditorView({
         onMoveNodes(moveIds, latestDx, latestDy);
         return;
       }
-      if (event.shiftKey) {
+      if (event.shiftKey || event.metaKey) {
         const next = new Set(selectedNodeIds);
         if (next.has(nodeId)) next.delete(nodeId);
         else next.add(nodeId);
@@ -494,11 +538,12 @@ export function EditorView({
     const start = clientToCanvas(event.clientX, event.clientY);
     if (!start) return;
     event.preventDefault();
-    if (!event.shiftKey) {
+    const extendsSelection = event.shiftKey || event.metaKey;
+    if (!extendsSelection) {
       onSelectionChange(new Set());
       onClearSelection();
     }
-    const baseSelection = event.shiftKey ? new Set(selectedNodeIds) : new Set<NodeId>();
+    const baseSelection = extendsSelection ? new Set(selectedNodeIds) : new Set<NodeId>();
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
       const current = clientToCanvas(moveEvent.clientX, moveEvent.clientY);
@@ -727,6 +772,13 @@ export function EditorView({
               }
               style={{ left: pos.x, top: pos.y, width: size.width, height: size.height }}
               onMouseDown={(event) => beginNodeInteraction(event, node.id)}
+              onDoubleClick={(event) => {
+                if (interactionDisabled) return;
+                event.preventDefault();
+                event.stopPropagation();
+                onSelectNode(node.id);
+                onBeginCardEdit(node.id);
+              }}
             >
               {jump.hint ? (
                 <div className={"nodeJumpHint" + (jump.isMatched ? " nodeJumpHintMatched" : "")}>

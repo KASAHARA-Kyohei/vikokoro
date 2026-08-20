@@ -19,7 +19,6 @@ export type KeyboardResolverContext = {
   nodeColorOpen: boolean;
   nodeMemoOpen: boolean;
   settingsOpen: boolean;
-  llmAssistOpen: boolean;
   closeConfirmOpen: boolean;
   focusActive: boolean;
   jumpSession: JumpSession | null;
@@ -37,7 +36,6 @@ export type KeyboardCommand =
   | { type: "setNodeColorOpen"; open: boolean }
   | { type: "setNodeMemoOpen"; open: boolean }
   | { type: "setSettingsOpen"; open: boolean }
-  | { type: "setLlmAssistOpen"; open: boolean }
   | { type: "dispatch"; action: EditorAction }
   | { type: "selectNode"; nodeId: NodeId }
   | { type: "setCursorColor"; color: NodeColor | null }

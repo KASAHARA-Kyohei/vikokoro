@@ -1,6 +1,11 @@
 import type { Document, Node, NodeId } from "../types";
 import { getNodeSize, getNodeSizes, H_GAP, V_GAP } from "../layout";
-import { findAvailablePosition, makeSpaceForNode } from "./freeLayout";
+import {
+  collectSubtreeNodeIds,
+  findAvailablePosition,
+  makeSpaceForNode,
+  moveNodePositions,
+} from "./freeLayout";
 import { generateId } from "./id";
 
 export function moveCursor(
@@ -51,12 +56,34 @@ export function swapSibling(doc: Document, direction: "up" | "down"): Document {
   if (swapWith < 0 || swapWith >= parent.childrenIds.length) return doc;
 
   const nextChildren = [...parent.childrenIds];
+  const otherId = nextChildren[swapWith];
   const tmp = nextChildren[index];
   nextChildren[index] = nextChildren[swapWith];
   nextChildren[swapWith] = tmp;
 
+  const cursorPoint = doc.nodePositions[cursor.id];
+  const otherPoint = doc.nodePositions[otherId];
+  let nodePositions = doc.nodePositions;
+  if (cursorPoint && otherPoint) {
+    const dx = otherPoint.x - cursorPoint.x;
+    const dy = otherPoint.y - cursorPoint.y;
+    nodePositions = moveNodePositions(
+      nodePositions,
+      collectSubtreeNodeIds(doc, cursor.id),
+      dx,
+      dy,
+    );
+    nodePositions = moveNodePositions(
+      nodePositions,
+      collectSubtreeNodeIds(doc, otherId),
+      -dx,
+      -dy,
+    );
+  }
+
   return {
     ...doc,
+    nodePositions,
     nodes: {
       ...doc.nodes,
       [parent.id]: { ...parent, childrenIds: nextChildren },

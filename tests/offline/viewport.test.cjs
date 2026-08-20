@@ -5,8 +5,15 @@ const {
   computeInitialScrollForRoot,
   isUsableViewportSize,
   shouldFollowCursor,
+  hasSavedViewport,
   shouldResetViewportSession,
 } = require("../../.tmp-tests/src/editor/domain/viewport.js");
+
+test("viewport restores only after a user view has been saved", () => {
+  assert.equal(hasSavedViewport({ x: 0, y: 0, zoom: 1, initialized: false }), false);
+  assert.equal(hasSavedViewport({ x: 0, y: 0, zoom: 1, initialized: true }), true);
+  assert.equal(hasSavedViewport({ x: 120, y: 0, zoom: 1 }), true);
+});
 
 test("shouldResetViewportSession resets only when the document session changes", () => {
   assert.equal(shouldResetViewportSession(null, "doc-1"), false);

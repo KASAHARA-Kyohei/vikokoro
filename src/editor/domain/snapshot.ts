@@ -14,6 +14,7 @@ export function cloneDocumentState(doc: DocumentState): DocumentState {
   const edgeAnchors: Record<string, EdgeAnchor> = {};
   const customLinks: Record<string, CustomLink> = {};
   const stickyNotes: Record<string, StickyNote> = {};
+  const cardSizes: DocumentState["cardSizes"] = {};
   for (const [id, node] of Object.entries(doc.nodes)) {
     nodes[id] = {
       id: node.id,
@@ -27,6 +28,8 @@ export function cloneDocumentState(doc: DocumentState): DocumentState {
     if (point) {
       nodePositions[id] = { x: point.x, y: point.y };
     }
+    const size = doc.cardSizes?.[id];
+    if (size) cardSizes[id] = { width: size.width, height: size.height };
   }
   for (const [key, anchor] of Object.entries(doc.edgeAnchors ?? {})) {
     edgeAnchors[key] = { from: anchor.from, to: anchor.to };
@@ -49,6 +52,7 @@ export function cloneDocumentState(doc: DocumentState): DocumentState {
     edgeAnchors,
     customLinks,
     stickyNotes,
+    cardSizes,
   };
 }
 
@@ -110,6 +114,10 @@ export function documentStateEquals(a: DocumentState, b: DocumentState): boolean
     const bp = b.nodePositions?.[id];
     if (Boolean(ap) !== Boolean(bp)) return false;
     if (ap && bp && (ap.x !== bp.x || ap.y !== bp.y)) return false;
+    const as = a.cardSizes?.[id];
+    const bs = b.cardSizes?.[id];
+    if (Boolean(as) !== Boolean(bs)) return false;
+    if (as && bs && (as.width !== bs.width || as.height !== bs.height)) return false;
   }
   return true;
 }

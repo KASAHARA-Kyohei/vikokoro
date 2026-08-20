@@ -1,201 +1,27 @@
 # vikokoro
 
-Japanese version: [README.ja.md](README.ja.md)
+日本語: [README.ja.md](README.ja.md)
 
-A keyboard-first tree/mind-map style editor built with Tauri v2 + React + TypeScript.
-You can add, move, and edit nodes using Vim-like **Normal / Insert** modes.
+vikokoro is a local-first mind map for quickly writing, navigating, and arranging ideas with Vim-style controls. It is built with Tauri v2, React, and TypeScript.
 
-<img src="./out2.gif" alt="vikokoro demo" width="840" />
+## Highlights
 
-This demo shows the basic flow: add nodes (`Tab` / `Enter`) -> edit (Insert) -> move (`hjkl` + `J/K`).
+- Free-position cards on a large pannable and zoomable canvas
+- Create by blank-area double-click or `Cmd+Enter`, then type immediately
+- IME-safe inline editing: Enter commits, Shift+Enter adds a line, Escape cancels
+- Shift/Command multi-selection, marquee selection, and batch movement
+- Duplicate with `Cmd+D`
+- Parent-child links, folding, focus mode, and Vim-style navigation
+- Undo/redo and atomic JSON persistence in Tauri AppData
+- A replaceable `ThoughtOrganizer` interface with non-destructive mock previews
 
-Note: This is currently a personal project, so specs and behavior may change.
+There is no direct external AI API connection. The current boundary is intended to evolve first into a browser prompt workflow and later into agent-proposed edits.
 
-
-## Features
-
-- Edit with Normal / Insert mode switching
-- `Tab` adds a child node, `Enter` adds a sibling node (both start editing immediately)
-- Move the cursor with `h/j/k/l`, reorder siblings with `J/K`
-- Move node hierarchy with `H/L` (left/right = outdent/indent, subtree included)
-- Freely position nodes by dragging; `Shift+Drag` moves an entire branch
-- Multi-select with `Shift+Click` or a blank-canvas marquee, then move together
-- Double-click blank canvas space to add a child at that position
-- Alignment guides with light snapping; `=` / `+` auto-layout a branch / the full map
-- Click an edge to manually choose parent/child connector sides; `Auto` resets the edge
-- Jump to any node with hint keys (`f` then displayed key sequence)
-- Focus the selected branch with `F`, then return through breadcrumbs or `Esc`
-- Fold branches with `za` / `zc` / `zo`, or fold/unfold all visible branches with `zM` / `zR`
-- Delete with `dd` (root is protected, children are promoted)
-- Node colors (`c` to open, `1-5` to apply, `0` to clear; `5` = gray for done/history)
-- Node memos (`m` to open, multi-line notes, `M` badge on nodes with notes)
-- Undo / Redo
-- Tabs (multiple documents)
-- Search (`Ctrl+F`) / Command palette (`Ctrl+P`) / Help (`?`)
-- Theme switcher (Dark / Light / Ivory / Tokyo Night)
-- Zoom (`Ctrl + Wheel`) / Pan (`Space + Drag`)
-- Local persistence (Tauri runtime only)
-- LLM settings modal (`LLM`) for Gemini provider/model/API key and connection test
-- LLM assist modal (`AI`) with:
-  - `Generate`: replace current tab with a generated map
-  - `Improve`: show diff preview first, then apply only after `Apply`
-
-
-## Usage
-
-The in-app help is the most up-to-date shortcut reference.
-
-- Help: `?`
-- Close: `Esc`
-
-Common keys (Normal mode):
-
-- `Tab`: Add a child and start editing
-- `Enter`: Add a sibling and start editing
-- `h/j/k/l`: Move to parent/next/previous/child
-- `J/K`: Reorder sibling down/up
-- `H/L`: Move node left/right in hierarchy (outdent / indent)
-- `Alt+h/j/k/l`: Nudge the selection 8px (`Shift` makes it 32px)
-- `=` / `+`: Auto-layout the selected branch / entire map
-- Mouse drag: Free positioning (`Shift` moves the entire branch)
-- Blank-canvas double-click: Add a child at the clicked position
-- Edge click: Select a connector, then click top/right/bottom/left anchors on either node
-- `f` + hint key(s): Jump to any node
-- `F`: Focus the selected branch (`Esc` returns to the full map)
-- `za` / `zc` / `zo`: Toggle / collapse / expand a branch
-- `zM` / `zR`: Collapse / expand all visible branches
-- `dd`: Delete
-- `c`: Open node color menu (`1-5` apply, `0` clear, `Esc` close)
-- `m`: Open node memo (`Esc` closes and commits)
-- `u` / `Ctrl+r`: Undo / Redo
-
-Editing (Insert mode):
-
-- `i`: Enter Insert mode
-- `Esc`: Confirm and return to Normal mode
-- `Enter`: Confirm and return to Normal mode
-  - When pressed during Japanese IME composition, it confirms after composition ends and returns to Normal with the same Enter.
-
-LLM (Tauri mode):
-
-- Open `LLM` from the status bar or command palette (`LLM settings`)
-- Set `Provider` and `Model`, paste API key, then `Save`
-- Run `Test Connection` (this consumes API quota)
-- Open `AI` and run:
-  - `Generate`: creates a new map from topic text
-  - `Improve`: creates a preview; press `Apply` to reflect changes
-
-
-## Data Persistence
-
-When running in Tauri (`npm run tauri dev` / `npm run tauri build`), the workspace is stored locally.
-
-- Save location: `workspace.json` under OS-specific AppData
-  - Uses `BaseDirectory::AppData` on the Tauri side
-- LLM settings location: `llm_settings.json` under AppData
-- API key storage:
-  - First choice: OS credential storage (keyring)
-  - Fallback: AppData (`llm_settings.json`) when keyring is unavailable
-- In browser mode (`npm run dev`), `invoke` is unavailable, so persistence is disabled (UI shows `Local`)
-
-
-## Setup (for Developers)
-
-### Requirements
-
-- Node.js (because of Vite requirements, **20.19+ or 22.12+ is recommended**)
-- Rust (stable)
-
-VS Code + rust-analyzer + Tauri extension is a convenient setup.
-
-### Install
+## Development
 
 ```sh
 npm ci
-```
-
-### Run
-
-Run in browser (no persistence):
-
-```sh
 npm run dev
 ```
 
-Run in Tauri (with persistence):
-
-```sh
-npm run tauri dev
-```
-
-### Build
-
-```sh
-npm run tauri build
-```
-
-Build artifacts are generally generated under `src-tauri/target/release/bundle/`.
-
-
-## GitHub Actions (macOS/Windows build)
-
-For machines without a local build environment, you can generate executables with GitHub Actions.
-
-- Workflow: `.github/workflows/tauri-build.yml`
-- How to run: GitHub `Actions` tab -> `tauri-build` -> `Run workflow`
-- Artifacts: `vikokoro-macos-latest` / `vikokoro-windows-latest`
-
-
-## Troubleshooting
-
-### macOS shows "App is damaged and can't be opened"
-
-When downloading an unsigned app, Gatekeeper (quarantine attribute) may block it.
-If you only need to run it on your own machine, this may help:
-
-```sh
-xattr -dr com.apple.quarantine "/Applications/vikokoro.app"
-```
-
-Optional status check:
-
-```sh
-spctl --assess --verbose=4 "/Applications/vikokoro.app"
-```
-
-### Node.js version warning appears
-
-Because of Vite requirements, older Node.js versions can show warnings.
-Check `node -v` and upgrade to `22.12+` or `20.19+` if needed.
-
-### `Gemini API key is not set` appears
-
-- Open `LLM` and confirm `Stored key: Configured`
-- If it remains `Not set`, paste the key again and press `Save`
-- Restart `npm run tauri dev` once after saving
-
-### `Rate limit exceeded. Retry later.` appears
-
-- This is Gemini API `429`
-- Wait and retry (do not spam requests)
-- Try a lighter model if needed
-
-
-## Main Directories
-
-- `src/`: Frontend (React/TS)
-- `src/editor/`: Core editor (state, layout, view)
-- `src/hooks/`: Hooks including persistence
-- `src/ui/modals/`: Modals such as Help/Search/Palette
-- `src-tauri/`: Tauri (Rust) side
-- `docs/`: Milestones and handover notes
-
-## Contributing
-
-Please read the contribution guide before opening Issues or PRs:
-[`CONTRIBUTING.md`](CONTRIBUTING.md)
-
-
-## License
-
-MIT (`LICENSE`)
+Run checks with `npm run lint`, `npm run typecheck`, `npm run test:offline`, `npm run build`, `cargo test --manifest-path src-tauri/Cargo.toml`, and `cargo check --manifest-path src-tauri/Cargo.toml`.

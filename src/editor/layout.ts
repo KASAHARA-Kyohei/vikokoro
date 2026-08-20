@@ -105,6 +105,15 @@ export function getNodeSizes(
   );
 }
 
+function getDocumentNodeSizes(
+  doc: Pick<DocumentState, "nodes"> & { cardSizes?: DocumentState["cardSizes"] },
+) {
+  const measured = getNodeSizes(doc.nodes);
+  return Object.fromEntries(
+    Object.entries(measured).map(([id, size]) => [id, doc.cardSizes?.[id] ?? size]),
+  );
+}
+
 function collectDepths(
   doc: Pick<DocumentState, "rootId" | "nodes">,
   rootId: NodeId = doc.rootId,
@@ -129,7 +138,7 @@ export function computeTreePositions(
   rootId: NodeId = doc.rootId,
 ): Record<NodeId, CanvasPoint> {
   const positions: Record<NodeId, CanvasPoint> = {};
-  const sizes = getNodeSizes(doc.nodes);
+  const sizes = getDocumentNodeSizes(doc);
   const depths = collectDepths(doc, rootId);
   const maxWidthByDepth: Record<number, number> = {};
   for (const [nodeId, depth] of Object.entries(depths)) {
@@ -221,7 +230,7 @@ export function sanitizeNodePositions(
 
 export function computeLayout(doc: DocumentState): LayoutResult {
   const depths = collectDepths(doc);
-  const sizes = getNodeSizes(doc.nodes);
+  const sizes = getDocumentNodeSizes(doc);
   const source = sanitizeNodePositions(doc, doc.nodePositions);
   const ids = Object.keys(doc.nodes).filter((id) => source[id]);
   if (ids.length === 0) {

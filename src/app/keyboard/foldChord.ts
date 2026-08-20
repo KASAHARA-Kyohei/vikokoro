@@ -1,4 +1,5 @@
 export type FoldChordAction =
+  | "center"
   | "toggle"
   | "collapse"
   | "expand"
@@ -12,6 +13,7 @@ export type FoldChordResolution = {
 };
 
 const ACTIONS: Record<string, FoldChordAction> = {
+  z: "center",
   a: "toggle",
   c: "collapse",
   o: "expand",

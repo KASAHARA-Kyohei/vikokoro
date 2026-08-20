@@ -1,4 +1,4 @@
-import type { CanvasPoint } from "../types";
+import type { CanvasPoint, Viewport } from "../types";
 import { PADDING_X } from "../layout";
 import type { NodeSize } from "../layout";
 
@@ -13,6 +13,11 @@ type ViewportSize = { width: number; height: number };
 
 export function isUsableViewportSize(viewportSize: ViewportSize): boolean {
   return viewportSize.width > 0 && viewportSize.height > 0;
+}
+
+export function hasSavedViewport(viewport: Viewport): boolean {
+  if (viewport.initialized !== undefined) return viewport.initialized;
+  return viewport.x !== 0 || viewport.y !== 0 || viewport.zoom !== 1;
 }
 
 export function shouldResetViewportSession(

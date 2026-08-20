@@ -21,9 +21,6 @@
     "src/app/keyboard/resolveKeyboardCommand.ts",
     "src/features/jump/model.ts",
     "src/features/search/model.ts",
-    "src/features/llm/schema.ts",
-    "src/features/llm/apply.ts",
-    "src/features/llm/errorFormatter.ts",
-    "src/features/llm/preview.ts"
+    "src/features/organizer/**/*.ts"
   ]
 }
