@@ -8,6 +8,8 @@ import type {
   NodeColor,
   NodeId,
   StickyNote,
+  Selection,
+  Viewport,
   Workspace,
 } from "./types";
 import { createInitialDocument } from "./domain/documentFactory";
@@ -18,6 +20,7 @@ import {
 } from "./domain/customLinks";
 import { sanitizeEdgeAnchors } from "./domain/edgeAnchors";
 import { sanitizeStickyNotes } from "./domain/stickyNotes";
+import { generateId } from "./domain/id";
 import { cloneDocumentState, documentStateEquals } from "./domain/snapshot";
 import {
   autoLayoutBranch,
@@ -64,6 +67,8 @@ export type EditorAction =
   | { type: "cancelCloseConfirm" }
   | { type: "closeActiveDoc" }
   | { type: "deleteNode" }
+  | { type: "deleteNodes"; nodeIds: NodeId[] }
+  | { type: "duplicateNodes"; nodeIds: NodeId[] }
   | { type: "selectNode"; nodeId: NodeId }
   | { type: "selectNodeReveal"; nodeId: NodeId }
   | {
@@ -94,6 +99,8 @@ export type EditorAction =
   | { type: "exitFocus" }
   | { type: "focusParent" }
   | { type: "moveNodes"; nodeIds: NodeId[]; dx: number; dy: number }
+  | { type: "setSelection"; selection: Selection }
+  | { type: "setViewport"; viewport: Viewport }
   | { type: "addStickyNote"; note: StickyNote }
   | { type: "moveStickyNote"; noteId: string; dx: number; dy: number }
   | { type: "deleteStickyNote"; noteId: string }
@@ -109,6 +116,7 @@ export type EditorAction =
   | { type: "resetEdgeAnchors"; edgeKey: string }
   | { type: "commitInsertAndContinue" }
   | { type: "commitInsert" }
+  | { type: "cancelInsert" }
   | { type: "applyDocumentState"; docId: DocId; nextState: DocumentState }
   | { type: "undo" }
   | { type: "redo" };
@@ -116,6 +124,7 @@ export type EditorAction =
 export function createInitialAppState(): EditorAppState {
   const doc1 = createInitialDocument("");
   const workspace: Workspace = {
+    schemaVersion: 2,
     tabs: [{ docId: doc1.docId }],
     activeDocId: doc1.docId,
     documents: {
@@ -142,6 +151,12 @@ function normalizeNote(note: string): string | undefined {
 
 function bumpSaveRevision(state: EditorAppState): EditorAppState {
   return { ...state, saveRevision: state.saveRevision + 1 };
+}
+
+function withoutLegacyGroups<T extends object>(value: T): T {
+  const copy = { ...value } as T & { groups?: unknown };
+  delete copy.groups;
+  return copy;
 }
 
 function edgeAnchorRecordsEqual(
@@ -175,21 +190,41 @@ function sanitizeWorkspace(workspace: Workspace): Workspace {
       edgeAnchors: sanitizeEdgeAnchors({ nodes }, doc.edgeAnchors),
       customLinks: sanitizeCustomLinks({ nodes }, doc.customLinks),
       stickyNotes: sanitizeStickyNotes(doc.stickyNotes),
+      cardSizes: Object.fromEntries(
+        Object.entries(nodes).map(([id, node]) => {
+          const saved = doc.cardSizes?.[id];
+          return [id, saved ?? getNodeSize(node)];
+        }),
+      ),
       undoStack: (doc.undoStack ?? []).map((snapshot) => ({
-        ...snapshot,
+        ...withoutLegacyGroups(snapshot),
         nodePositions: sanitizeNodePositions(snapshot, snapshot.nodePositions),
         edgeAnchors: sanitizeEdgeAnchors(snapshot, snapshot.edgeAnchors),
         customLinks: sanitizeCustomLinks(snapshot, snapshot.customLinks),
         stickyNotes: sanitizeStickyNotes(snapshot.stickyNotes),
+        cardSizes: Object.fromEntries(
+          Object.entries(snapshot.nodes ?? {}).map(([id, node]) => [
+            id,
+            snapshot.cardSizes?.[id] ?? getNodeSize(node),
+          ]),
+        ),
       })),
       redoStack: (doc.redoStack ?? []).map((snapshot) => ({
-        ...snapshot,
+        ...withoutLegacyGroups(snapshot),
         nodePositions: sanitizeNodePositions(snapshot, snapshot.nodePositions),
         edgeAnchors: sanitizeEdgeAnchors(snapshot, snapshot.edgeAnchors),
         customLinks: sanitizeCustomLinks(snapshot, snapshot.customLinks),
         stickyNotes: sanitizeStickyNotes(snapshot.stickyNotes),
+        cardSizes: Object.fromEntries(
+          Object.entries(snapshot.nodes ?? {}).map(([id, node]) => [
+            id,
+            snapshot.cardSizes?.[id] ?? getNodeSize(node),
+          ]),
+        ),
       })),
       collapsedNodeIds: sanitizeCollapsedNodeIds(doc, doc.collapsedNodeIds),
+      viewport: sanitizeViewport(doc.viewport),
+      selection: sanitizeSelection(doc.selection, nodes, doc.cursorId),
     });
   }
   const tabs = workspace.tabs.filter(
@@ -198,6 +233,7 @@ function sanitizeWorkspace(workspace: Workspace): Workspace {
   if (tabs.length === 0) {
     const created = createInitialDocument("");
     return {
+      schemaVersion: 2,
       tabs: [{ docId: created.docId }],
       activeDocId: created.docId,
       documents: { [created.docId]: created.doc },
@@ -210,17 +246,47 @@ function sanitizeWorkspace(workspace: Workspace): Workspace {
 
   return {
     ...workspace,
+    schemaVersion: 2,
     documents,
     tabs,
     activeDocId,
   };
 }
 
+function sanitizeViewport(viewport: Viewport | undefined): Viewport {
+  const x = Number.isFinite(viewport?.x) ? viewport!.x : 0;
+  const y = Number.isFinite(viewport?.y) ? viewport!.y : 0;
+  const zoom = Math.min(2, Math.max(0.5, Number.isFinite(viewport?.zoom) ? viewport!.zoom : 1));
+  return {
+    x,
+    y,
+    zoom,
+    initialized: viewport?.initialized ?? (x !== 0 || y !== 0 || zoom !== 1),
+  };
+}
+
+function sanitizeSelection(
+  selection: Selection | undefined,
+  nodes: Document["nodes"],
+  fallbackId: NodeId,
+): Selection {
+  const cardIds = [...new Set(selection?.cardIds ?? [fallbackId])].filter((id) => nodes[id]);
+  const lastEditedCardId = selection?.lastEditedCardId;
+  return {
+    cardIds,
+    lastEditedCardId: lastEditedCardId && nodes[lastEditedCardId] ? lastEditedCardId : fallbackId,
+  };
+}
+
 function sanitizeDocumentViewState(doc: Document): Document {
+  const hasLegacyGroups = Object.prototype.hasOwnProperty.call(doc, "groups");
   const nodePositions = sanitizeNodePositions(doc, doc.nodePositions);
   const edgeAnchors = sanitizeEdgeAnchors(doc, doc.edgeAnchors);
   const customLinks = sanitizeCustomLinks(doc, doc.customLinks);
   const stickyNotes = sanitizeStickyNotes(doc.stickyNotes);
+  const cardSizes = Object.fromEntries(
+    Object.entries(doc.nodes).map(([id, node]) => [id, doc.cardSizes?.[id] ?? getNodeSize(node)]),
+  );
   const cursorAncestors = new Set(getAncestorIds(doc, doc.cursorId));
   const collapsedNodeIds = sanitizeCollapsedNodeIds(
     doc,
@@ -275,9 +341,27 @@ function sanitizeDocumentViewState(doc: Document): Document {
           current?.position.y === next.position.y
         );
       });
-    if (positionsEqual && edgeAnchorsEqual && customLinksEqual && stickyNotesEqual) return doc;
+    const sizesEqual = JSON.stringify(cardSizes) === JSON.stringify(doc.cardSizes ?? {});
+    if (
+      !hasLegacyGroups &&
+      positionsEqual &&
+      edgeAnchorsEqual &&
+      customLinksEqual &&
+      stickyNotesEqual &&
+      sizesEqual
+    ) return doc;
   }
-  return { ...doc, collapsedNodeIds, nodePositions, edgeAnchors, customLinks, stickyNotes };
+  return {
+    ...withoutLegacyGroups(doc),
+    collapsedNodeIds,
+    nodePositions,
+    edgeAnchors,
+    customLinks,
+    stickyNotes,
+    cardSizes,
+    viewport: sanitizeViewport(doc.viewport),
+    selection: sanitizeSelection(doc.selection, doc.nodes, doc.cursorId),
+  };
 }
 
 function normalizeFocusRoot(state: EditorAppState): EditorAppState {
@@ -463,6 +547,7 @@ export function editorReducer(state: EditorAppState, action: EditorAction): Edit
           }),
           customLinks: sanitizeCustomLinks(action.nextState, action.nextState.customLinks),
           stickyNotes: sanitizeStickyNotes(action.nextState.stickyNotes),
+          cardSizes: action.nextState.cardSizes ?? doc.cardSizes,
         });
         const currentSnapshot = cloneDocumentState(doc);
         if (documentStateEquals(currentSnapshot, normalizedNext)) return doc;
@@ -497,6 +582,62 @@ export function editorReducer(state: EditorAppState, action: EditorAction): Edit
       });
       if (next === state) return state;
       return bumpSaveRevision(normalizeFocusRoot(next));
+    }
+    case "deleteNodes": {
+      if (state.mode === "insert") return state;
+      const next = updateActiveDoc(state, (doc) => {
+        const ids = [...new Set(action.nodeIds)].filter((id) => id !== doc.rootId && doc.nodes[id]);
+        if (ids.length === 0) return doc;
+        const snapshot = cloneDocumentState(doc);
+        let updated = doc;
+        for (const nodeId of ids) {
+          if (!updated.nodes[nodeId]) continue;
+          updated = deleteCursorNodeAndPromoteChildren({ ...updated, cursorId: nodeId });
+        }
+        return sanitizeDocumentViewState({
+          ...updated,
+          undoStack: [...doc.undoStack, snapshot],
+          redoStack: [],
+          selection: { ...doc.selection, cardIds: [updated.cursorId] },
+        });
+      });
+      return next === state ? state : bumpSaveRevision(normalizeFocusRoot(next));
+    }
+    case "duplicateNodes": {
+      if (state.mode === "insert") return state;
+      const next = updateActiveDoc(state, (doc) => {
+        const sourceIds = [...new Set(action.nodeIds)].filter((id) => doc.nodes[id]);
+        if (sourceIds.length === 0) return doc;
+        const snapshot = cloneDocumentState(doc);
+        const nodes = { ...doc.nodes };
+        const nodePositions = { ...doc.nodePositions };
+        const cardSizes = { ...doc.cardSizes };
+        const createdIds: NodeId[] = [];
+        for (const sourceId of sourceIds) {
+          const source = doc.nodes[sourceId];
+          const id = generateId();
+          const parentId = source.parentId ?? doc.rootId;
+          nodes[id] = { ...source, id, parentId, childrenIds: [] };
+          const parent = nodes[parentId];
+          if (parent) nodes[parentId] = { ...parent, childrenIds: [...parent.childrenIds, id] };
+          const position = doc.nodePositions[sourceId] ?? { x: 0, y: 0 };
+          nodePositions[id] = { x: position.x + 24, y: position.y + 24 };
+          cardSizes[id] = { ...(doc.cardSizes[sourceId] ?? getNodeSize(source)) };
+          createdIds.push(id);
+        }
+        const cursorId = createdIds[0];
+        return {
+          ...doc,
+          nodes,
+          nodePositions,
+          cardSizes,
+          cursorId,
+          selection: { cardIds: createdIds, lastEditedCardId: cursorId },
+          undoStack: [...doc.undoStack, snapshot],
+          redoStack: [],
+        };
+      });
+      return next === state ? state : bumpSaveRevision(next);
     }
     case "selectNode": {
       if (state.mode === "insert") return state;
@@ -666,7 +807,16 @@ export function editorReducer(state: EditorAppState, action: EditorAction): Edit
     }
     case "swapSibling": {
       if (state.mode === "insert") return state;
-      const next = updateActiveDoc(state, (doc) => swapSibling(doc, action.direction));
+      const next = updateActiveDoc(state, (doc) => {
+        const snapshot = cloneDocumentState(doc);
+        const updated = swapSibling(doc, action.direction);
+        if (updated === doc) return doc;
+        return {
+          ...updated,
+          undoStack: [...doc.undoStack, snapshot],
+          redoStack: [],
+        };
+      });
       if (next === state) return state;
       return bumpSaveRevision(next);
     }
@@ -695,9 +845,13 @@ export function editorReducer(state: EditorAppState, action: EditorAction): Edit
       if (state.mode === "insert") return state;
       const docId = state.workspace.activeDocId;
       const before = cloneDocumentState(state.workspace.documents[docId]);
-      const nextState = updateActiveDoc(state, (doc) =>
-        sanitizeDocumentViewState(addChild(doc).updated),
-      );
+      const nextState = updateActiveDoc(state, (doc) => {
+        const result = addChild(doc);
+        return sanitizeDocumentViewState({
+          ...result.updated,
+          selection: { cardIds: [result.newNodeId], lastEditedCardId: result.newNodeId },
+        });
+      });
       return bumpSaveRevision({
         ...nextState,
         mode: "insert",
@@ -718,6 +872,7 @@ export function editorReducer(state: EditorAppState, action: EditorAction): Edit
             ...result.updated.nodePositions,
             [result.newNodeId]: { ...action.point },
           },
+          selection: { cardIds: [result.newNodeId], lastEditedCardId: result.newNodeId },
         });
       });
       return bumpSaveRevision({
@@ -732,7 +887,13 @@ export function editorReducer(state: EditorAppState, action: EditorAction): Edit
       if (state.mode === "insert") return state;
       const docId = state.workspace.activeDocId;
       const before = cloneDocumentState(state.workspace.documents[docId]);
-      const nextState = updateActiveDoc(state, (doc) => addSibling(doc).updated);
+      const nextState = updateActiveDoc(state, (doc) => {
+        const result = addSibling(doc);
+        return {
+          ...result.updated,
+          selection: { cardIds: [result.newNodeId], lastEditedCardId: result.newNodeId },
+        };
+      });
       return bumpSaveRevision({
         ...normalizeFocusRoot(nextState),
         mode: "insert",
@@ -756,6 +917,8 @@ export function editorReducer(state: EditorAppState, action: EditorAction): Edit
         const nextDoc = {
           ...doc,
           nodes,
+          cardSizes: { ...doc.cardSizes, [cursor.id]: getNodeSize(nextCursor) },
+          selection: { ...doc.selection, lastEditedCardId: cursor.id },
         };
         const nextSize = getNodeSize(nextCursor);
         if (
@@ -926,6 +1089,20 @@ export function editorReducer(state: EditorAppState, action: EditorAction): Edit
           redoStack: [],
         };
       });
+      return next === state ? state : bumpSaveRevision(next);
+    }
+    case "setSelection": {
+      const next = updateActiveDoc(state, (doc) => ({
+        ...doc,
+        selection: sanitizeSelection(action.selection, doc.nodes, doc.cursorId),
+      }));
+      return next === state ? state : bumpSaveRevision(next);
+    }
+    case "setViewport": {
+      const next = updateActiveDoc(state, (doc) => ({
+        ...doc,
+        viewport: sanitizeViewport(action.viewport),
+      }));
       return next === state ? state : bumpSaveRevision(next);
     }
     case "addStickyNote": {
@@ -1120,6 +1297,22 @@ export function editorReducer(state: EditorAppState, action: EditorAction): Edit
         }),
       );
 
+      return bumpSaveRevision(next);
+    }
+    case "cancelInsert": {
+      if (state.mode !== "insert") return state;
+      const origin = state.insertOrigin;
+      const docId = state.workspace.activeDocId;
+      if (!origin || origin.docId !== docId) {
+        return { ...state, mode: "normal", insertOrigin: null };
+      }
+      const next = updateActiveDoc(
+        { ...state, mode: "normal", insertOrigin: null },
+        (doc) => ({
+          ...doc,
+          ...cloneDocumentState(origin.snapshot),
+        }),
+      );
       return bumpSaveRevision(next);
     }
     case "commitInsertAndContinue": {

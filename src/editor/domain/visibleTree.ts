@@ -144,7 +144,18 @@ export function buildVisibleTreeProjection(
   const cursorId = visibleNodeIds.has(doc.cursorId) ? doc.cursorId : rootId;
 
   return {
-    state: { rootId, cursorId, nodes, nodePositions, edgeAnchors, customLinks, stickyNotes },
+    state: {
+      rootId,
+      cursorId,
+      nodes,
+      nodePositions,
+      edgeAnchors,
+      customLinks,
+      stickyNotes,
+      cardSizes: Object.fromEntries(
+        [...visibleNodeIds].flatMap((id) => doc.cardSizes?.[id] ? [[id, doc.cardSizes[id]]] : []),
+      ),
+    },
     visibleNodeIds,
     hiddenDescendantCounts,
   };

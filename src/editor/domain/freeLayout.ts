@@ -107,7 +107,7 @@ export function makeSpaceForNode(
     const nextActiveRoots = new Set(activeRoots).add(rootId);
     const branchIds = branchIdsFor(rootId);
     const branchSet = new Set(branchIds);
-    let currentBlockers = [...blockers];
+    const currentBlockers = [...blockers];
 
     for (let attempt = 0; attempt < 100; attempt += 1) {
       let dy = 0;

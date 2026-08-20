@@ -21,9 +21,12 @@ export function createInitialDocument(title: string): { docId: DocId; doc: Docum
     edgeAnchors: {},
     customLinks: {},
     stickyNotes: {},
+    cardSizes: { [rootId]: { width: 180, height: 34 } },
     collapsedNodeIds: [],
     undoStack: [],
     redoStack: [],
+    viewport: { x: 0, y: 0, zoom: 1, initialized: false },
+    selection: { cardIds: [rootId], lastEditedCardId: rootId },
   };
 
   return {

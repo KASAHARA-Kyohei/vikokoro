@@ -6,6 +6,7 @@ import { useDeleteChord } from "./app/keyboard/useDeleteChord";
 import { useFoldChord } from "./app/keyboard/useFoldChord";
 import { useEditorUiSession } from "./app/session/useEditorUiSession";
 import { EditorView } from "./editor/EditorView";
+import { computeLayout } from "./editor/layout";
 import { TabBar } from "./editor/TabBar";
 import { canCreateCustomLink } from "./editor/domain/customLinks";
 import { makeEdgeKey } from "./editor/domain/edgeAnchors";
@@ -18,6 +19,8 @@ import {
 } from "./editor/domain/visibleTree";
 import { buildJumpSession } from "./features/jump/model";
 import { filterPaletteCommands, type PaletteCommand } from "./features/palette/model";
+import { createMockThoughtOrganizer } from "./features/organizer/mockThoughtOrganizer";
+import type { OrganizePreview } from "./features/organizer/types";
 import { buildSearchResults } from "./features/search/model";
 import { useAppPreferences } from "./hooks/useAppPreferences";
 import { useWorkspacePersistence } from "./hooks/useWorkspacePersistence";
@@ -40,6 +43,7 @@ function App() {
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const { reset: resetDeleteChord, consumeD: consumeDeleteChord } = useDeleteChord();
   const { reset: resetFoldChord, consume: consumeFoldChord } = useFoldChord();
+  const [centerCursorRequest, setCenterCursorRequest] = useState(0);
 
   const {
     helpOpen,
@@ -100,6 +104,31 @@ function App() {
   );
   const closeConfirmOpen = state.closeConfirmDocId !== null;
   const [selectedNodeIds, setSelectedNodeIds] = useState<Set<NodeId>>(new Set());
+  const [organizePreview, setOrganizePreview] = useState<OrganizePreview | null>(null);
+  const thoughtOrganizer = useMemo(() => createMockThoughtOrganizer(), []);
+
+  const requestOrganizePreview = useCallback(async () => {
+    const cards = [...selectedNodeIds]
+      .map((id) => activeDoc.nodes[id])
+      .filter((card): card is NonNullable<typeof card> => Boolean(card))
+      .map(({ id, text: cardText }) => ({ id, text: cardText }));
+    if (cards.length === 0) return;
+    const request = { cards, instruction: "選択した思考を自然なまとまりに整理してください" };
+    const suggestion = await thoughtOrganizer.organize(request);
+    setOrganizePreview({ request, suggestion });
+  }, [activeDoc.nodes, selectedNodeIds, thoughtOrganizer]);
+
+  const applySelection = useCallback((cardIds: Iterable<NodeId>) => {
+    const nextIds = [...cardIds].filter((id) => activeDoc.nodes[id]);
+    setSelectedNodeIds(new Set(nextIds));
+    dispatch({
+      type: "setSelection",
+      selection: {
+        cardIds: nextIds,
+        lastEditedCardId: activeDoc.selection?.lastEditedCardId ?? activeDoc.cursorId,
+      },
+    });
+  }, [activeDoc.cursorId, activeDoc.nodes, activeDoc.selection?.lastEditedCardId]);
   const [selectedEdgeKey, setSelectedEdgeKey] = useState<string | null>(null);
   const [selectedCustomLinkId, setSelectedCustomLinkId] = useState<string | null>(null);
   const [selectedStickyNoteId, setSelectedStickyNoteId] = useState<string | null>(null);
@@ -133,6 +162,13 @@ function App() {
     setJumpPrefix("");
   }, [activeDoc, setJumpPrefix, setJumpSession, visibleDoc]);
 
+  const persistViewport = useCallback(
+    (viewport: Viewport) => {
+      dispatch({ type: "setViewport", viewport });
+    },
+    [],
+  );
+
   const zoomPan = useZoomPan({
     activeDocId: state.workspace.activeDocId,
     mode: state.mode,
@@ -146,10 +182,11 @@ function App() {
       closeConfirmOpen ||
       jumpActive,
     viewportRef,
+    initialViewport: activeDoc.viewport ?? { x: 0, y: 0, zoom: 1, initialized: false },
+    onViewportChange: persistViewport,
   });
 
   useEffect(() => {
-    setSelectedNodeIds(new Set());
     setSelectedEdgeKey(null);
     setSelectedCustomLinkId(null);
     setSelectedStickyNoteId(null);
@@ -158,6 +195,10 @@ function App() {
     setRelatedLinkSourceNodeId(null);
     setRelatedLinkJumpSourceNodeId(null);
   }, [state.workspace.activeDocId, state.focusRootId]);
+
+  useEffect(() => {
+    setSelectedNodeIds(new Set(activeDoc.selection?.cardIds ?? []));
+  }, [activeDoc.selection]);
 
   useEffect(() => {
     if (!selectedEdgeKey) return;
@@ -298,7 +339,7 @@ function App() {
         subtitle: paletteText.addStickyNoteSubtitle,
         run: () => {
           setStickyPlacementActive(true);
-          setSelectedNodeIds(new Set());
+          applySelection([]);
           setSelectedEdgeKey(null);
           setSelectedCustomLinkId(null);
           setSelectedStickyNoteId(null);
@@ -397,6 +438,7 @@ function App() {
     return filterPaletteCommands(commands, paletteQuery);
   }, [
     activeDoc.cursorId,
+    applySelection,
     dispatch,
     paletteQuery,
     selectedCustomLinkId,
@@ -540,7 +582,7 @@ function App() {
         position: point,
       },
     });
-    setSelectedNodeIds(new Set());
+    applySelection([]);
     setSelectedEdgeKey(null);
     setSelectedCustomLinkId(null);
     setSelectedStickyNoteId(noteId);
@@ -595,10 +637,34 @@ function App() {
         return;
       }
 
+      const commandKey = event.metaKey || event.ctrlKey;
+      if (commandLayerActive && commandKey && event.key === "Enter") {
+        event.preventDefault();
+        const viewport = viewportRef.current;
+        if (!viewport) return;
+        const layout = computeLayout(visibleDoc);
+        dispatch({
+          type: "addChildAtPosition",
+          point: {
+            x: (viewport.scrollLeft + viewport.clientWidth / 2) / zoomPan.zoom - layout.offset.x,
+            y: (viewport.scrollTop + viewport.clientHeight / 2) / zoomPan.zoom - layout.offset.y,
+          },
+        });
+        return;
+      }
+
+      if (commandLayerActive && commandKey && event.key.toLowerCase() === "d") {
+        event.preventDefault();
+        const ids = selectedNodeIds.size > 0 ? [...selectedNodeIds] : [activeDoc.cursorId];
+        dispatch({ type: "duplicateNodes", nodeIds: ids });
+        return;
+      }
+
       if (commandLayerActive && !event.ctrlKey && !event.metaKey && !event.altKey) {
         const foldAction = consumeFoldChord(event.key);
         if (foldAction) {
           event.preventDefault();
+          if (foldAction === "center") setCenterCursorRequest((current) => current + 1);
           if (foldAction === "toggle") dispatch({ type: "toggleNodeCollapsed" });
           if (foldAction === "collapse") dispatch({ type: "collapseNode" });
           if (foldAction === "expand") dispatch({ type: "expandNode" });
@@ -626,6 +692,18 @@ function App() {
           dispatch({ type: "deleteCustomLink", linkId: selectedCustomLinkId });
           setSelectedCustomLinkId(null);
         }
+        return;
+      }
+
+      if (
+        commandLayerActive &&
+        !selectedStickyNoteId &&
+        !selectedCustomLinkId &&
+        (event.key === "Delete" || event.key === "Backspace") &&
+        selectedNodeIds.size > 0
+      ) {
+        event.preventDefault();
+        dispatch({ type: "deleteNodes", nodeIds: [...selectedNodeIds] });
         return;
       }
 
@@ -755,6 +833,8 @@ function App() {
     selectedStickyNoteId,
     selectedNodeIds,
     activeDoc,
+    visibleDoc,
+    zoomPan.zoom,
   ]);
 
   if (!state.hydrated) {
@@ -777,6 +857,40 @@ function App() {
         onNew={() => dispatch({ type: "createDoc" })}
         language={language}
       />
+      <div className="canvasToolbar" aria-label="マインドマップの操作">
+        <div className="canvasToolbarRight">
+          <button
+            type="button"
+            className="organizeButton"
+            disabled={selectedNodeIds.size === 0}
+            onClick={() => void requestOrganizePreview()}
+          >
+            整理案
+          </button>
+          <span className="canvasToolbarHint">⌘Enter ノード · Space ドラッグ</span>
+          <div className="zoomControls" aria-label="ズーム">
+            <button type="button" onClick={zoomPan.zoomOut} aria-label="ズームアウト">−</button>
+            <button type="button" onClick={zoomPan.resetZoom}>{Math.round(zoomPan.zoom * 100)}%</button>
+            <button type="button" onClick={zoomPan.zoomIn} aria-label="ズームイン">＋</button>
+          </div>
+        </div>
+      </div>
+      {organizePreview ? (
+        <aside className="organizePreview" aria-label="AI整理案のプレビュー">
+          <div>
+            <strong>整理案（モック）</strong>
+            <span>{organizePreview.suggestion.summary}</span>
+          </div>
+          <div className="organizePreviewGroups">
+            {organizePreview.suggestion.groups.map((group) => (
+              <span key={`${group.title}:${group.cardIds.join("-")}`}>{group.title} · {group.cardIds.length}枚</span>
+            ))}
+          </div>
+          <div className="organizePreviewActions">
+            <button type="button" onClick={() => setOrganizePreview(null)}>閉じる</button>
+          </div>
+        </aside>
+      ) : null}
       {state.focusRootId ? (
         <div className="focusBreadcrumb" aria-label={text.focus.breadcrumbLabel}>
           <button
@@ -841,6 +955,7 @@ function App() {
           viewportRef={viewportRef}
           panGestureActive={zoomPan.panGestureActive}
           viewSessionKey={`${state.workspace.activeDocId}:${visibleProjection.state.rootId}`}
+          centerCursorRequest={centerCursorRequest}
           highlightedNodeIds={highlightedNodeIds}
           activeHighlightedNodeId={activeSearchNodeId}
           jumpHints={jumpSession?.nodeToHint ?? null}
@@ -860,32 +975,37 @@ function App() {
             setSelectedStickyNoteId(null);
             dispatch({ type: "selectNode", nodeId });
           }}
-          onSelectionChange={setSelectedNodeIds}
+          onBeginCardEdit={(nodeId) => {
+            dispatch({ type: "selectNode", nodeId });
+            dispatch({ type: "enterInsert" });
+          }}
+          onSelectionChange={(nodeIds) => applySelection(nodeIds)}
           onSelectEdge={(edgeKey) => {
-            setSelectedNodeIds(new Set());
+            applySelection([]);
             setSelectedEdgeKey(edgeKey);
             setSelectedCustomLinkId(null);
             setSelectedStickyNoteId(null);
           }}
           onSelectCustomLink={(linkId) => {
-            setSelectedNodeIds(new Set());
+            applySelection([]);
             setSelectedEdgeKey(null);
             setSelectedCustomLinkId(linkId);
             setSelectedStickyNoteId(null);
           }}
           onSelectStickyNote={(noteId) => {
-            setSelectedNodeIds(new Set());
+            applySelection([]);
             setSelectedEdgeKey(null);
             setSelectedCustomLinkId(null);
             setSelectedStickyNoteId(noteId);
           }}
           onClearSelection={() => {
+            applySelection([]);
             setSelectedEdgeKey(null);
             setSelectedCustomLinkId(null);
             setSelectedStickyNoteId(null);
           }}
           onBeginStickyEdit={(noteId) => {
-            setSelectedNodeIds(new Set());
+            applySelection([]);
             setSelectedEdgeKey(null);
             setSelectedCustomLinkId(null);
             setSelectedStickyNoteId(noteId);
@@ -907,7 +1027,7 @@ function App() {
             dispatch({ type: "moveNodes", nodeIds, dx, dy })
           }
           onCreateChildAt={(point) => {
-            setSelectedNodeIds(new Set());
+            applySelection([]);
             setSelectedEdgeKey(null);
             setSelectedCustomLinkId(null);
             setSelectedStickyNoteId(null);
@@ -922,7 +1042,8 @@ function App() {
           }
           onChangeText={(nodeText) => dispatch({ type: "setCursorText", text: nodeText })}
           onEnterCommit={() => dispatch({ type: "commitInsert" })}
-          onEsc={() => dispatch({ type: "commitInsert" })}
+          onEsc={() => dispatch({ type: "cancelInsert" })}
+          onViewportChange={persistViewport}
         />
         <CloseConfirmModal
           open={closeConfirmOpen}
