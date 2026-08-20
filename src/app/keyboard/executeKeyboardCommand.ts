@@ -1,4 +1,5 @@
 import type { EditorAction } from "../../editor/state";
+import type { SpatialDirection } from "../../editor/domain/spatialNavigation";
 import type { KeyboardCommand } from "./types";
 
 type CommandExecutor = {
@@ -17,6 +18,7 @@ type CommandExecutor = {
   closeJump: () => void;
   selectNode: (nodeId: string) => void;
   nudgeSelection: (dx: number, dy: number) => void;
+  moveCursorVisual: (direction: SpatialDirection) => void;
 };
 
 export function executeKeyboardCommand(command: KeyboardCommand, executor: CommandExecutor): void {
@@ -76,6 +78,9 @@ export function executeKeyboardCommand(command: KeyboardCommand, executor: Comma
       return;
     case "nudgeSelection":
       executor.nudgeSelection(command.dx, command.dy);
+      return;
+    case "moveCursorVisual":
+      executor.moveCursorVisual(command.direction);
       return;
     default:
       return;

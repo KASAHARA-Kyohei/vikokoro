@@ -22,6 +22,8 @@ There is no direct external AI API connection. The current boundary is intended 
 
 `Tab` follows the latest child direction, then the selected node's incoming direction, and finally east. `Enter` creates a sibling in the current direction. Dragging a node freely updates its direction to the nearest 45-degree angle; moving a parent and child together preserves the child's direction.
 
+In Normal mode, `h/j/k/l` moves to the nearest visible node on screen left/down/up/right, including nodes outside the current viewport. Arrow keys keep hierarchy navigation: `←/↓/↑/→` move to the parent/next sibling/previous sibling/child. Shift+HJKL and Alt+HJKL keep their existing editing and nudge actions.
+
 ## Development
 
 ```sh
