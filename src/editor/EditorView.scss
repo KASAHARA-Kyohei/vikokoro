@@ -566,6 +566,10 @@
   opacity: 0.35;
 }
 
+.nodeEditing .nodeText {
+  visibility: hidden;
+}
+
 .nodeInput {
   position: absolute;
   z-index: 2;
