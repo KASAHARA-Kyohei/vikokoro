@@ -1,7 +1,7 @@
 import type { Mode } from "../editor/types";
 import type { AppLanguage, ThemeName } from "../hooks/useAppPreferences";
 
-type SaveStatusLabel = "saved" | "saving" | "unavailable";
+export type SaveStatusLabel = "saved" | "saving" | "error" | "unavailable";
 
 export const APP_TEXT = {
   ja: {
@@ -17,6 +17,13 @@ export const APP_TEXT = {
       jump: "ジャンプ",
       sticky: "付箋",
       stickyPlacement: "配置中",
+    },
+    hints: {
+      normal: "hjkl: 画面方向移動 · 矢印: 階層移動 · a: 8方向追加",
+      insert: "入力中: Enterで確定 · Tabで子ノード · Escで取消",
+      direction: "方向を選択: Q/W/E/A/D/Z/X/C · Escで取消",
+      sticky: "付箋を配置中: クリックで配置 · Escで取消",
+      selected: "選択中: ⌘Enterでノード作成 · Shift+H/Lで階層移動",
     },
     tabs: {
       untitled: "無題",
@@ -76,6 +83,13 @@ export const APP_TEXT = {
       sticky: "Sticky",
       stickyPlacement: "Placing",
     },
+    hints: {
+      normal: "HJKL: move by screen direction · Arrows: tree navigation · A: add in 8 directions",
+      insert: "Insert mode: Enter to commit · Tab for child · Esc to cancel",
+      direction: "Choose a direction: Q/W/E/A/D/Z/X/C · Esc to cancel",
+      sticky: "Placing a sticky note: click to place · Esc to cancel",
+      selected: "Selected: ⌘Enter to create a node · Shift+H/L to change hierarchy",
+    },
     tabs: {
       untitled: "Untitled",
       missing: "(missing)",
@@ -122,6 +136,23 @@ export const APP_TEXT = {
   },
 } as const;
 
+export function getContextualHint(
+  language: AppLanguage,
+  options: {
+    mode: Mode;
+    directionPickerOpen: boolean;
+    stickyPlacementActive: boolean;
+    selectedCount: number;
+  },
+): string {
+  const hints = APP_TEXT[language].hints;
+  if (options.directionPickerOpen) return hints.direction;
+  if (options.stickyPlacementActive) return hints.sticky;
+  if (options.mode === "insert") return hints.insert;
+  if (options.selectedCount > 0) return hints.selected;
+  return hints.normal;
+}
+
 const THEME_LABELS: Record<AppLanguage, Record<ThemeName, string>> = {
   ja: {
     dark: "ダーク",
@@ -163,11 +194,13 @@ const SAVE_STATUS_LABELS: Record<AppLanguage, Record<SaveStatusLabel, string>> =
   ja: {
     saved: "保存済み",
     saving: "保存中…",
+    error: "保存失敗・再試行",
     unavailable: "ローカル",
   },
   en: {
     saved: "Saved",
     saving: "Saving…",
+    error: "Save failed · Retry",
     unavailable: "Local",
   },
 };

@@ -41,6 +41,21 @@
   letter-spacing: 0.02em;
 }
 
+.operationNotice {
+  position: fixed;
+  right: 16px;
+  bottom: 46px;
+  z-index: 20;
+  max-width: min(420px, calc(100vw - 32px));
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--surface), transparent 4%);
+  color: var(--text);
+  box-shadow: 0 8px 24px color-mix(in srgb, #000, transparent 78%);
+  font-size: 12px;
+}
+
 .canvasToolbarRight,
 .zoomControls {
   display: flex;
@@ -65,6 +80,36 @@
 
 .zoomControls button:first-child { border-radius: 7px 0 0 7px; }
 .zoomControls button:last-child { border-radius: 0 7px 7px 0; }
+
+.statusRetryButton {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--dangerText, var(--text));
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.viewActionButton {
+  min-height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.viewActionButton:hover:not(:disabled) {
+  background: var(--surfaceHover);
+}
+
+.viewActionButton:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
 
 .organizeButton,
 .organizePreview button {

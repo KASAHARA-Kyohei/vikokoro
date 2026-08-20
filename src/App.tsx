@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { isTauri } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import "./App.scss";
 import { executeKeyboardCommand } from "./app/keyboard/executeKeyboardCommand";
 import { resolveKeyboardCommand } from "./app/keyboard/resolveKeyboardCommand";
@@ -6,7 +8,7 @@ import { useDeleteChord } from "./app/keyboard/useDeleteChord";
 import { useFoldChord } from "./app/keyboard/useFoldChord";
 import { useEditorUiSession } from "./app/session/useEditorUiSession";
 import { EditorView } from "./editor/EditorView";
-import { computeLayout } from "./editor/layout";
+import { computeLayout, STICKY_NOTE_HEIGHT, STICKY_NOTE_WIDTH } from "./editor/layout";
 import { findSpatialNeighbor } from "./editor/domain/spatialNavigation";
 import { TabBar } from "./editor/TabBar";
 import { canCreateCustomLink } from "./editor/domain/customLinks";
@@ -35,7 +37,12 @@ import { buildSearchResults } from "./features/search/model";
 import { useAppPreferences } from "./hooks/useAppPreferences";
 import { useWorkspacePersistence } from "./hooks/useWorkspacePersistence";
 import { useZoomPan } from "./hooks/useZoomPan";
-import { APP_TEXT, getModeLabel, getSaveStatusLabel } from "./i18n/uiText";
+import {
+  APP_TEXT,
+  getContextualHint,
+  getModeLabel,
+  getSaveStatusLabel,
+} from "./i18n/uiText";
 import { createTauriWorkspaceRepository } from "./persistence";
 import { CloseConfirmModal } from "./ui/modals/CloseConfirmModal";
 import { CommandPaletteModal } from "./ui/modals/CommandPaletteModal";
@@ -51,10 +58,30 @@ function App() {
   const { theme, setTheme, language, setLanguage } = useAppPreferences();
   const text = APP_TEXT[language];
   const viewportRef = useRef<HTMLDivElement | null>(null);
+  const closingWindowRef = useRef(false);
   const { reset: resetDeleteChord, consumeD: consumeDeleteChord } = useDeleteChord();
   const { reset: resetFoldChord, consume: consumeFoldChord } = useFoldChord();
   const [centerCursorRequest, setCenterCursorRequest] = useState(0);
   const [directionPickerNodeId, setDirectionPickerNodeId] = useState<NodeId | null>(null);
+  const [operationNotice, setOperationNotice] = useState<string | null>(null);
+  const operationNoticeTimerRef = useRef<number | null>(null);
+
+  const showOperationNotice = useCallback((message: string) => {
+    setOperationNotice(message);
+    if (operationNoticeTimerRef.current !== null) {
+      window.clearTimeout(operationNoticeTimerRef.current);
+    }
+    operationNoticeTimerRef.current = window.setTimeout(() => {
+      operationNoticeTimerRef.current = null;
+      setOperationNotice(null);
+    }, 2400);
+  }, []);
+
+  useEffect(() => () => {
+    if (operationNoticeTimerRef.current !== null) {
+      window.clearTimeout(operationNoticeTimerRef.current);
+    }
+  }, []);
 
   const {
     helpOpen,
@@ -95,6 +122,32 @@ function App() {
     () => ({ ...activeDoc, ...visibleProjection.state }),
     [activeDoc, visibleProjection.state],
   );
+  const visibleLayout = useMemo(() => computeLayout(visibleDoc), [visibleDoc]);
+  const visibleBounds = useMemo(() => {
+    const entries = Object.keys(visibleLayout.positions)
+      .map((nodeId) => {
+        const position = visibleLayout.positions[nodeId];
+        const size = visibleLayout.sizes[nodeId];
+        return position && size
+          ? { left: position.x, top: position.y, right: position.x + size.width, bottom: position.y + size.height }
+          : null;
+      })
+      .filter((entry): entry is { left: number; top: number; right: number; bottom: number } => Boolean(entry));
+    for (const note of Object.values(visibleDoc.stickyNotes ?? {})) {
+      entries.push({
+        left: note.position.x,
+        top: note.position.y,
+        right: note.position.x + STICKY_NOTE_WIDTH,
+        bottom: note.position.y + STICKY_NOTE_HEIGHT,
+      });
+    }
+    if (entries.length === 0) return null;
+    const left = Math.min(...entries.map((entry) => entry.left));
+    const top = Math.min(...entries.map((entry) => entry.top));
+    const right = Math.max(...entries.map((entry) => entry.right));
+    const bottom = Math.max(...entries.map((entry) => entry.bottom));
+    return { x: left, y: top, width: right - left, height: bottom - top };
+  }, [visibleDoc.stickyNotes, visibleLayout]);
   const collapsibleNodeIds = useMemo(() => {
     const ids = new Set<NodeId>();
     for (const nodeId of visibleProjection.visibleNodeIds) {
@@ -197,6 +250,22 @@ function App() {
     onViewportChange: persistViewport,
   });
 
+  const centerSelectedNode = useCallback(() => {
+    const position = visibleLayout.positions[activeDoc.cursorId];
+    const size = visibleLayout.sizes[activeDoc.cursorId];
+    if (!position || !size) return;
+    zoomPan.centerOnWorldBounds({ x: position.x, y: position.y, width: size.width, height: size.height });
+    showOperationNotice("選択ノードを中央に表示しました");
+  }, [activeDoc.cursorId, showOperationNotice, visibleLayout, zoomPan]);
+
+  const centerRootNode = useCallback(() => {
+    const position = visibleLayout.positions[visibleDoc.rootId];
+    const size = visibleLayout.sizes[visibleDoc.rootId];
+    if (!position || !size) return;
+    zoomPan.centerOnWorldBounds({ x: position.x, y: position.y, width: size.width, height: size.height });
+    showOperationNotice("ルートを中央に表示しました");
+  }, [showOperationNotice, visibleDoc.rootId, visibleLayout, zoomPan]);
+
   useEffect(() => {
     setSelectedEdgeKey(null);
     setSelectedCustomLinkId(null);
@@ -232,9 +301,10 @@ function App() {
       setSelectedEdgeKey(null);
       setSelectedCustomLinkId(null);
       setSelectedStickyNoteId(null);
+      showOperationNotice("子ノードを作成中…");
       dispatch({ type: "addChildInDirectionAndInsert", parentId, direction });
     },
-    [applySelection],
+    [applySelection, showOperationNotice],
   );
 
   useEffect(() => {
@@ -568,13 +638,51 @@ function App() {
 
   const workspaceRepository = useMemo(() => createTauriWorkspaceRepository(), []);
 
-  const { saveStatus } = useWorkspacePersistence({
+  const {
+    saveStatus,
+    saveError,
+    tauriAvailable,
+    flushPendingSave,
+    retrySave,
+  } = useWorkspacePersistence({
     hydrated: state.hydrated,
     saveRevision: state.saveRevision,
     workspace: state.workspace,
     dispatch,
     repository: workspaceRepository,
   });
+
+  useEffect(() => {
+    if (!tauriAvailable || !isTauri()) return;
+    const currentWindow = getCurrentWindow();
+    let cancelled = false;
+    let unlisten: (() => void) | null = null;
+    void currentWindow
+      .onCloseRequested(async (event) => {
+        if (closingWindowRef.current) return;
+        event.preventDefault();
+        closingWindowRef.current = true;
+        const saved = await flushPendingSave();
+        if (cancelled) return;
+        if (saved) {
+          await currentWindow.destroy();
+          return;
+        }
+        closingWindowRef.current = false;
+      })
+      .then((remove) => {
+        if (cancelled) {
+          remove();
+          return;
+        }
+        unlisten = remove;
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, [flushPendingSave, tauriAvailable]);
 
   const moveSearch = (delta: number) => {
     if (searchResults.length === 0) return;
@@ -640,6 +748,18 @@ function App() {
   };
 
   const saveStatusLabel = getSaveStatusLabel(saveStatus, language);
+  const contextualHint = getContextualHint(language, {
+    mode: state.mode,
+    directionPickerOpen: directionPickerNodeId !== null,
+    stickyPlacementActive,
+    selectedCount: selectedNodeIds.size,
+  });
+
+  useEffect(() => {
+    if (saveStatus === "error") {
+      showOperationNotice(saveError?.message ?? saveStatusLabel);
+    }
+  }, [saveError?.message, saveStatus, saveStatusLabel, showOperationNotice]);
 
   useEffect(() => {
     if (state.mode === "normal") {
@@ -944,7 +1064,21 @@ function App() {
           >
             整理案
           </button>
-          <span className="canvasToolbarHint">⌘Enter ノード · Space ドラッグ</span>
+          <button type="button" className="viewActionButton" onClick={centerSelectedNode}>
+            選択を中央
+          </button>
+          <button type="button" className="viewActionButton" onClick={centerRootNode}>
+            ルートを中央
+          </button>
+          <button
+            type="button"
+            className="viewActionButton"
+            disabled={!visibleBounds}
+            onClick={() => visibleBounds && zoomPan.fitToWorldBounds(visibleBounds)}
+          >
+            全体表示
+          </button>
+          <span className="canvasToolbarHint" aria-live="polite">{contextualHint}</span>
           <div className="zoomControls" aria-label="ズーム">
             <button type="button" onClick={zoomPan.zoomOut} aria-label="ズームアウト">−</button>
             <button type="button" onClick={zoomPan.resetZoom}>{Math.round(zoomPan.zoom * 100)}%</button>
@@ -952,6 +1086,11 @@ function App() {
           </div>
         </div>
       </div>
+      {operationNotice ? (
+        <div className="operationNotice" role="status" aria-live="polite">
+          {operationNotice}
+        </div>
+      ) : null}
       {organizePreview ? (
         <aside className="organizePreview" aria-label="AI整理案のプレビュー">
           <div>
@@ -1012,6 +1151,8 @@ function App() {
         ref={viewportRef}
         onMouseDown={zoomPan.onViewportMouseDown}
         onWheel={zoomPan.onViewportWheel}
+        onScroll={zoomPan.onViewportScroll}
+        aria-label="マインドマップキャンバス"
         tabIndex={0}
       >
         <EditorView
@@ -1262,9 +1403,20 @@ function App() {
           </span>
           <span className="statusDot">•</span>
           <span className="statusLabel">{text.status.save}</span>
-          <span className={"statusValue " + (saveStatus === "saving" ? "statusValueSaving" : "")}>
-            {saveStatusLabel}
-          </span>
+          {saveStatus === "error" ? (
+            <button
+              type="button"
+              className="statusValue statusRetryButton"
+              title={saveError?.message}
+              onClick={() => void retrySave()}
+            >
+              {saveStatusLabel}
+            </button>
+          ) : (
+            <span className={"statusValue " + (saveStatus === "saving" ? "statusValueSaving" : "")}>
+              {saveStatusLabel}
+            </span>
+          )}
           {jumpActive ? (
             <>
               <span className="statusDot">•</span>
