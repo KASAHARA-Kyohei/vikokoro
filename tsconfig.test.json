@@ -16,6 +16,7 @@
     "src/editor/layout.ts",
     "src/editor/state.ts",
     "src/editor/domain/**/*.ts",
+    "src/persistence/saveCoordinator.ts",
     "src/app/keyboard/types.ts",
     "src/app/keyboard/foldChord.ts",
     "src/app/keyboard/resolveKeyboardCommand.ts",

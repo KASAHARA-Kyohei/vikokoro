@@ -1,9 +1,14 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Workspace } from "../editor/types";
 import type { EditorAction } from "../editor/state";
 import type { WorkspaceRepository } from "../persistence/types";
 import { createTauriWorkspaceRepository } from "../persistence/tauriWorkspaceRepository";
 import { createUnavailableWorkspaceRepository } from "../persistence/unavailableWorkspaceRepository";
+import {
+  createSaveCoordinator,
+  type SaveCoordinator,
+  type SaveCoordinatorState,
+} from "../persistence/saveCoordinator";
 
 type Params = {
   hydrated: boolean;
@@ -21,24 +26,32 @@ export function useWorkspacePersistence({
   repository,
 }: Params) {
   const [tauriAvailable, setTauriAvailable] = useState(repository?.name !== "unavailable");
-  const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "unavailable">("saved");
+  const [saveState, setSaveState] = useState<SaveCoordinatorState>(() => ({
+    status: repository?.name === "unavailable" ? "unavailable" : "saved",
+    lastSavedRevision: 0,
+    lastSavedAt: null,
+    pendingRevision: null,
+    error: null,
+  }));
 
-  const repositoryRef = useRef<WorkspaceRepository>(
-    repository ?? createTauriWorkspaceRepository(),
-  );
+  const initialRepository = repository ?? createTauriWorkspaceRepository();
+  const repositoryRef = useRef<WorkspaceRepository>(initialRepository);
 
-  const lastSavedRevisionRef = useRef(0);
-  const saveTimerRef = useRef<number | null>(null);
-  const savingRef = useRef(false);
-  const queuedSaveRef = useRef<{ revision: number; workspace: Workspace } | null>(null);
+  const coordinatorRef = useRef<SaveCoordinator | null>(null);
+  if (coordinatorRef.current === null) {
+    coordinatorRef.current = createSaveCoordinator(initialRepository, {
+      onStateChange: setSaveState,
+    });
+  }
 
   useEffect(() => {
     if (!repository) return;
     repositoryRef.current = repository;
+    coordinatorRef.current?.setRepository(repository);
     const available = repository.name !== "unavailable";
     setTauriAvailable(available);
     if (!available) {
-      setSaveStatus("unavailable");
+      setSaveState((current) => ({ ...current, status: "unavailable", error: null }));
     }
   }, [repository]);
 
@@ -52,8 +65,9 @@ export function useWorkspacePersistence({
       } catch {
         if (cancelled) return;
         repositoryRef.current = createUnavailableWorkspaceRepository();
+        coordinatorRef.current?.setRepository(repositoryRef.current);
         setTauriAvailable(false);
-        setSaveStatus("unavailable");
+        setSaveState((current) => ({ ...current, status: "unavailable", error: null }));
         dispatch({ type: "finishHydration", workspace: null });
       }
     };
@@ -65,80 +79,39 @@ export function useWorkspacePersistence({
 
   useEffect(() => {
     return () => {
-      if (saveTimerRef.current !== null) {
-        window.clearTimeout(saveTimerRef.current);
-      }
+      coordinatorRef.current?.dispose();
     };
   }, []);
 
   useEffect(() => {
     if (!hydrated) return;
-    if (saveRevision <= lastSavedRevisionRef.current) return;
-
-    if (saveTimerRef.current !== null) {
-      window.clearTimeout(saveTimerRef.current);
-    }
-
-    const revision = saveRevision;
-    const snapshot = workspace;
-
-    saveTimerRef.current = window.setTimeout(() => {
-      saveTimerRef.current = null;
-      queuedSaveRef.current = { revision, workspace: snapshot };
-
-      if (repositoryRef.current.name === "unavailable") {
-        lastSavedRevisionRef.current = Math.max(lastSavedRevisionRef.current, revision);
-        setSaveStatus("unavailable");
-        return;
-      }
-
-      setSaveStatus("saving");
-
-      const flushSaveQueue = async () => {
-        if (savingRef.current) return;
-        const queued = queuedSaveRef.current;
-        if (!queued) return;
-        queuedSaveRef.current = null;
-
-        savingRef.current = true;
-        try {
-          await repositoryRef.current.save(queued.workspace);
-          lastSavedRevisionRef.current = Math.max(lastSavedRevisionRef.current, queued.revision);
-          setSaveStatus("saved");
-        } catch {
-          lastSavedRevisionRef.current = Math.max(lastSavedRevisionRef.current, queued.revision);
-          repositoryRef.current = createUnavailableWorkspaceRepository();
-          setTauriAvailable(false);
-          setSaveStatus("unavailable");
-        } finally {
-          savingRef.current = false;
-        }
-
-        void flushSaveQueue();
-      };
-
-      void flushSaveQueue();
-    }, 250);
+    if (saveRevision <= (coordinatorRef.current?.getState().lastSavedRevision ?? 0)) return;
+    coordinatorRef.current?.schedule(saveRevision, workspace);
   }, [hydrated, saveRevision, workspace]);
 
-  useEffect(() => {
-    if (!tauriAvailable) return;
-    if (saveRevision <= lastSavedRevisionRef.current) {
-      setSaveStatus("saved");
-      return;
-    }
-    setSaveStatus("saving");
-  }, [saveRevision, tauriAvailable]);
-
   const saveLabel = tauriAvailable
-    ? saveStatus === "saving"
+    ? saveState.status === "saving"
       ? "Saving…"
-      : "Saved"
+      : saveState.status === "error"
+        ? "Save failed"
+        : "Saved"
     : "Local";
+
+  const flushPendingSave = useCallback(
+    () => coordinatorRef.current?.flush() ?? Promise.resolve(false),
+    [],
+  );
+  const retrySave = useCallback(
+    () => coordinatorRef.current?.retry() ?? Promise.resolve(false),
+    [],
+  );
 
   return {
     tauriAvailable,
-    saveStatus,
+    saveStatus: saveState.status,
     saveLabel,
+    saveError: saveState.error,
+    flushPendingSave,
+    retrySave,
   };
 }
