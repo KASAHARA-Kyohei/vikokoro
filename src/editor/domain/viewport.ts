@@ -1,5 +1,4 @@
 import type { CanvasPoint, Viewport } from "../types";
-import { PADDING_X } from "../layout";
 import type { NodeSize } from "../layout";
 
 type Rect = {
@@ -69,7 +68,10 @@ export function computeInitialScrollForRoot(
   zoom: number,
 ): CanvasPoint {
   return {
-    x: Math.max(0, rootPoint.x * zoom - PADDING_X),
+    x: Math.max(
+      0,
+      (rootPoint.x + rootSize.width / 2) * zoom - viewportSize.width / 2,
+    ),
     y: Math.max(
       0,
       (rootPoint.y + rootSize.height / 2) * zoom - viewportSize.height / 2,

@@ -4,6 +4,7 @@ import type {
   DocumentState,
   Mode,
   AnchorSide,
+  BranchDirection,
   CanvasPoint,
   NodeColor,
   NodeId,
@@ -19,6 +20,11 @@ import {
   sanitizeCustomLinks,
 } from "./domain/customLinks";
 import { sanitizeEdgeAnchors } from "./domain/edgeAnchors";
+import {
+  inferBranchDirection,
+  sanitizeBranchDirections,
+  sanitizeBranchTones,
+} from "./domain/branchDirections";
 import { sanitizeStickyNotes } from "./domain/stickyNotes";
 import { generateId } from "./domain/id";
 import { cloneDocumentState, documentStateEquals } from "./domain/snapshot";
@@ -79,6 +85,11 @@ export type EditorAction =
   | { type: "reparentNode"; direction: "left" | "right" }
   | { type: "enterInsert" }
   | { type: "addChildAndInsert" }
+  | {
+      type: "addChildInDirectionAndInsert";
+      parentId: NodeId;
+      direction: BranchDirection;
+    }
   | { type: "addChildAtPosition"; point: CanvasPoint }
   | { type: "addSiblingAndInsert" }
   | { type: "setCursorText"; text: string }
@@ -124,7 +135,7 @@ export type EditorAction =
 export function createInitialAppState(): EditorAppState {
   const doc1 = createInitialDocument("");
   const workspace: Workspace = {
-    schemaVersion: 2,
+    schemaVersion: 3,
     tabs: [{ docId: doc1.docId }],
     activeDocId: doc1.docId,
     documents: {
@@ -175,6 +186,35 @@ function edgeAnchorRecordsEqual(
   return true;
 }
 
+function sanitizeHistorySnapshot(snapshot: DocumentState): DocumentState {
+  const withoutGroups = withoutLegacyGroups(snapshot);
+  const rawNodes = snapshot.nodes ?? {};
+  const nodes = sanitizeBranchTones({ rootId: snapshot.rootId, nodes: rawNodes });
+  const nodePositions = sanitizeNodePositions(
+    { rootId: snapshot.rootId, nodes, branchDirections: snapshot.branchDirections },
+    snapshot.nodePositions,
+  );
+  const cardSizes = Object.fromEntries(
+    Object.entries(nodes).map(([id, node]) => [
+      id,
+      snapshot.cardSizes?.[id] ?? getNodeSize(node),
+    ]),
+  );
+  return {
+    ...withoutGroups,
+    nodes,
+    nodePositions,
+    branchDirections: sanitizeBranchDirections(
+      { rootId: snapshot.rootId, nodes, nodePositions, cardSizes },
+      snapshot.branchDirections,
+    ),
+    edgeAnchors: sanitizeEdgeAnchors({ nodes }, snapshot.edgeAnchors),
+    customLinks: sanitizeCustomLinks({ nodes }, snapshot.customLinks),
+    stickyNotes: sanitizeStickyNotes(snapshot.stickyNotes),
+    cardSizes,
+  };
+}
+
 function sanitizeWorkspace(workspace: Workspace): Workspace {
   const documents: Record<DocId, Document> = {};
   for (const [docId, doc] of Object.entries(workspace.documents)) {
@@ -184,7 +224,7 @@ function sanitizeWorkspace(workspace: Workspace): Workspace {
       ...doc,
       nodes,
       nodePositions: sanitizeNodePositions(
-        { rootId, nodes },
+        { rootId, nodes, branchDirections: doc.branchDirections },
         doc.nodePositions,
       ),
       edgeAnchors: sanitizeEdgeAnchors({ nodes }, doc.edgeAnchors),
@@ -196,32 +236,8 @@ function sanitizeWorkspace(workspace: Workspace): Workspace {
           return [id, saved ?? getNodeSize(node)];
         }),
       ),
-      undoStack: (doc.undoStack ?? []).map((snapshot) => ({
-        ...withoutLegacyGroups(snapshot),
-        nodePositions: sanitizeNodePositions(snapshot, snapshot.nodePositions),
-        edgeAnchors: sanitizeEdgeAnchors(snapshot, snapshot.edgeAnchors),
-        customLinks: sanitizeCustomLinks(snapshot, snapshot.customLinks),
-        stickyNotes: sanitizeStickyNotes(snapshot.stickyNotes),
-        cardSizes: Object.fromEntries(
-          Object.entries(snapshot.nodes ?? {}).map(([id, node]) => [
-            id,
-            snapshot.cardSizes?.[id] ?? getNodeSize(node),
-          ]),
-        ),
-      })),
-      redoStack: (doc.redoStack ?? []).map((snapshot) => ({
-        ...withoutLegacyGroups(snapshot),
-        nodePositions: sanitizeNodePositions(snapshot, snapshot.nodePositions),
-        edgeAnchors: sanitizeEdgeAnchors(snapshot, snapshot.edgeAnchors),
-        customLinks: sanitizeCustomLinks(snapshot, snapshot.customLinks),
-        stickyNotes: sanitizeStickyNotes(snapshot.stickyNotes),
-        cardSizes: Object.fromEntries(
-          Object.entries(snapshot.nodes ?? {}).map(([id, node]) => [
-            id,
-            snapshot.cardSizes?.[id] ?? getNodeSize(node),
-          ]),
-        ),
-      })),
+      undoStack: (doc.undoStack ?? []).map(sanitizeHistorySnapshot),
+      redoStack: (doc.redoStack ?? []).map(sanitizeHistorySnapshot),
       collapsedNodeIds: sanitizeCollapsedNodeIds(doc, doc.collapsedNodeIds),
       viewport: sanitizeViewport(doc.viewport),
       selection: sanitizeSelection(doc.selection, nodes, doc.cursorId),
@@ -233,7 +249,7 @@ function sanitizeWorkspace(workspace: Workspace): Workspace {
   if (tabs.length === 0) {
     const created = createInitialDocument("");
     return {
-      schemaVersion: 2,
+      schemaVersion: 3,
       tabs: [{ docId: created.docId }],
       activeDocId: created.docId,
       documents: { [created.docId]: created.doc },
@@ -246,7 +262,7 @@ function sanitizeWorkspace(workspace: Workspace): Workspace {
 
   return {
     ...workspace,
-    schemaVersion: 2,
+    schemaVersion: 3,
     documents,
     tabs,
     activeDocId,
@@ -280,16 +296,22 @@ function sanitizeSelection(
 
 function sanitizeDocumentViewState(doc: Document): Document {
   const hasLegacyGroups = Object.prototype.hasOwnProperty.call(doc, "groups");
-  const nodePositions = sanitizeNodePositions(doc, doc.nodePositions);
-  const edgeAnchors = sanitizeEdgeAnchors(doc, doc.edgeAnchors);
-  const customLinks = sanitizeCustomLinks(doc, doc.customLinks);
+  const nodes = sanitizeBranchTones(doc);
+  const normalizedDoc = { ...doc, nodes };
+  const nodePositions = sanitizeNodePositions(normalizedDoc, doc.nodePositions);
+  const edgeAnchors = sanitizeEdgeAnchors(normalizedDoc, doc.edgeAnchors);
+  const customLinks = sanitizeCustomLinks(normalizedDoc, doc.customLinks);
   const stickyNotes = sanitizeStickyNotes(doc.stickyNotes);
   const cardSizes = Object.fromEntries(
-    Object.entries(doc.nodes).map(([id, node]) => [id, doc.cardSizes?.[id] ?? getNodeSize(node)]),
+    Object.entries(nodes).map(([id, node]) => [id, doc.cardSizes?.[id] ?? getNodeSize(node)]),
   );
-  const cursorAncestors = new Set(getAncestorIds(doc, doc.cursorId));
+  const branchDirections = sanitizeBranchDirections(
+    { rootId: doc.rootId, nodes, nodePositions, cardSizes },
+    doc.branchDirections,
+  );
+  const cursorAncestors = new Set(getAncestorIds(normalizedDoc, doc.cursorId));
   const collapsedNodeIds = sanitizeCollapsedNodeIds(
-    doc,
+    normalizedDoc,
     doc.collapsedNodeIds,
   ).filter((id) => !cursorAncestors.has(id));
   if (
@@ -298,6 +320,8 @@ function sanitizeDocumentViewState(doc: Document): Document {
   ) {
     const positionIds = Object.keys(nodePositions);
     const currentPositionIds = Object.keys(doc.nodePositions ?? {});
+    const directionIds = Object.keys(branchDirections).sort();
+    const currentDirectionIds = Object.keys(doc.branchDirections ?? {}).sort();
     const edgeAnchorIds = Object.keys(edgeAnchors);
     const currentEdgeAnchorIds = Object.keys(doc.edgeAnchors ?? {});
     const customLinkIds = Object.keys(customLinks);
@@ -311,6 +335,12 @@ function sanitizeDocumentViewState(doc: Document): Document {
         const next = nodePositions[id];
         return current?.x === next.x && current?.y === next.y;
       });
+    const directionsEqual =
+      directionIds.length === currentDirectionIds.length &&
+      directionIds.every(
+        (id, index) =>
+          id === currentDirectionIds[index] && branchDirections[id] === doc.branchDirections?.[id],
+      );
     const edgeAnchorsEqual =
       edgeAnchorIds.length === currentEdgeAnchorIds.length &&
       edgeAnchorIds.every((id) => {
@@ -345,6 +375,8 @@ function sanitizeDocumentViewState(doc: Document): Document {
     if (
       !hasLegacyGroups &&
       positionsEqual &&
+      directionsEqual &&
+      nodes === doc.nodes &&
       edgeAnchorsEqual &&
       customLinksEqual &&
       stickyNotesEqual &&
@@ -354,13 +386,15 @@ function sanitizeDocumentViewState(doc: Document): Document {
   return {
     ...withoutLegacyGroups(doc),
     collapsedNodeIds,
+    nodes,
     nodePositions,
+    branchDirections,
     edgeAnchors,
     customLinks,
     stickyNotes,
     cardSizes,
     viewport: sanitizeViewport(doc.viewport),
-    selection: sanitizeSelection(doc.selection, doc.nodes, doc.cursorId),
+    selection: sanitizeSelection(doc.selection, nodes, doc.cursorId),
   };
 }
 
@@ -480,6 +514,8 @@ export function editorReducer(state: EditorAppState, action: EditorAction): Edit
         ...state,
         focusRootId: null,
         workspace: {
+          ...state.workspace,
+          schemaVersion: 3,
           tabs: [...state.workspace.tabs, { docId: created.docId }],
           activeDocId: created.docId,
           documents: {
@@ -518,6 +554,8 @@ export function editorReducer(state: EditorAppState, action: EditorAction): Edit
         closeConfirmDocId: null,
         focusRootId: null,
         workspace: {
+          ...state.workspace,
+          schemaVersion: 3,
           tabs: nextTabs,
           activeDocId: nextActiveTab.docId,
           documents: restDocuments,
@@ -541,6 +579,7 @@ export function editorReducer(state: EditorAppState, action: EditorAction): Edit
           cursorId,
           nodes: action.nextState.nodes,
           nodePositions: sanitizeNodePositions(action.nextState, action.nextState.nodePositions),
+          branchDirections: action.nextState.branchDirections ?? doc.branchDirections,
           edgeAnchors: sanitizeEdgeAnchors(action.nextState, {
             ...doc.edgeAnchors,
             ...(action.nextState.edgeAnchors ?? {}),
@@ -611,31 +650,40 @@ export function editorReducer(state: EditorAppState, action: EditorAction): Edit
         const snapshot = cloneDocumentState(doc);
         const nodes = { ...doc.nodes };
         const nodePositions = { ...doc.nodePositions };
+        const branchDirections = { ...doc.branchDirections };
         const cardSizes = { ...doc.cardSizes };
         const createdIds: NodeId[] = [];
         for (const sourceId of sourceIds) {
           const source = doc.nodes[sourceId];
           const id = generateId();
           const parentId = source.parentId ?? doc.rootId;
-          nodes[id] = { ...source, id, parentId, childrenIds: [] };
+          nodes[id] = {
+            ...source,
+            id,
+            parentId,
+            childrenIds: [],
+            branchTone: parentId === doc.rootId ? undefined : source.branchTone,
+          };
           const parent = nodes[parentId];
           if (parent) nodes[parentId] = { ...parent, childrenIds: [...parent.childrenIds, id] };
           const position = doc.nodePositions[sourceId] ?? { x: 0, y: 0 };
           nodePositions[id] = { x: position.x + 24, y: position.y + 24 };
+          branchDirections[id] = doc.branchDirections[sourceId] ?? "e";
           cardSizes[id] = { ...(doc.cardSizes[sourceId] ?? getNodeSize(source)) };
           createdIds.push(id);
         }
         const cursorId = createdIds[0];
-        return {
+        return sanitizeDocumentViewState({
           ...doc,
           nodes,
           nodePositions,
+          branchDirections,
           cardSizes,
           cursorId,
           selection: { cardIds: createdIds, lastEditedCardId: cursorId },
           undoStack: [...doc.undoStack, snapshot],
           redoStack: [],
-        };
+        });
       });
       return next === state ? state : bumpSaveRevision(next);
     }
@@ -860,17 +908,54 @@ export function editorReducer(state: EditorAppState, action: EditorAction): Edit
         stickyEditOrigin: null,
       });
     }
+    case "addChildInDirectionAndInsert": {
+      if (state.mode === "insert") return state;
+      const docId = state.workspace.activeDocId;
+      const before = cloneDocumentState(state.workspace.documents[docId]);
+      const nextState = updateActiveDoc(state, (doc) => {
+        if (!doc.nodes[action.parentId]) return doc;
+        const result = addChild(
+          { ...doc, cursorId: action.parentId },
+          action.direction,
+        );
+        return sanitizeDocumentViewState({
+          ...result.updated,
+          selection: { cardIds: [result.newNodeId], lastEditedCardId: result.newNodeId },
+        });
+      });
+      if (nextState === state) return state;
+      return bumpSaveRevision({
+        ...nextState,
+        mode: "insert",
+        insertOrigin: { docId, snapshot: before },
+        noteEditOrigin: null,
+        stickyEditOrigin: null,
+      });
+    }
     case "addChildAtPosition": {
       if (state.mode === "insert") return state;
       const docId = state.workspace.activeDocId;
       const before = cloneDocumentState(state.workspace.documents[docId]);
       const nextState = updateActiveDoc(state, (doc) => {
+        const parentId = doc.cursorId;
         const result = addChild(doc);
+        const parentPoint = doc.nodePositions[parentId] ?? { x: 0, y: 0 };
+        const direction = inferBranchDirection(
+          parentPoint,
+          action.point,
+          doc.cardSizes[parentId],
+          result.updated.cardSizes?.[result.newNodeId] ?? getNodeSize(result.updated.nodes[result.newNodeId]),
+          result.updated.branchDirections[result.newNodeId] ?? "e",
+        );
         return sanitizeDocumentViewState({
           ...result.updated,
           nodePositions: {
             ...result.updated.nodePositions,
             [result.newNodeId]: { ...action.point },
+          },
+          branchDirections: {
+            ...result.updated.branchDirections,
+            [result.newNodeId]: direction,
           },
           selection: { cardIds: [result.newNodeId], lastEditedCardId: result.newNodeId },
         });
@@ -1077,14 +1162,32 @@ export function editorReducer(state: EditorAppState, action: EditorAction): Edit
         const nodeIds = [...new Set(action.nodeIds)].filter((id) => Boolean(doc.nodes[id]));
         if (nodeIds.length === 0) return doc;
         const snapshot = cloneDocumentState(doc);
+        const nodePositions = moveNodePositions(
+          sanitizeNodePositions(doc, doc.nodePositions),
+          nodeIds,
+          action.dx,
+          action.dy,
+        );
+        const movedIds = new Set(nodeIds);
+        const branchDirections = { ...doc.branchDirections };
+        for (const nodeId of nodeIds) {
+          const node = doc.nodes[nodeId];
+          if (!node?.parentId || movedIds.has(node.parentId)) continue;
+          const parentPoint = nodePositions[node.parentId];
+          const childPoint = nodePositions[nodeId];
+          if (!parentPoint || !childPoint) continue;
+          branchDirections[nodeId] = inferBranchDirection(
+            parentPoint,
+            childPoint,
+            doc.cardSizes[node.parentId],
+            doc.cardSizes[nodeId],
+            branchDirections[nodeId] ?? "e",
+          );
+        }
         return {
           ...doc,
-          nodePositions: moveNodePositions(
-            sanitizeNodePositions(doc, doc.nodePositions),
-            nodeIds,
-            action.dx,
-            action.dy,
-          ),
+          nodePositions,
+          branchDirections,
           undoStack: [...doc.undoStack, snapshot],
           redoStack: [],
         };

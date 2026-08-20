@@ -5,7 +5,8 @@ import {
   sanitizeNodePositions,
 } from "../layout";
 import type { NodeSize } from "../layout";
-import type { CanvasPoint, DocumentState, NodeId } from "../types";
+import type { BranchDirection, CanvasPoint, DocumentState, NodeId } from "../types";
+import { directionTangent, directionVector } from "./branchDirections";
 
 export function collectSubtreeNodeIds(doc: DocumentState, rootId: NodeId): NodeId[] {
   const result: NodeId[] = [];
@@ -251,6 +252,59 @@ export function findAvailablePosition(
     if (!overlapsAny(down, positions, sizes, candidateSize)) return down;
     const up = { x: preferred.x, y: preferred.y - step * ring };
     if (!overlapsAny(up, positions, sizes, candidateSize)) return up;
+  }
+  return preferred;
+}
+
+export function directionalChildPosition(
+  parent: CanvasPoint,
+  parentSize: NodeSize,
+  childSize: NodeSize,
+  direction: BranchDirection,
+): CanvasPoint {
+  const vector = directionVector(direction);
+  const parentCenter = {
+    x: parent.x + parentSize.width / 2,
+    y: parent.y + parentSize.height / 2,
+  };
+  const horizontalClearance = parentSize.width / 2 + childSize.width / 2 + 80;
+  const verticalClearance = parentSize.height / 2 + childSize.height / 2 + 58;
+  const distance = Math.max(
+    vector.x === 0 ? 0 : horizontalClearance / Math.abs(vector.x),
+    vector.y === 0 ? 0 : verticalClearance / Math.abs(vector.y),
+  );
+  return {
+    x: parentCenter.x + vector.x * distance - childSize.width / 2,
+    y: parentCenter.y + vector.y * distance - childSize.height / 2,
+  };
+}
+
+export function findAvailablePositionInDirection(
+  preferred: CanvasPoint,
+  direction: BranchDirection,
+  positions: Record<NodeId, CanvasPoint>,
+  sizes: Record<NodeId, NodeSize>,
+  candidateSize: NodeSize,
+  ignoredId?: NodeId,
+): CanvasPoint {
+  if (!overlapsAny(preferred, positions, sizes, candidateSize, ignoredId)) return preferred;
+  const tangent = directionTangent(direction);
+  const tangentUsesWidth = Math.abs(tangent.x) >= Math.abs(tangent.y);
+  const step = (tangentUsesWidth ? candidateSize.width : candidateSize.height) + 24;
+  const outward = directionVector(direction);
+  for (let ring = 1; ring <= 80; ring += 1) {
+    for (const sign of [1, -1]) {
+      const candidate = {
+        x: preferred.x + tangent.x * step * ring * sign,
+        y: preferred.y + tangent.y * step * ring * sign,
+      };
+      if (!overlapsAny(candidate, positions, sizes, candidateSize, ignoredId)) return candidate;
+    }
+    const candidate = {
+      x: preferred.x + outward.x * 28 * ring,
+      y: preferred.y + outward.y * 28 * ring,
+    };
+    if (!overlapsAny(candidate, positions, sizes, candidateSize, ignoredId)) return candidate;
   }
   return preferred;
 }

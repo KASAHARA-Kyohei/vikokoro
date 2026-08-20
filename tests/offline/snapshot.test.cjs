@@ -13,6 +13,7 @@ function makeState() {
       root: { x: 0, y: 0 },
       a: { x: 260, y: 10 },
     },
+    branchDirections: { a: "e" },
     edgeAnchors: {
       "root->a": { from: "right", to: "left" },
     },
@@ -34,6 +35,7 @@ function makeState() {
         parentId: null,
         childrenIds: ["a"],
         color: undefined,
+        branchTone: undefined,
       },
       a: {
         id: "a",
@@ -42,6 +44,7 @@ function makeState() {
         parentId: "root",
         childrenIds: [],
         color: undefined,
+        branchTone: undefined,
       },
     },
   };

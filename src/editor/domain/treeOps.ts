@@ -1,11 +1,16 @@
-import type { Document, Node, NodeId } from "../types";
-import { getNodeSize, getNodeSizes, H_GAP, V_GAP } from "../layout";
+import type { BranchDirection, Document, Node, NodeId } from "../types";
+import { getNodeSize, getNodeSizes } from "../layout";
 import {
   collectSubtreeNodeIds,
-  findAvailablePosition,
-  makeSpaceForNode,
+  directionalChildPosition,
+  findAvailablePositionInDirection,
   moveNodePositions,
 } from "./freeLayout";
+import {
+  inferBranchDirection,
+  nextBranchTone,
+  preferredChildDirection,
+} from "./branchDirections";
 import { generateId } from "./id";
 
 export function moveCursor(
@@ -109,12 +114,21 @@ export function reparentNode(doc: Document, direction: "left" | "right"): Docume
     const nextParentChildren = [...parent.childrenIds];
     nextParentChildren.splice(cursorIndex, 1);
     const nextPrevSiblingChildren = [...prevSibling.childrenIds, cursor.id];
+    const sizes = getNodeSizes(doc.nodes);
+    const branchDirection = inferBranchDirection(
+      doc.nodePositions?.[prevSibling.id] ?? { x: 0, y: 0 },
+      doc.nodePositions?.[cursor.id] ?? { x: 0, y: 0 },
+      sizes[prevSibling.id],
+      sizes[cursor.id],
+      doc.branchDirections?.[cursor.id] ?? "e",
+    );
 
     return {
       ...doc,
+      branchDirections: { ...doc.branchDirections, [cursor.id]: branchDirection },
       nodes: {
         ...doc.nodes,
-        [cursor.id]: { ...cursor, parentId: prevSibling.id },
+        [cursor.id]: { ...cursor, parentId: prevSibling.id, branchTone: undefined },
         [parent.id]: { ...parent, childrenIds: nextParentChildren },
         [prevSibling.id]: { ...prevSibling, childrenIds: nextPrevSiblingChildren },
       },
@@ -132,32 +146,58 @@ export function reparentNode(doc: Document, direction: "left" | "right"): Docume
 
   const nextGrandParentChildren = [...grandParent.childrenIds];
   nextGrandParentChildren.splice(parentIndex + 1, 0, cursor.id);
+  const sizes = getNodeSizes(doc.nodes);
+  const branchDirection = inferBranchDirection(
+    doc.nodePositions?.[grandParent.id] ?? { x: 0, y: 0 },
+    doc.nodePositions?.[cursor.id] ?? { x: 0, y: 0 },
+    sizes[grandParent.id],
+    sizes[cursor.id],
+    doc.branchDirections?.[cursor.id] ?? "e",
+  );
+  const nextCursor = {
+    ...cursor,
+    parentId: grandParent.id,
+    branchTone: grandParent.id === doc.rootId ? cursor.branchTone ?? nextBranchTone(doc) : undefined,
+  };
 
   return {
     ...doc,
+    branchDirections: { ...doc.branchDirections, [cursor.id]: branchDirection },
     nodes: {
       ...doc.nodes,
-      [cursor.id]: { ...cursor, parentId: grandParent.id },
+      [cursor.id]: nextCursor,
       [parent.id]: { ...parent, childrenIds: nextParentChildren },
       [grandParent.id]: { ...grandParent, childrenIds: nextGrandParentChildren },
     },
   };
 }
 
-export function addChild(doc: Document): { updated: Document; newNodeId: NodeId } {
+export function addChild(
+  doc: Document,
+  requestedDirection?: BranchDirection,
+): { updated: Document; newNodeId: NodeId } {
   const cursor = doc.nodes[doc.cursorId];
   if (!cursor) return { updated: doc, newNodeId: doc.cursorId };
 
   const newId = generateId();
-  const newNode: Node = { id: newId, text: "", parentId: cursor.id, childrenIds: [] };
+  const direction = requestedDirection ?? preferredChildDirection(doc, cursor.id);
+  const newNode: Node = {
+    id: newId,
+    text: "",
+    parentId: cursor.id,
+    childrenIds: [],
+    branchTone: cursor.id === doc.rootId ? nextBranchTone(doc) : undefined,
+  };
   const nextCursorChildren = [...cursor.childrenIds, newId];
   const currentPositions = doc.nodePositions ?? {};
   const parentPoint = currentPositions[cursor.id] ?? { x: 0, y: 0 };
   const sizes = getNodeSizes(doc.nodes);
   const parentSize = sizes[cursor.id] ?? getNodeSize(cursor);
   const newNodeSize = getNodeSize(newNode);
-  const point = findAvailablePosition(
-    { x: parentPoint.x + parentSize.width + H_GAP, y: parentPoint.y },
+  const preferred = directionalChildPosition(parentPoint, parentSize, newNodeSize, direction);
+  const point = findAvailablePositionInDirection(
+    preferred,
+    direction,
     currentPositions,
     sizes,
     newNodeSize,
@@ -168,6 +208,7 @@ export function addChild(doc: Document): { updated: Document; newNodeId: NodeId 
       ...doc,
       cursorId: newId,
       nodePositions: { ...currentPositions, [newId]: point },
+      branchDirections: { ...doc.branchDirections, [newId]: direction },
       nodes: {
         ...doc.nodes,
         [newId]: newNode,
@@ -192,37 +233,36 @@ export function addSibling(doc: Document): { updated: Document; newNodeId: NodeI
   if (index === -1) return { updated: doc, newNodeId: doc.cursorId };
 
   const newId = generateId();
-  const newNode: Node = { id: newId, text: "", parentId: parent.id, childrenIds: [] };
+  const direction = doc.branchDirections?.[cursor.id] ?? preferredChildDirection(doc, parent.id);
+  const newNode: Node = {
+    id: newId,
+    text: "",
+    parentId: parent.id,
+    childrenIds: [],
+    branchTone: parent.id === doc.rootId ? nextBranchTone(doc) : undefined,
+  };
   const nextChildren = [...parent.childrenIds];
   nextChildren.splice(index + 1, 0, newId);
   const currentPositions = doc.nodePositions ?? {};
-  const cursorPoint = currentPositions[cursor.id] ?? { x: 0, y: 0 };
+  const parentPoint = currentPositions[parent.id] ?? { x: 0, y: 0 };
   const sizes = getNodeSizes(doc.nodes);
-  const cursorSize = sizes[cursor.id] ?? getNodeSize(cursor);
+  const parentSize = sizes[parent.id] ?? getNodeSize(parent);
   const newNodeSize = getNodeSize(newNode);
-  const point = {
-    x: cursorPoint.x,
-    y: cursorPoint.y + cursorSize.height + V_GAP,
-  };
-  const protectedNodeIds: NodeId[] = [];
-  let protectedId: NodeId | null = cursor.id;
-  while (protectedId) {
-    protectedNodeIds.push(protectedId);
-    protectedId = doc.nodes[protectedId]?.parentId ?? null;
-  }
-  const nextPositions = makeSpaceForNode(
-    doc,
-    point,
+  const preferred = directionalChildPosition(parentPoint, parentSize, newNodeSize, direction);
+  const point = findAvailablePositionInDirection(
+    preferred,
+    direction,
+    currentPositions,
     sizes,
     newNodeSize,
-    protectedNodeIds,
   );
 
   return {
     updated: {
       ...doc,
       cursorId: newId,
-      nodePositions: { ...nextPositions, [newId]: point },
+      nodePositions: { ...currentPositions, [newId]: point },
+      branchDirections: { ...doc.branchDirections, [newId]: direction },
       nodes: {
         ...doc.nodes,
         [newId]: newNode,
@@ -251,14 +291,31 @@ export function deleteCursorNodeAndPromoteChildren(doc: Document): Document {
 
   const nextNodes: Record<NodeId, Node> = { ...doc.nodes };
   const nextNodePositions = { ...(doc.nodePositions ?? {}) };
+  const nextBranchDirections = { ...(doc.branchDirections ?? {}) };
   delete nextNodes[deleting.id];
   delete nextNodePositions[deleting.id];
+  delete nextBranchDirections[deleting.id];
   nextNodes[parent.id] = { ...parent, childrenIds: nextParentChildren };
 
   for (const childId of promotedIds) {
     const child = nextNodes[childId];
     if (!child) continue;
-    nextNodes[childId] = { ...child, parentId: parent.id };
+    const sizes = getNodeSizes(nextNodes);
+    nextBranchDirections[childId] = inferBranchDirection(
+      nextNodePositions[parent.id] ?? { x: 0, y: 0 },
+      nextNodePositions[childId] ?? { x: 0, y: 0 },
+      sizes[parent.id],
+      sizes[childId],
+      nextBranchDirections[childId] ?? "e",
+    );
+    nextNodes[childId] = {
+      ...child,
+      parentId: parent.id,
+      branchTone:
+        parent.id === doc.rootId
+          ? child.branchTone ?? nextBranchTone({ ...doc, nodes: nextNodes })
+          : undefined,
+    };
   }
 
   let nextCursorId: NodeId = parent.id;
@@ -279,5 +336,6 @@ export function deleteCursorNodeAndPromoteChildren(doc: Document): Document {
     cursorId: nextCursorId,
     nodes: nextNodes,
     nodePositions: nextNodePositions,
+    branchDirections: nextBranchDirections,
   };
 }

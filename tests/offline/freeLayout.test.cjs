@@ -133,28 +133,28 @@ test("edge endpoints prefer horizontal sides for ordinary parent-child links", (
   const horizontal = getEdgeEndpoints({ x: 0, y: 0 }, { x: 300, y: 10 });
   assert.equal(horizontal.fromSide, "right");
   assert.equal(horizontal.toSide, "left");
-  assert.deepEqual(horizontal.from, { x: 180, y: 17 });
-  assert.deepEqual(horizontal.to, { x: 300, y: 27 });
+  assert.deepEqual(horizontal.from, { x: 180, y: 20 });
+  assert.deepEqual(horizontal.to, { x: 300, y: 24 });
 
   const left = getEdgeEndpoints({ x: 300, y: 0 }, { x: 0, y: 40 });
   assert.equal(left.fromSide, "left");
   assert.equal(left.toSide, "right");
-  assert.deepEqual(left.from, { x: 300, y: 17 });
-  assert.deepEqual(left.to, { x: 180, y: 57 });
+  assert.deepEqual(left.from, { x: 300, y: 29 });
+  assert.deepEqual(left.to, { x: 180, y: 45 });
 });
 
 test("edge endpoints only use vertical sides for clearly stacked nodes", () => {
   const vertical = getEdgeEndpoints({ x: 0, y: 0 }, { x: 10, y: 200 });
   assert.equal(vertical.fromSide, "bottom");
   assert.equal(vertical.toSide, "top");
-  assert.deepEqual(vertical.from, { x: 90, y: 34 });
-  assert.deepEqual(vertical.to, { x: 100, y: 200 });
+  assert.deepEqual(vertical.from, { x: 90.85, y: 34 });
+  assert.deepEqual(vertical.to, { x: 99.15, y: 200 });
 
   const diagonal = getEdgeEndpoints({ x: 0, y: 0 }, { x: 90, y: 220 });
-  assert.equal(diagonal.fromSide, "right");
-  assert.equal(diagonal.toSide, "left");
-  assert.deepEqual(diagonal.from, { x: 180, y: 17 });
-  assert.deepEqual(diagonal.to, { x: 90, y: 237 });
+  assert.equal(diagonal.fromSide, "bottom");
+  assert.equal(diagonal.toSide, "top");
+  assert.deepEqual(diagonal.from, { x: 96.95454545454545, y: 34 });
+  assert.deepEqual(diagonal.to, { x: 173.04545454545453, y: 220 });
 });
 
 test("manual edge anchors override automatic endpoint sides independently", () => {
@@ -179,8 +179,8 @@ test("edge endpoints use each node's variable dimensions", () => {
     { width: 220, height: 54 },
   );
 
-  assert.deepEqual(endpoints.from, { x: 320, y: 37 });
-  assert.deepEqual(endpoints.to, { x: 500, y: 47 });
+  assert.deepEqual(endpoints.from, { x: 320, y: 40.55555555555556 });
+  assert.deepEqual(endpoints.to, { x: 500, y: 44.55555555555556 });
 });
 
 test("long connector curves cap their control distance", () => {

@@ -15,6 +15,7 @@ export function cloneDocumentState(doc: DocumentState): DocumentState {
   const customLinks: Record<string, CustomLink> = {};
   const stickyNotes: Record<string, StickyNote> = {};
   const cardSizes: DocumentState["cardSizes"] = {};
+  const branchDirections: DocumentState["branchDirections"] = {};
   for (const [id, node] of Object.entries(doc.nodes)) {
     nodes[id] = {
       id: node.id,
@@ -23,6 +24,7 @@ export function cloneDocumentState(doc: DocumentState): DocumentState {
       parentId: node.parentId,
       childrenIds: [...node.childrenIds],
       color: node.color,
+      branchTone: node.branchTone,
     };
     const point = doc.nodePositions?.[id];
     if (point) {
@@ -30,6 +32,8 @@ export function cloneDocumentState(doc: DocumentState): DocumentState {
     }
     const size = doc.cardSizes?.[id];
     if (size) cardSizes[id] = { width: size.width, height: size.height };
+    const direction = doc.branchDirections?.[id];
+    if (direction) branchDirections[id] = direction;
   }
   for (const [key, anchor] of Object.entries(doc.edgeAnchors ?? {})) {
     edgeAnchors[key] = { from: anchor.from, to: anchor.to };
@@ -49,6 +53,7 @@ export function cloneDocumentState(doc: DocumentState): DocumentState {
     cursorId: doc.cursorId,
     nodes,
     nodePositions,
+    branchDirections,
     edgeAnchors,
     customLinks,
     stickyNotes,
@@ -106,6 +111,8 @@ export function documentStateEquals(a: DocumentState, b: DocumentState): boolean
     if (an.note !== bn.note) return false;
     if (an.parentId !== bn.parentId) return false;
     if (an.color !== bn.color) return false;
+    if (an.branchTone !== bn.branchTone) return false;
+    if (a.branchDirections?.[id] !== b.branchDirections?.[id]) return false;
     if (an.childrenIds.length !== bn.childrenIds.length) return false;
     for (let i = 0; i < an.childrenIds.length; i += 1) {
       if (an.childrenIds[i] !== bn.childrenIds[i]) return false;
