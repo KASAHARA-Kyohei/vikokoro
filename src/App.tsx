@@ -10,9 +10,18 @@ import { computeLayout } from "./editor/layout";
 import { TabBar } from "./editor/TabBar";
 import { canCreateCustomLink } from "./editor/domain/customLinks";
 import { makeEdgeKey } from "./editor/domain/edgeAnchors";
+import { resolveDirectionPickerKey } from "./editor/domain/branchDirections";
+import { hasSavedViewport } from "./editor/domain/viewport";
 import { generateId } from "./editor/domain/id";
 import { createInitialAppState, editorReducer } from "./editor/state";
-import type { AnchorSide, CanvasPoint, Document, NodeId, Viewport } from "./editor/types";
+import type {
+  AnchorSide,
+  BranchDirection,
+  CanvasPoint,
+  Document,
+  NodeId,
+  Viewport,
+} from "./editor/types";
 import {
   buildVisibleTreeProjection,
   getBreadcrumbNodeIds,
@@ -44,6 +53,7 @@ function App() {
   const { reset: resetDeleteChord, consumeD: consumeDeleteChord } = useDeleteChord();
   const { reset: resetFoldChord, consume: consumeFoldChord } = useFoldChord();
   const [centerCursorRequest, setCenterCursorRequest] = useState(0);
+  const [directionPickerNodeId, setDirectionPickerNodeId] = useState<NodeId | null>(null);
 
   const {
     helpOpen,
@@ -195,6 +205,36 @@ function App() {
     setRelatedLinkSourceNodeId(null);
     setRelatedLinkJumpSourceNodeId(null);
   }, [state.workspace.activeDocId, state.focusRootId]);
+
+  useEffect(() => {
+    setDirectionPickerNodeId(null);
+  }, [
+    activeDoc.cursorId,
+    closeConfirmOpen,
+    editingStickyNoteId,
+    helpOpen,
+    jumpActive,
+    nodeColorOpen,
+    nodeMemoOpen,
+    paletteOpen,
+    searchOpen,
+    settingsOpen,
+    state.mode,
+    state.workspace.activeDocId,
+    state.focusRootId,
+  ]);
+
+  const createChildInDirection = useCallback(
+    (parentId: NodeId, direction: BranchDirection) => {
+      setDirectionPickerNodeId(null);
+      applySelection([]);
+      setSelectedEdgeKey(null);
+      setSelectedCustomLinkId(null);
+      setSelectedStickyNoteId(null);
+      dispatch({ type: "addChildInDirectionAndInsert", parentId, direction });
+    },
+    [applySelection],
+  );
 
   useEffect(() => {
     setSelectedNodeIds(new Set(activeDoc.selection?.cardIds ?? []));
@@ -631,6 +671,35 @@ function App() {
         resetFoldChord();
       }
 
+      if (directionPickerNodeId) {
+        event.preventDefault();
+        const directionCommand = resolveDirectionPickerKey(
+          event.key,
+          event.ctrlKey || event.metaKey || event.altKey,
+        );
+        if (directionCommand === "cancel") {
+          setDirectionPickerNodeId(null);
+          return;
+        }
+        if (directionCommand) {
+          createChildInDirection(directionPickerNodeId, directionCommand);
+        }
+        return;
+      }
+
+      if (
+        commandLayerActive &&
+        !event.ctrlKey &&
+        !event.metaKey &&
+        !event.altKey &&
+        !event.shiftKey &&
+        event.key.toLowerCase() === "a"
+      ) {
+        event.preventDefault();
+        setDirectionPickerNodeId(activeDoc.cursorId);
+        return;
+      }
+
       if (commandLayerActive && stickyPlacementActive && event.key === "Escape") {
         event.preventDefault();
         setStickyPlacementActive(false);
@@ -800,6 +869,7 @@ function App() {
     closeJump,
     consumeDeleteChord,
     consumeFoldChord,
+    createChildInDirection,
     dispatch,
     helpOpen,
     jumpActive,
@@ -829,6 +899,7 @@ function App() {
     state.focusRootId,
     state.mode,
     editingStickyNoteId,
+    directionPickerNodeId,
     selectedCustomLinkId,
     selectedStickyNoteId,
     selectedNodeIds,
@@ -955,6 +1026,7 @@ function App() {
           viewportRef={viewportRef}
           panGestureActive={zoomPan.panGestureActive}
           viewSessionKey={`${state.workspace.activeDocId}:${visibleProjection.state.rootId}`}
+          centerRootOnInitialView={!hasSavedViewport(activeDoc.viewport)}
           centerCursorRequest={centerCursorRequest}
           highlightedNodeIds={highlightedNodeIds}
           activeHighlightedNodeId={activeSearchNodeId}
@@ -969,6 +1041,7 @@ function App() {
           selectedStickyNoteId={selectedStickyNoteId}
           editingStickyNoteId={editingStickyNoteId}
           stickyPlacementActive={stickyPlacementActive}
+          directionPickerNodeId={directionPickerNodeId}
           onSelectNode={(nodeId) => {
             setSelectedEdgeKey(null);
             setSelectedCustomLinkId(null);
@@ -1033,6 +1106,8 @@ function App() {
             setSelectedStickyNoteId(null);
             dispatch({ type: "addChildAtPosition", point });
           }}
+          onCreateChildInDirection={createChildInDirection}
+          onCloseDirectionPicker={() => setDirectionPickerNodeId(null)}
           onCreateStickyNoteAt={createStickyNoteAt}
           onMoveStickyNote={(noteId, dx, dy) =>
             dispatch({ type: "moveStickyNote", noteId, dx, dy })

@@ -15,8 +15,9 @@ type HelpRow = {
 function buildRows(language: AppLanguage): HelpRow[] {
   if (language === "ja") {
     return [
+      { keys: "a → q w e / a d / z x c", description: "8方向を選んで子ノードを追加（Escで中止）" },
       { keys: "Tab", description: "子ノードを追加して編集開始" },
-      { keys: "Enter", description: "兄弟ノードを追加して編集開始" },
+      { keys: "Enter", description: "同じ枝方向へ兄弟ノードを追加して編集開始" },
       { keys: "i / Enter / Esc", description: "入力 / 確定 / 通常モードへ戻る" },
       { keys: "Shift+Enter", description: "ノード本文内で改行" },
       { keys: "h j k l", description: "移動（親 / 次 / 前 / 子）" },
@@ -55,8 +56,9 @@ function buildRows(language: AppLanguage): HelpRow[] {
   }
 
   return [
+    { keys: "a → q w e / a d / z x c", description: "Choose one of 8 directions for a child (Esc cancels)" },
     { keys: "Tab", description: "Add a child node and start editing" },
-    { keys: "Enter", description: "Add a sibling node and start editing" },
+    { keys: "Enter", description: "Add a sibling in the current branch direction" },
     { keys: "i / Enter / Esc", description: "Insert / Commit / Return to normal mode" },
     { keys: "Shift+Enter", description: "Insert a line break in node text" },
     { keys: "h j k l", description: "Move (parent / next / previous / child)" },

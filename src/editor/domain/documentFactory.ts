@@ -18,6 +18,7 @@ export function createInitialDocument(title: string): { docId: DocId; doc: Docum
     cursorId: rootId,
     nodes: { [rootId]: rootNode },
     nodePositions: { [rootId]: { x: 0, y: 0 } },
+    branchDirections: {},
     edgeAnchors: {},
     customLinks: {},
     stickyNotes: {},

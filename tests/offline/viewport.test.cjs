@@ -72,7 +72,7 @@ test("computeCenteredScrollFromRects does not return negative scroll positions",
   assert.deepEqual(scroll, { x: 0, y: 0 });
 });
 
-test("computeInitialScrollForRoot places the root at left padding and vertical center", () => {
+test("computeInitialScrollForRoot centers the root in an unsaved viewport", () => {
   const scroll = computeInitialScrollForRoot(
     { x: 100, y: 200 },
     { width: 180, height: 34 },
@@ -80,7 +80,7 @@ test("computeInitialScrollForRoot places the root at left padding and vertical c
     1,
   );
 
-  assert.deepEqual(scroll, { x: 52, y: 0 });
+  assert.deepEqual(scroll, { x: 0, y: 0 });
 });
 
 test("computeInitialScrollForRoot respects zoom", () => {
@@ -91,5 +91,5 @@ test("computeInitialScrollForRoot respects zoom", () => {
     2,
   );
 
-  assert.deepEqual(scroll, { x: 152, y: 334 });
+  assert.deepEqual(scroll, { x: 180, y: 334 });
 });

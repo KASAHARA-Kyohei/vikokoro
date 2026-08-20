@@ -149,6 +149,11 @@ export function buildVisibleTreeProjection(
       cursorId,
       nodes,
       nodePositions,
+      branchDirections: Object.fromEntries(
+        [...visibleNodeIds].flatMap((id) =>
+          doc.branchDirections?.[id] ? [[id, doc.branchDirections[id]]] : [],
+        ),
+      ),
       edgeAnchors,
       customLinks,
       stickyNotes,

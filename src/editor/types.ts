@@ -4,6 +4,16 @@ export type DocId = string;
 export type Mode = "normal" | "insert";
 
 export type NodeColor = "blue" | "green" | "yellow" | "pink" | "gray";
+export type BranchDirection = "n" | "ne" | "e" | "se" | "s" | "sw" | "w" | "nw";
+export type BranchTone =
+  | "sky"
+  | "teal"
+  | "fern"
+  | "amber"
+  | "coral"
+  | "rose"
+  | "violet"
+  | "indigo";
 export type CanvasPoint = { x: number; y: number };
 export type CanvasSize = { width: number; height: number };
 export type Viewport = { x: number; y: number; zoom: number; initialized?: boolean };
@@ -34,6 +44,7 @@ export type Node = {
   parentId: NodeId | null;
   childrenIds: NodeId[];
   color?: NodeColor;
+  branchTone?: BranchTone;
 };
 
 export type DocumentState = {
@@ -41,6 +52,7 @@ export type DocumentState = {
   cursorId: NodeId;
   nodes: Record<NodeId, Node>;
   nodePositions: Record<NodeId, CanvasPoint>;
+  branchDirections: Record<NodeId, BranchDirection>;
   edgeAnchors: Record<string, EdgeAnchor>;
   customLinks: Record<string, CustomLink>;
   stickyNotes: Record<string, StickyNote>;
@@ -66,7 +78,7 @@ export type Tab = {
 };
 
 export type Workspace = {
-  schemaVersion?: 2;
+  schemaVersion?: 3;
   tabs: Tab[];
   activeDocId: DocId;
   documents: Record<DocId, Document>;

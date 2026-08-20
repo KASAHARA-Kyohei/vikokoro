@@ -23,19 +23,27 @@
 
 .edgePath {
   fill: none;
-  stroke: var(--edge);
-  stroke-width: 1.2;
+  stroke: var(--branch-color, var(--edge));
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  opacity: 0.82;
 }
 
 .edgePathHighlighted {
   stroke: var(--edgeSelected);
-  stroke-width: 2;
+  stroke-width: 2.4;
+  opacity: 1;
 }
 
 .edgePathSelected {
   stroke: var(--accent);
   stroke-width: 2.4;
 }
+
+.edgeDepth-1 { stroke-width: 2.8; }
+.edgeDepth-2 { stroke-width: 2.25; }
+.edgeDepth-3 { stroke-width: 1.85; }
+.edgeDepth-4 { stroke-width: 1.55; }
 
 .edgePathCustom {
   stroke: color-mix(in srgb, var(--edgeSelected), transparent 28%);
@@ -67,9 +75,9 @@
   animation: nodeIn 160ms ease both;
   position: absolute;
   z-index: 2;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--surface);
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--branch-color, var(--border)) 48%, var(--border));
+  background: color-mix(in srgb, var(--branch-color, var(--surface)) 7%, var(--surface));
   display: flex;
   align-items: center;
   padding: 0 30px 0 10px;
@@ -82,6 +90,44 @@
     background 120ms ease,
     border-color 120ms ease,
     box-shadow 120ms ease;
+}
+
+.branchTone-sky { --branch-color: #4b9fe8; }
+.branchTone-teal { --branch-color: #22a69e; }
+.branchTone-fern { --branch-color: #6aa84f; }
+.branchTone-amber { --branch-color: #d59a2f; }
+.branchTone-coral { --branch-color: #dc7257; }
+.branchTone-rose { --branch-color: #d45f83; }
+.branchTone-violet { --branch-color: #9b6bd3; }
+.branchTone-indigo { --branch-color: #6674d8; }
+
+.nodeBranch::before {
+  content: "";
+  position: absolute;
+  left: 9px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--branch-color, var(--muted));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--branch-color, var(--muted)) 14%, transparent);
+}
+
+.nodeRoot {
+  border-width: 2px;
+  border-color: color-mix(in srgb, var(--accent) 64%, var(--border));
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--accentBg) 72%, var(--surface)), var(--surface));
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  box-shadow: 0 10px 30px color-mix(in srgb, var(--accent) 13%, transparent);
+}
+
+.nodeDirectionPickerOpen {
+  z-index: 12;
+}
+
+.nodeBranch .nodeText {
+  padding-left: 7px;
 }
 
 .nodeSelected,
@@ -189,7 +235,93 @@
 }
 
 .node:hover {
-  background: var(--surfaceHover);
+  background: color-mix(in srgb, var(--branch-color, var(--surfaceHover)) 11%, var(--surfaceHover));
+}
+
+.directionPicker {
+  position: absolute;
+  z-index: 20;
+  left: 50%;
+  top: 50%;
+  width: 214px;
+  height: 174px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  animation: directionPickerIn 150ms cubic-bezier(0.2, 0.9, 0.25, 1.15) both;
+}
+
+.directionPickerRing {
+  position: absolute;
+  inset: 13px 33px;
+  border: 1px dashed color-mix(in srgb, var(--accent) 38%, transparent);
+  border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--surface) 82%, transparent) 0 24%, transparent 25%);
+}
+
+.directionOption,
+.directionPickerCenter {
+  position: absolute;
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in srgb, var(--accentBorder) 42%, var(--border));
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  color: var(--text);
+  box-shadow: 0 5px 16px color-mix(in srgb, #000 20%, transparent);
+  cursor: pointer;
+  backdrop-filter: blur(7px);
+}
+
+.directionOption {
+  width: 38px;
+  height: 30px;
+  gap: 3px;
+  border-radius: 999px;
+  transform: translate(-50%, -50%);
+}
+
+.directionOption:hover,
+.directionOption:focus-visible {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accentBg) 66%, var(--surface));
+  transform: translate(-50%, -50%) scale(1.09);
+  outline: none;
+}
+
+.directionOptionArrow { font-size: 14px; line-height: 1; }
+.directionOption kbd {
+  color: var(--muted);
+  font: 700 9px/1 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+.directionOption-n { left: 50%; top: 0; }
+.directionOption-ne { left: 83%; top: 18%; }
+.directionOption-e { left: 100%; top: 50%; }
+.directionOption-se { left: 83%; top: 82%; }
+.directionOption-s { left: 50%; top: 100%; }
+.directionOption-sw { left: 17%; top: 82%; }
+.directionOption-w { left: 0; top: 50%; }
+.directionOption-nw { left: 17%; top: 18%; }
+
+.directionPickerCenter {
+  left: 50%;
+  top: 50%;
+  width: 29px;
+  height: 29px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  color: var(--muted);
+  font-size: 18px;
+}
+
+.directionPickerCenter:hover {
+  color: var(--text);
+  border-color: var(--accentBorder);
+}
+
+@keyframes directionPickerIn {
+  from { opacity: 0; transform: translate(-50%, -50%) scale(0.82); }
+  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
 }
 
 .stickyNote {
@@ -434,11 +566,15 @@
   opacity: 0.35;
 }
 
+.nodeEditing .nodeText {
+  visibility: hidden;
+}
+
 .nodeInput {
   position: absolute;
   z-index: 2;
   box-sizing: border-box;
-  border-radius: 8px;
+  border-radius: 999px;
   border: 2px solid var(--accent);
   background: var(--inputBg);
   color: var(--text);

@@ -21,6 +21,7 @@ function makeDoc() {
     },
     undoStack: [],
     redoStack: [],
+    branchDirections: { a: "e", a1: "e", b: "e" },
   };
 }
 
@@ -57,11 +58,22 @@ test("swapSibling exchanges sibling branches and keeps descendant offsets", () =
 });
 
 test("reparentNode: right indent keeps subtree", () => {
-  const doc = { ...makeDoc(), cursorId: "b" };
+  const doc = {
+    ...makeDoc(),
+    cursorId: "b",
+    nodePositions: {
+      root: { x: 0, y: 0 },
+      a: { x: 260, y: 0 },
+      a1: { x: 520, y: 0 },
+      b: { x: 260, y: 220 },
+    },
+  };
   const updated = reparentNode(doc, "right");
   assert.equal(updated.nodes.b.parentId, "a");
   assert.deepEqual(updated.nodes.root.childrenIds, ["a"]);
   assert.deepEqual(updated.nodes.a.childrenIds, ["a1", "b"]);
+  assert.equal(updated.branchDirections.b, "s");
+  assert.equal(updated.nodes.b.branchTone, undefined);
 });
 
 test("reparentNode: left outdent no-op at root child", () => {
@@ -77,6 +89,9 @@ test("deleteCursorNodeAndPromoteChildren: delete promotes child and moves cursor
   assert.deepEqual(updated.nodes.root.childrenIds, ["a1", "b"]);
   assert.equal(updated.nodes.a1.parentId, "root");
   assert.equal(updated.cursorId, "a1");
+  assert.equal(updated.branchDirections.a, undefined);
+  assert.equal(updated.branchDirections.a1, "e");
+  assert.ok(updated.nodes.a1.branchTone);
 });
 
 test("addSibling: root cursor falls back to addChild", () => {
@@ -103,8 +118,8 @@ test("addSibling keeps the preferred position and moves an overlapping lower bra
   const updated = addSibling(doc).updated;
   const newNodeId = updated.cursorId;
 
-  assert.deepEqual(updated.nodePositions[newNodeId], { x: 520, y: 50 });
-  assert.equal(updated.nodePositions.b.y > 50, true);
+  assert.equal(updated.nodePositions[newNodeId].x, 520);
+  assert.equal(updated.nodePositions[newNodeId].y < 0, true);
   assert.deepEqual(updated.nodePositions.root, doc.nodePositions.root);
   assert.deepEqual(updated.nodePositions.a, doc.nodePositions.a);
   assert.deepEqual(updated.nodePositions.a1, doc.nodePositions.a1);

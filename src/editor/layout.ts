@@ -1,4 +1,13 @@
-import type { AnchorSide, CanvasPoint, DocumentState, EdgeAnchor, Node, NodeId } from "./types";
+import { directionTangent, directionVector } from "./domain/branchDirections";
+import type {
+  AnchorSide,
+  BranchDirection,
+  CanvasPoint,
+  DocumentState,
+  EdgeAnchor,
+  Node,
+  NodeId,
+} from "./types";
 
 export const NODE_WIDTH = 180;
 export const NODE_HEIGHT = 34;
@@ -27,6 +36,7 @@ export type LayoutResult = {
 };
 
 const DEFAULT_NODE_SIZE: NodeSize = { width: NODE_WIDTH, height: NODE_HEIGHT };
+const ROOT_MIN_SIZE: NodeSize = { width: 220, height: 46 };
 
 function estimateCharacterWidth(character: string): number {
   if (character === "\t") return 28;
@@ -106,11 +116,22 @@ export function getNodeSizes(
 }
 
 function getDocumentNodeSizes(
-  doc: Pick<DocumentState, "nodes"> & { cardSizes?: DocumentState["cardSizes"] },
+  doc: Pick<DocumentState, "rootId" | "nodes"> & { cardSizes?: DocumentState["cardSizes"] },
 ) {
   const measured = getNodeSizes(doc.nodes);
   return Object.fromEntries(
-    Object.entries(measured).map(([id, size]) => [id, doc.cardSizes?.[id] ?? size]),
+    Object.entries(measured).map(([id, size]) => {
+      const resolved = doc.cardSizes?.[id] ?? size;
+      return [
+        id,
+        id === doc.rootId
+          ? {
+              width: Math.max(ROOT_MIN_SIZE.width, resolved.width),
+              height: Math.max(ROOT_MIN_SIZE.height, resolved.height),
+            }
+          : resolved,
+      ];
+    }),
   );
 }
 
@@ -133,7 +154,7 @@ function collectDepths(
   return depths;
 }
 
-export function computeTreePositions(
+function computeLegacyTreePositions(
   doc: Pick<DocumentState, "rootId" | "nodes">,
   rootId: NodeId = doc.rootId,
 ): Record<NodeId, CanvasPoint> {
@@ -208,6 +229,142 @@ export function computeTreePositions(
   return positions;
 }
 
+type DirectionalLayoutDocument = Pick<DocumentState, "rootId" | "nodes"> &
+  Partial<Pick<DocumentState, "branchDirections" | "cardSizes">>;
+
+function directionalPosition(
+  parentPoint: CanvasPoint,
+  parentSize: NodeSize,
+  childSize: NodeSize,
+  direction: BranchDirection,
+  tangentOffset: number,
+  outwardOffset = 0,
+): CanvasPoint {
+  const vector = directionVector(direction);
+  const tangent = directionTangent(direction);
+  const horizontalClearance = parentSize.width / 2 + childSize.width / 2 + H_GAP;
+  const verticalClearance = parentSize.height / 2 + childSize.height / 2 + 58;
+  const distance = Math.max(
+    vector.x === 0 ? 0 : horizontalClearance / Math.abs(vector.x),
+    vector.y === 0 ? 0 : verticalClearance / Math.abs(vector.y),
+  ) + outwardOffset;
+  const parentCenter = {
+    x: parentPoint.x + parentSize.width / 2,
+    y: parentPoint.y + parentSize.height / 2,
+  };
+  return {
+    x:
+      parentCenter.x +
+      vector.x * distance +
+      tangent.x * tangentOffset -
+      childSize.width / 2,
+    y:
+      parentCenter.y +
+      vector.y * distance +
+      tangent.y * tangentOffset -
+      childSize.height / 2,
+  };
+}
+
+function layoutRectsOverlap(
+  aPoint: CanvasPoint,
+  aSize: NodeSize,
+  bPoint: CanvasPoint,
+  bSize: NodeSize,
+): boolean {
+  const gap = 18;
+  return (
+    aPoint.x < bPoint.x + bSize.width + gap &&
+    aPoint.x + aSize.width + gap > bPoint.x &&
+    aPoint.y < bPoint.y + bSize.height + gap &&
+    aPoint.y + aSize.height + gap > bPoint.y
+  );
+}
+
+function computeDirectionalTreePositions(
+  doc: DirectionalLayoutDocument,
+  rootId: NodeId,
+): Record<NodeId, CanvasPoint> {
+  const positions: Record<NodeId, CanvasPoint> = { [rootId]: { x: 0, y: 0 } };
+  const sizes = getDocumentNodeSizes(doc);
+  const placed = new Set<NodeId>([rootId]);
+  const visited = new Set<NodeId>();
+
+  const visit = (parentId: NodeId) => {
+    if (visited.has(parentId)) return;
+    visited.add(parentId);
+    const parent = doc.nodes[parentId];
+    const parentPoint = positions[parentId];
+    if (!parent || !parentPoint) return;
+    const parentSize = sizes[parentId] ?? DEFAULT_NODE_SIZE;
+    const groups = new Map<BranchDirection, NodeId[]>();
+    for (const childId of parent.childrenIds.filter((id) => Boolean(doc.nodes[id]))) {
+      const direction = doc.branchDirections?.[childId] ?? "e";
+      groups.set(direction, [...(groups.get(direction) ?? []), childId]);
+    }
+
+    for (const [direction, childIds] of groups) {
+      const tangent = directionTangent(direction);
+      const tangentUsesWidth = Math.abs(tangent.x) >= Math.abs(tangent.y);
+      const slots = childIds.map((childId) => {
+        const size = sizes[childId] ?? DEFAULT_NODE_SIZE;
+        return (tangentUsesWidth ? size.width : size.height) + 26;
+      });
+      const totalSpan = slots.reduce((sum, value) => sum + value, 0);
+      let cursor = -totalSpan / 2;
+      for (let index = 0; index < childIds.length; index += 1) {
+        const childId = childIds[index];
+        const childSize = sizes[childId] ?? DEFAULT_NODE_SIZE;
+        const tangentOffset = cursor + slots[index] / 2;
+        cursor += slots[index];
+        let outwardOffset = 0;
+        let candidate = directionalPosition(
+          parentPoint,
+          parentSize,
+          childSize,
+          direction,
+          tangentOffset,
+        );
+        for (let attempt = 0; attempt < 40; attempt += 1) {
+          const collides = [...placed].some((otherId) => {
+            if (otherId === parentId) return false;
+            const otherPoint = positions[otherId];
+            const otherSize = sizes[otherId] ?? DEFAULT_NODE_SIZE;
+            return otherPoint
+              ? layoutRectsOverlap(candidate, childSize, otherPoint, otherSize)
+              : false;
+          });
+          if (!collides) break;
+          outwardOffset += 32;
+          candidate = directionalPosition(
+            parentPoint,
+            parentSize,
+            childSize,
+            direction,
+            tangentOffset,
+            outwardOffset,
+          );
+        }
+        positions[childId] = candidate;
+        placed.add(childId);
+      }
+    }
+
+    for (const childId of parent.childrenIds) visit(childId);
+  };
+
+  visit(rootId);
+  return positions;
+}
+
+export function computeTreePositions(
+  doc: DirectionalLayoutDocument,
+  rootId: NodeId = doc.rootId,
+): Record<NodeId, CanvasPoint> {
+  if (doc.branchDirections === undefined) return computeLegacyTreePositions(doc, rootId);
+  return computeDirectionalTreePositions(doc, rootId);
+}
+
 export function isFiniteCanvasPoint(value: unknown): value is CanvasPoint {
   if (!value || typeof value !== "object") return false;
   const point = value as CanvasPoint;
@@ -215,7 +372,7 @@ export function isFiniteCanvasPoint(value: unknown): value is CanvasPoint {
 }
 
 export function sanitizeNodePositions(
-  doc: Pick<DocumentState, "rootId" | "nodes">,
+  doc: DirectionalLayoutDocument,
   input: Record<NodeId, CanvasPoint> | undefined,
 ): Record<NodeId, CanvasPoint> {
   const fallback = computeTreePositions(doc);
@@ -305,30 +462,36 @@ export function getEdgeEndpoints(
     y: from.y + fromSize.height / 2,
   };
   const toCenter = { x: to.x + toSize.width / 2, y: to.y + toSize.height / 2 };
-  const dx = toCenter.x - fromCenter.x;
-  const dy = toCenter.y - fromCenter.y;
-  const horizontalBias = Math.max(fromSize.width, toSize.width) * 0.35;
-  const verticalBias = Math.max(fromSize.height, toSize.height) * 2.5;
-  const shouldUseVertical =
-    Math.abs(dx) < horizontalBias && Math.abs(dy) > verticalBias;
-
-  if (!shouldUseVertical) {
-    const fromSide = dx >= 0 ? "right" : "left";
-    const toSide = dx >= 0 ? "left" : "right";
+  const automaticBoundaryPoint = (
+    center: CanvasPoint,
+    size: NodeSize,
+    toward: CanvasPoint,
+  ): { point: CanvasPoint; side: AnchorSide } => {
+    const dx = toward.x - center.x;
+    const dy = toward.y - center.y;
+    if (Math.abs(dx) < 0.001 && Math.abs(dy) < 0.001) {
+      return { point: { x: center.x + size.width / 2, y: center.y }, side: "right" };
+    }
+    const xRatio = Math.abs(dx) / (size.width / 2);
+    const yRatio = Math.abs(dy) / (size.height / 2);
+    const scale = 1 / Math.max(xRatio, yRatio);
+    const side: AnchorSide = xRatio >= yRatio
+      ? dx >= 0 ? "right" : "left"
+      : dy >= 0 ? "bottom" : "top";
     return {
-      from: getAnchorPoint(from, anchor?.from ?? fromSide, fromSize),
-      to: getAnchorPoint(to, anchor?.to ?? toSide, toSize),
-      fromSide: anchor?.from ?? fromSide,
-      toSide: anchor?.to ?? toSide,
+      point: { x: center.x + dx * scale, y: center.y + dy * scale },
+      side,
     };
-  }
-  const fromSide = dy >= 0 ? "bottom" : "top";
-  const toSide = dy >= 0 ? "top" : "bottom";
+  };
+  const automaticFrom = automaticBoundaryPoint(fromCenter, fromSize, toCenter);
+  const automaticTo = automaticBoundaryPoint(toCenter, toSize, fromCenter);
+  const fromSide = anchor?.from ?? automaticFrom.side;
+  const toSide = anchor?.to ?? automaticTo.side;
   return {
-    from: getAnchorPoint(from, anchor?.from ?? fromSide, fromSize),
-    to: getAnchorPoint(to, anchor?.to ?? toSide, toSize),
-    fromSide: anchor?.from ?? fromSide,
-    toSide: anchor?.to ?? toSide,
+    from: anchor?.from ? getAnchorPoint(from, anchor.from, fromSize) : automaticFrom.point,
+    to: anchor?.to ? getAnchorPoint(to, anchor.to, toSize) : automaticTo.point,
+    fromSide,
+    toSide,
   };
 }
 

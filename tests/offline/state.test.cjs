@@ -71,6 +71,7 @@ function withTree(state) {
             a1: { x: 520, y: 0 },
             b: { x: 260, y: 50 },
           },
+          branchDirections: { a: "e", a1: "e", b: "e" },
           edgeAnchors: {},
           customLinks: {},
           stickyNotes: {},
@@ -82,9 +83,9 @@ function withTree(state) {
           },
           nodes: {
             root: { id: "root", text: "root", parentId: null, childrenIds: ["a", "b"] },
-            a: { id: "a", text: "a", parentId: "root", childrenIds: ["a1"] },
+            a: { id: "a", text: "a", parentId: "root", childrenIds: ["a1"], branchTone: "sky" },
             a1: { id: "a1", text: "a1", parentId: "a", childrenIds: [] },
-            b: { id: "b", text: "b", parentId: "root", childrenIds: [] },
+            b: { id: "b", text: "b", parentId: "root", childrenIds: [], branchTone: "teal" },
           },
           undoStack: [],
           redoStack: [],
@@ -136,6 +137,8 @@ test("legacy hydration defaults and sanitizes collapsed node IDs", () => {
   delete legacy.documents[docId].edgeAnchors;
   delete legacy.documents[docId].customLinks;
   delete legacy.documents[docId].stickyNotes;
+  delete legacy.documents[docId].branchDirections;
+  legacy.schemaVersion = 2;
   legacy.documents[docId].groups = {
     old: { id: "old", title: "old", cardIds: ["a"], position: { x: 0, y: 0 }, size: { width: 1, height: 1 } },
   };
@@ -153,6 +156,18 @@ test("legacy hydration defaults and sanitizes collapsed node IDs", () => {
   assert.deepEqual(state.workspace.documents[docId].edgeAnchors, {});
   assert.deepEqual(state.workspace.documents[docId].customLinks, {});
   assert.deepEqual(state.workspace.documents[docId].stickyNotes, {});
+  assert.equal(state.workspace.schemaVersion, 3);
+  assert.deepEqual(state.workspace.documents[docId].branchDirections, {
+    a: "e",
+    a1: "e",
+    b: "e",
+  });
+  assert.deepEqual(state.workspace.documents[docId].viewport, {
+    x: 0,
+    y: 0,
+    zoom: 1,
+    initialized: false,
+  });
   assert.equal(Object.hasOwn(state.workspace.documents[docId], "groups"), false);
   assert.equal(Object.hasOwn(state.workspace.documents[docId].undoStack[0], "groups"), false);
 });
@@ -195,6 +210,84 @@ test("moving multiple nodes is one undo step and undo restores positions", () =>
   doc = state.workspace.documents[docId];
   assert.deepEqual(doc.nodePositions.a, { x: 260, y: 0 });
   assert.deepEqual(doc.nodePositions.a1, { x: 520, y: 0 });
+});
+
+test("方向付き子作成は指定方向・枝色・Insertモードを一度に設定する", () => {
+  let state = withTree(makeReadyState());
+  const docId = state.workspace.activeDocId;
+  state.workspace.documents[docId].cursorId = "root";
+
+  state = editorReducer(state, {
+    type: "addChildInDirectionAndInsert",
+    parentId: "root",
+    direction: "nw",
+  });
+
+  const doc = state.workspace.documents[docId];
+  const child = doc.nodes[doc.cursorId];
+  assert.equal(state.mode, "insert");
+  assert.equal(child.parentId, "root");
+  assert.equal(doc.branchDirections[child.id], "nw");
+  assert.equal(child.branchTone, "fern");
+  assert.equal(doc.nodePositions[child.id].x < doc.nodePositions.root.x, true);
+  assert.equal(doc.nodePositions[child.id].y < doc.nodePositions.root.y, true);
+});
+
+test("単独ドラッグは枝方向を更新し、Undoで座標と方向を同時に戻す", () => {
+  let state = withTree(makeReadyState());
+  const docId = state.workspace.activeDocId;
+
+  state = editorReducer(state, { type: "moveNodes", nodeIds: ["a"], dx: -350, dy: -180 });
+  let doc = state.workspace.documents[docId];
+  assert.equal(doc.branchDirections.a, "nw");
+  assert.equal(doc.undoStack.length, 1);
+
+  state = editorReducer(state, { type: "undo" });
+  doc = state.workspace.documents[docId];
+  assert.deepEqual(doc.nodePositions.a, { x: 260, y: 0 });
+  assert.equal(doc.branchDirections.a, "e");
+});
+
+test("親子を同時ドラッグした場合は子の枝方向を変更しない", () => {
+  let state = withTree(makeReadyState());
+  const docId = state.workspace.activeDocId;
+  state.workspace.documents[docId].branchDirections.a1 = "se";
+
+  state = editorReducer(state, {
+    type: "moveNodes",
+    nodeIds: ["a", "a1"],
+    dx: -300,
+    dy: 280,
+  });
+
+  const doc = state.workspace.documents[docId];
+  assert.equal(doc.branchDirections.a1, "se");
+  assert.equal(doc.branchDirections.a, "s");
+});
+
+test("複製と削除は枝方向を複製・除去する", () => {
+  let state = withTree(makeReadyState());
+  const docId = state.workspace.activeDocId;
+  state.workspace.documents[docId].branchDirections.a = "nw";
+  state = editorReducer(state, { type: "duplicateNodes", nodeIds: ["a"] });
+  let doc = state.workspace.documents[docId];
+  const duplicateId = doc.nodes.root.childrenIds.find((id) => id !== "a" && id !== "b");
+  assert.ok(duplicateId);
+  assert.equal(doc.branchDirections[duplicateId], "nw");
+  state = editorReducer(state, { type: "deleteNodes", nodeIds: [duplicateId] });
+  doc = state.workspace.documents[docId];
+  assert.equal(doc.branchDirections[duplicateId], undefined);
+});
+
+test("タブ作成・削除後もworkspace schema version 3を維持する", () => {
+  let state = makeReadyState();
+  state = editorReducer(state, { type: "createDoc" });
+  assert.equal(state.workspace.schemaVersion, 3);
+  assert.equal(state.workspace.tabs.length, 2);
+
+  state = editorReducer(state, { type: "closeActiveDoc" });
+  assert.equal(state.workspace.schemaVersion, 3);
+  assert.equal(state.workspace.tabs.length, 1);
 });
 
 test("branch auto-layout keeps branch root position", () => {
