@@ -91,7 +91,81 @@ test("F enters focus and Escape exits focus", () => {
   });
 });
 
-test("h moves focus up while focus is active", () => {
+test("hjkl resolve to screen-direction navigation", () => {
+  for (const [key, direction] of [["h", "left"], ["j", "down"], ["k", "up"], ["l", "right"]]) {
+    const resolution = resolveKeyboardCommand(baseContext(), {
+      key,
+      ctrlKey: false,
+      metaKey: false,
+      altKey: false,
+      shiftKey: false,
+    });
+    assert.deepEqual(resolution.command, { type: "moveCursorVisual", direction });
+  }
+});
+
+test("arrow keys retain hierarchy navigation and focus parent behavior", () => {
+  const arrows = [
+    ["ArrowLeft", "parent"],
+    ["ArrowDown", "nextSibling"],
+    ["ArrowUp", "prevSibling"],
+    ["ArrowRight", "child"],
+  ];
+  for (const [key, direction] of arrows) {
+    const resolution = resolveKeyboardCommand(baseContext(), {
+      key,
+      ctrlKey: false,
+      metaKey: false,
+      altKey: false,
+      shiftKey: false,
+    });
+    assert.deepEqual(resolution.command, {
+      type: "dispatch",
+      action: { type: "moveCursor", direction },
+    });
+  }
+
+  const focusParent = resolveKeyboardCommand(
+    { ...baseContext(), focusActive: true },
+    {
+      key: "ArrowLeft",
+      ctrlKey: false,
+      metaKey: false,
+      altKey: false,
+      shiftKey: false,
+    },
+  );
+  assert.deepEqual(focusParent.command, {
+    type: "dispatch",
+    action: { type: "focusParent" },
+  });
+});
+
+test("Shift+HJKL and Alt+HJKL keep their editing commands", () => {
+  const swap = resolveKeyboardCommand(baseContext(), {
+    key: "J",
+    ctrlKey: false,
+    metaKey: false,
+    altKey: false,
+    shiftKey: true,
+  });
+  assert.deepEqual(swap.command, {
+    type: "dispatch",
+    action: { type: "swapSibling", direction: "down" },
+  });
+
+  const nudge = resolveKeyboardCommand(baseContext(), {
+    key: "h",
+    code: "KeyH",
+    ctrlKey: false,
+    metaKey: false,
+    altKey: true,
+    shiftKey: false,
+  });
+  assert.deepEqual(nudge.command, { type: "nudgeSelection", dx: -8, dy: 0 });
+});
+
+test("h no longer changes focus hierarchy while focus is active", () => {
   const resolution = resolveKeyboardCommand(
     { ...baseContext(), focusActive: true },
     {
@@ -103,9 +177,35 @@ test("h moves focus up while focus is active", () => {
     },
   );
   assert.deepEqual(resolution.command, {
-    type: "dispatch",
-    action: { type: "focusParent" },
+    type: "moveCursorVisual",
+    direction: "left",
   });
+});
+
+test("insert mode does not intercept arrows or hjkl", () => {
+  for (const key of ["ArrowLeft", "ArrowRight", "h", "j", "k", "l"]) {
+    const resolution = resolveKeyboardCommand({ ...baseContext(), mode: "insert" }, {
+      key,
+      ctrlKey: false,
+      metaKey: false,
+      altKey: false,
+      shiftKey: false,
+    });
+    assert.equal(resolution.preventDefault, false);
+    assert.deepEqual(resolution.command, { type: "none" });
+  }
+});
+
+test("modified arrows remain available to the host instead of changing the cursor", () => {
+  const resolution = resolveKeyboardCommand(baseContext(), {
+    key: "ArrowLeft",
+    ctrlKey: false,
+    metaKey: false,
+    altKey: false,
+    shiftKey: true,
+  });
+  assert.equal(resolution.preventDefault, false);
+  assert.deepEqual(resolution.command, { type: "none" });
 });
 
 test("escape closes and commits node memo", () => {

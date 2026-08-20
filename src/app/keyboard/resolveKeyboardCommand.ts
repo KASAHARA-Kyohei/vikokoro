@@ -1,4 +1,5 @@
 import type { NodeColor } from "../../editor/types";
+import type { SpatialDirection } from "../../editor/domain/spatialNavigation";
 import { resolveJumpKey } from "../../features/jump/model";
 import type { KeyboardInput, KeyboardResolution, KeyboardResolverContext } from "./types";
 
@@ -313,36 +314,37 @@ export function resolveKeyboardCommand(
     };
   }
 
-  if (key === "h") {
+  const spatialDirectionByKey: Record<string, SpatialDirection> = {
+    h: "left",
+    j: "down",
+    k: "up",
+    l: "right",
+  };
+  const spatialDirection = spatialDirectionByKey[key];
+  if (spatialDirection) {
+    return {
+      preventDefault: true,
+      command: { type: "moveCursorVisual", direction: spatialDirection },
+    };
+  }
+
+  const hierarchyActionByKey: Record<string, "parent" | "nextSibling" | "prevSibling" | "child"> = {
+    ArrowLeft: "parent",
+    ArrowDown: "nextSibling",
+    ArrowUp: "prevSibling",
+    ArrowRight: "child",
+  };
+  const hierarchyDirection = hierarchyActionByKey[key];
+  if (!ctrlKey && !metaKey && !altKey && !shiftKey && hierarchyDirection) {
     return {
       preventDefault: true,
       command: {
         type: "dispatch",
-        action: ctx.focusActive
-          ? { type: "focusParent" }
-          : { type: "moveCursor", direction: "parent" },
+        action:
+          hierarchyDirection === "parent" && ctx.focusActive
+            ? { type: "focusParent" }
+            : { type: "moveCursor", direction: hierarchyDirection },
       },
-    };
-  }
-
-  if (key === "l") {
-    return {
-      preventDefault: true,
-      command: { type: "dispatch", action: { type: "moveCursor", direction: "child" } },
-    };
-  }
-
-  if (key === "j") {
-    return {
-      preventDefault: true,
-      command: { type: "dispatch", action: { type: "moveCursor", direction: "nextSibling" } },
-    };
-  }
-
-  if (key === "k") {
-    return {
-      preventDefault: true,
-      command: { type: "dispatch", action: { type: "moveCursor", direction: "prevSibling" } },
     };
   }
 

@@ -1,6 +1,7 @@
 import type { EditorAction } from "../../editor/state";
 import type { Mode, NodeColor, NodeId } from "../../editor/types";
 import type { JumpSession } from "../../features/jump/model";
+import type { SpatialDirection } from "../../editor/domain/spatialNavigation";
 
 export type KeyboardInput = {
   key: string;
@@ -44,6 +45,7 @@ export type KeyboardCommand =
   | { type: "openRelatedLinkJump" }
   | { type: "closeJump" }
   | { type: "nudgeSelection"; dx: number; dy: number }
+  | { type: "moveCursorVisual"; direction: SpatialDirection }
   | { type: "multi"; commands: KeyboardCommand[] };
 
 export type KeyboardResolution = {

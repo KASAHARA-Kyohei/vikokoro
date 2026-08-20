@@ -7,6 +7,7 @@ import { useFoldChord } from "./app/keyboard/useFoldChord";
 import { useEditorUiSession } from "./app/session/useEditorUiSession";
 import { EditorView } from "./editor/EditorView";
 import { computeLayout } from "./editor/layout";
+import { findSpatialNeighbor } from "./editor/domain/spatialNavigation";
 import { TabBar } from "./editor/TabBar";
 import { canCreateCustomLink } from "./editor/domain/customLinks";
 import { makeEdgeKey } from "./editor/domain/edgeAnchors";
@@ -856,6 +857,11 @@ function App() {
             ? [...selectedNodeIds].filter((id) => Boolean(activeDoc.nodes[id]))
             : [activeDoc.cursorId];
           dispatch({ type: "moveNodes", nodeIds: selected, dx, dy });
+        },
+        moveCursorVisual: (direction) => {
+          const layout = computeLayout(visibleDoc);
+          const nodeId = findSpatialNeighbor(layout, visibleDoc.cursorId, direction);
+          if (nodeId) dispatch({ type: "selectNode", nodeId });
         },
       });
     };

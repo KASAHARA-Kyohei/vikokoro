@@ -21,7 +21,7 @@ Persisted workspaces use `schemaVersion: 3`. Each non-root node stores an eight-
 - In Normal mode, `a` opens an eight-way radial picker around the selected node. `q/w/e/a/d/z/x/c` choose northwest/north/northeast/west/east/southwest/south/southeast; click and Escape are supported.
 - Tab creates a child using the latest direct-child direction, then the current node's incoming direction, then east. Enter creates a sibling in the current node's direction. Both enter inline editing.
 - Enter commits, Shift+Enter inserts a newline, and Escape restores the edit origin. Japanese IME composition Enter is not treated as commit.
-- `h/j/k/l` navigates the hierarchy. `Shift+j/k` exchanges adjacent sibling branches visually and logically.
+- `h/j/k/l` moves to the nearest visible node on screen left/down/up/right. Candidates use node rectangles, prefer perpendicular-axis overlap, and never wrap around. `←/↓/↑/→` retain hierarchy navigation (parent/next sibling/previous sibling/child); in focus mode `←` returns to the focus parent. `Shift+j/k` exchanges adjacent sibling branches visually and logically.
 - Blank double-click creates at the pointer; Command+Enter creates at viewport center.
 - Shift or Command click toggles nodes; blank drag performs marquee selection. Dragging a selected node moves the selection in one history step. If its parent is not moved, the new center angle is rounded to the nearest 45 degrees and saved in the same history step.
 - Command+D duplicates selected nodes with a small offset.
