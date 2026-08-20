@@ -11,7 +11,6 @@ function baseContext() {
     nodeColorOpen: false,
     nodeMemoOpen: false,
     settingsOpen: false,
-    llmAssistOpen: false,
     closeConfirmOpen: false,
     focusActive: false,
     jumpSession: null,
@@ -199,4 +198,15 @@ test("equals auto-layouts a branch and plus auto-layouts the entire map", () => 
     type: "dispatch",
     action: { type: "autoLayout", scope: "all" },
   });
+});
+
+test("Command+Z and Command+Shift+Z resolve undo and redo", () => {
+  const undo = resolveKeyboardCommand(baseContext(), {
+    key: "z", code: "KeyZ", ctrlKey: false, metaKey: true, altKey: false, shiftKey: false,
+  });
+  const redo = resolveKeyboardCommand(baseContext(), {
+    key: "z", code: "KeyZ", ctrlKey: false, metaKey: true, altKey: false, shiftKey: true,
+  });
+  assert.deepEqual(undo.command, { type: "dispatch", action: { type: "undo" } });
+  assert.deepEqual(redo.command, { type: "dispatch", action: { type: "redo" } });
 });

@@ -5,6 +5,7 @@ const {
   deleteCursorNodeAndPromoteChildren,
   moveCursor,
   reparentNode,
+  swapSibling,
 } = require("../../.tmp-tests/src/editor/domain/treeOps.js");
 
 function makeDoc() {
@@ -33,6 +34,26 @@ test("moveCursor: parent/child/nextSibling/prevSibling", () => {
 
   const fromB = { ...makeDoc(), cursorId: "b" };
   assert.equal(moveCursor(fromB, "prevSibling").cursorId, "a");
+});
+
+test("swapSibling exchanges sibling branches and keeps descendant offsets", () => {
+  const doc = {
+    ...makeDoc(),
+    cursorId: "a",
+    nodePositions: {
+      root: { x: 0, y: 100 },
+      a: { x: 260, y: 20 },
+      a1: { x: 520, y: 30 },
+      b: { x: 300, y: 220 },
+    },
+  };
+
+  const updated = swapSibling(doc, "down");
+
+  assert.deepEqual(updated.nodes.root.childrenIds, ["b", "a"]);
+  assert.deepEqual(updated.nodePositions.a, { x: 300, y: 220 });
+  assert.deepEqual(updated.nodePositions.a1, { x: 560, y: 230 });
+  assert.deepEqual(updated.nodePositions.b, { x: 260, y: 20 });
 });
 
 test("reparentNode: right indent keeps subtree", () => {

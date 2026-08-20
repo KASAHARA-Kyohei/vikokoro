@@ -22,6 +22,10 @@ function makeState() {
     stickyNotes: {
       "note-1": { id: "note-1", text: "memo", position: { x: 30, y: -10 } },
     },
+    cardSizes: {
+      root: { width: 180, height: 34 },
+      a: { width: 180, height: 34 },
+    },
     nodes: {
       root: {
         id: "root",

@@ -8,6 +8,7 @@ test("z starts a fold chord and known second keys resolve actions", () => {
   const start = resolveFoldChordKey(false, "z");
   assert.deepEqual(start, { handled: true, nextPending: true, action: null });
 
+  assert.equal(resolveFoldChordKey(true, "z").action, "center");
   assert.equal(resolveFoldChordKey(true, "a").action, "toggle");
   assert.equal(resolveFoldChordKey(true, "c").action, "collapse");
   assert.equal(resolveFoldChordKey(true, "o").action, "expand");
