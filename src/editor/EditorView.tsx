@@ -1,6 +1,10 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ANCHOR_SIDES, makeEdgeKey } from "./domain/edgeAnchors";
 import {
+  BRANCH_DIRECTIONS,
+  branchToneForNode,
+} from "./domain/branchDirections";
+import {
   createEditorEnterState,
   transitionEditorEnter,
 } from "./domain/editorEnter";
@@ -15,6 +19,7 @@ import {
 } from "./domain/viewport";
 import type {
   AnchorSide,
+  BranchDirection,
   CanvasPoint,
   DocumentState,
   Mode,
@@ -41,6 +46,7 @@ type Props = {
   viewportRef: React.RefObject<HTMLDivElement | null>;
   panGestureActive: boolean;
   viewSessionKey: string;
+  centerRootOnInitialView: boolean;
   centerCursorRequest: number;
   highlightedNodeIds: Set<NodeId> | null;
   activeHighlightedNodeId: NodeId | null;
@@ -55,6 +61,7 @@ type Props = {
   selectedStickyNoteId: string | null;
   editingStickyNoteId: string | null;
   stickyPlacementActive: boolean;
+  directionPickerNodeId: NodeId | null;
   onSelectNode: (nodeId: NodeId) => void;
   onBeginCardEdit: (nodeId: NodeId) => void;
   onSelectionChange: (nodeIds: Set<NodeId>) => void;
@@ -73,6 +80,8 @@ type Props = {
   onResetEdgeAnchors: (edgeKey: string) => void;
   onMoveNodes: (nodeIds: NodeId[], dx: number, dy: number) => void;
   onCreateChildAt: (point: CanvasPoint) => void;
+  onCreateChildInDirection: (parentId: NodeId, direction: BranchDirection) => void;
+  onCloseDirectionPicker: () => void;
   onCreateStickyNoteAt: (point: CanvasPoint) => void;
   onMoveStickyNote: (noteId: string, dx: number, dy: number) => void;
   onToggleCollapse: (nodeId: NodeId) => void;
@@ -127,6 +136,7 @@ export function EditorView({
   viewportRef,
   panGestureActive,
   viewSessionKey,
+  centerRootOnInitialView,
   centerCursorRequest,
   highlightedNodeIds,
   activeHighlightedNodeId,
@@ -141,6 +151,7 @@ export function EditorView({
   selectedStickyNoteId,
   editingStickyNoteId,
   stickyPlacementActive,
+  directionPickerNodeId,
   onSelectNode,
   onBeginCardEdit,
   onSelectionChange,
@@ -155,6 +166,8 @@ export function EditorView({
   onResetEdgeAnchors,
   onMoveNodes,
   onCreateChildAt,
+  onCreateChildInDirection,
+  onCloseDirectionPicker,
   onCreateStickyNoteAt,
   onMoveStickyNote,
   onToggleCollapse,
@@ -191,6 +204,20 @@ export function EditorView({
   const [exitingNodes, setExitingNodes] = useState<Record<NodeId, ExitingNode>>({});
   const interactionDisabled = disabled || mode === "insert" || panGestureActive;
 
+  const directionOptionContent: Record<
+    BranchDirection,
+    { key: string; arrow: string; label: string }
+  > = {
+    n: { key: "W", arrow: "↑", label: "北" },
+    ne: { key: "E", arrow: "↗", label: "北東" },
+    e: { key: "D", arrow: "→", label: "東" },
+    se: { key: "C", arrow: "↘", label: "南東" },
+    s: { key: "X", arrow: "↓", label: "南" },
+    sw: { key: "Z", arrow: "↙", label: "南西" },
+    w: { key: "A", arrow: "←", label: "西" },
+    nw: { key: "Q", arrow: "↖", label: "北西" },
+  };
+
   const cursorPos = layout.positions[doc.cursorId];
   const cursorNode = doc.nodes[doc.cursorId];
   const rootPoint = layout.positions[doc.rootId];
@@ -209,6 +236,10 @@ export function EditorView({
 
   useEffect(() => {
     if (initialViewPositionedRef.current) return;
+    if (!centerRootOnInitialView) {
+      initialViewPositionedRef.current = true;
+      return;
+    }
     const viewport = viewportRef.current;
     if (!viewport || !rootPoint || !rootSize) return;
     const viewportSize = {
@@ -233,6 +264,7 @@ export function EditorView({
     rootPoint?.y,
     rootSize?.height,
     rootSize?.width,
+    centerRootOnInitialView,
     viewSessionKey,
     viewportRef,
     zoom,
@@ -535,6 +567,7 @@ export function EditorView({
 
   const beginMarqueeSelection = (event: React.MouseEvent<HTMLDivElement>) => {
     if (event.target !== event.currentTarget || interactionDisabled || event.button !== 0) return;
+    if (directionPickerNodeId) onCloseDirectionPicker();
     const start = clientToCanvas(event.clientX, event.clientY);
     if (!start) return;
     event.preventDefault();
@@ -631,6 +664,8 @@ export function EditorView({
             );
             const isHighlighted = highlightedEdgeKeys.has(key);
             const isSelected = selectedEdgeKey === key;
+            const branchTone = branchToneForNode(sourceDoc, edge.toId);
+            const depth = Math.min(4, to.depth);
             const path = svgPathForEdge(
               endpoints.from,
               endpoints.to,
@@ -638,11 +673,11 @@ export function EditorView({
               endpoints.toSide,
             );
             return (
-              <g key={key}>
+              <g key={key} className={branchTone ? `branchTone-${branchTone}` : undefined}>
                 <path
                   d={path}
                   className={
-                    "edgePath" +
+                    `edgePath edgeDepth-${depth}` +
                     (isHighlighted ? " edgePathHighlighted" : "") +
                     (isSelected ? " edgePathSelected" : "")
                   }
@@ -748,6 +783,8 @@ export function EditorView({
           const isCollapsed = collapsedNodeIds.has(node.id);
           const hiddenCount = hiddenDescendantCounts[node.id] ?? 0;
           const isMultiSelected = selectedNodeIds.has(node.id);
+          const branchTone = branchToneForNode(sourceDoc, node.id);
+          const pickerOpen = directionPickerNodeId === node.id;
           const selectedEdgeEndpoint =
             selectedEdge?.fromId === node.id
               ? "from"
@@ -761,6 +798,9 @@ export function EditorView({
               title={node.text}
               className={
                 "node" +
+                (node.id === doc.rootId ? " nodeRoot" : " nodeBranch") +
+                (branchTone ? ` branchTone-${branchTone}` : "") +
+                (pickerOpen ? " nodeDirectionPickerOpen" : "") +
                 (node.color ? ` nodeColor-${node.color}` : "") +
                 (isCursor ? " nodeSelected" : "") +
                 (isMultiSelected ? " nodeMultiSelected" : "") +
@@ -783,6 +823,53 @@ export function EditorView({
               {jump.hint ? (
                 <div className={"nodeJumpHint" + (jump.isMatched ? " nodeJumpHintMatched" : "")}>
                   {jump.hint}
+                </div>
+              ) : null}
+              {pickerOpen ? (
+                <div
+                  className="directionPicker"
+                  role="menu"
+                  aria-label="子ノードを作成する方向"
+                  onMouseDown={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                  }}
+                >
+                  <div className="directionPickerRing" aria-hidden="true" />
+                  {BRANCH_DIRECTIONS.map((direction) => {
+                    const option = directionOptionContent[direction];
+                    return (
+                      <button
+                        key={direction}
+                        type="button"
+                        role="menuitem"
+                        className={`directionOption directionOption-${direction}`}
+                        title={`${option.label} (${option.key})`}
+                        aria-label={`${option.label}方向に子ノードを作成`}
+                        onMouseDown={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          onCreateChildInDirection(node.id, direction);
+                        }}
+                      >
+                        <span className="directionOptionArrow">{option.arrow}</span>
+                        <kbd>{option.key}</kbd>
+                      </button>
+                    );
+                  })}
+                  <button
+                    type="button"
+                    className="directionPickerCenter"
+                    title="キャンセル (Esc)"
+                    aria-label="方向選択をキャンセル"
+                    onMouseDown={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      onCloseDirectionPicker();
+                    }}
+                  >
+                    ×
+                  </button>
                 </div>
               ) : null}
               {isCollapsible ? (

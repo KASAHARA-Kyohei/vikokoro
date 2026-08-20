@@ -19,8 +19,9 @@
   outline: none;
   background-color: color-mix(in srgb, var(--panel), #c9b98f 7%);
   background-image:
+    radial-gradient(circle at 50% 48%, color-mix(in srgb, var(--accentBg), transparent 78%) 0, transparent 34%),
     radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--muted), transparent 82%) 1px, transparent 0);
-  background-size: 22px 22px;
+  background-size: 100% 100%, 22px 22px;
 }
 
 .canvasToolbar {
