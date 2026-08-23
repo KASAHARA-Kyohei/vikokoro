@@ -107,6 +107,16 @@ export function getNodeSize(node: Pick<Node, "text">): NodeSize {
   return { width, height };
 }
 
+export function getNodeEditorPaddingY(
+  node: Pick<Node, "text">,
+  renderedSize: NodeSize,
+): number {
+  const contentWidth = Math.max(1, renderedSize.width - NODE_PADDING_X);
+  const textHeight = countWrappedLines(node.text, contentWidth) * NODE_LINE_HEIGHT;
+  const borderHeight = 4;
+  return Math.max(5, Math.floor((renderedSize.height - textHeight - borderHeight) / 2));
+}
+
 export function getNodeSizes(
   nodes: Record<NodeId, Pick<Node, "text">>,
 ): Record<NodeId, NodeSize> {

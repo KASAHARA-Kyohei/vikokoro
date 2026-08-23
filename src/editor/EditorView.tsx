@@ -32,6 +32,7 @@ import "./EditorView.scss";
 import {
   computeLayout,
   getEdgeEndpoints,
+  getNodeEditorPaddingY,
   STICKY_NOTE_HEIGHT,
   STICKY_NOTE_WIDTH,
   svgPathForEdge,
@@ -229,6 +230,10 @@ export function EditorView({
 
   const cursorPos = layout.positions[doc.cursorId];
   const cursorNode = doc.nodes[doc.cursorId];
+  const cursorSize = cursorNode ? layout.sizes[cursorNode.id] : undefined;
+  const rootEditorPaddingY = cursorNode && cursorSize && cursorNode.id === doc.rootId
+    ? getNodeEditorPaddingY(cursorNode, cursorSize)
+    : undefined;
   const rootPoint = layout.positions[doc.rootId];
   const rootSize = layout.sizes[doc.rootId];
 
@@ -1166,6 +1171,8 @@ export function EditorView({
               top: cursorPos.y,
               width: layout.sizes[cursorNode.id]?.width,
               height: layout.sizes[cursorNode.id]?.height,
+              paddingTop: rootEditorPaddingY,
+              paddingBottom: rootEditorPaddingY,
             }}
           />
         ) : null}

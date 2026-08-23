@@ -11,6 +11,7 @@ const {
   computeLayout,
   computeTreePositions,
   getEdgeEndpoints,
+  getNodeEditorPaddingY,
   getNodeSize,
   NODE_MAX_WIDTH,
   sanitizeNodePositions,
@@ -108,6 +109,15 @@ test("node size keeps short text compact and expands long or multiline text", ()
 
   const multiline = getNodeSize({ text: "first line\nsecond line\nthird line" });
   assert.equal(multiline.height, 74);
+});
+
+test("root editor padding vertically centers its text in the rendered node", () => {
+  assert.equal(getNodeEditorPaddingY({ text: "root" }, { width: 220, height: 46 }), 11);
+  assert.equal(getNodeEditorPaddingY({ text: "root" }, { width: 320, height: 90 }), 33);
+  assert.equal(
+    getNodeEditorPaddingY({ text: "first line\nsecond line" }, { width: 220, height: 54 }),
+    5,
+  );
 });
 
 test("tree layout uses the widest node in each depth and variable node heights", () => {
