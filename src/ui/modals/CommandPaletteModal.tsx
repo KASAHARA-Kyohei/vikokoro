@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import type { AppLanguage } from "../../hooks/useAppPreferences";
+import { Dialog } from "../Dialog";
 import "./CommandPaletteModal.scss";
 
 export type PaletteItem = {
@@ -43,6 +44,7 @@ export function CommandPaletteModal({
           listLabel: "コマンド一覧",
           run: "実行 (Enter)",
           close: "閉じる (Esc)",
+          empty: query.trim() ? "一致するコマンドがありません" : "コマンド名を入力してください",
         }
       : {
           title: "Command palette",
@@ -51,6 +53,7 @@ export function CommandPaletteModal({
           listLabel: "Commands",
           run: "Run (Enter)",
           close: "Close (Esc)",
+          empty: query.trim() ? "No matching commands" : "Type a command name",
         };
 
   useEffect(() => {
@@ -62,24 +65,8 @@ export function CommandPaletteModal({
     return () => cancelAnimationFrame(id);
   }, [open]);
 
-  if (!open) return null;
-
   return (
-    <div
-      className="modalOverlay"
-      onMouseDown={(e) => {
-        if (e.target !== e.currentTarget) return;
-        e.preventDefault();
-        onClose();
-      }}
-    >
-      <div
-        className="modal paletteModal"
-        onMouseDown={(e) => {
-          e.stopPropagation();
-        }}
-      >
-        <div className="modalTitle">{text.title}</div>
+    <Dialog open={open} title={text.title} className="paletteModal" initialFocusRef={inputRef} onClose={onClose}>
         <div className="modalBody">
           <div className="paletteBar">
             <input
@@ -121,8 +108,9 @@ export function CommandPaletteModal({
                   key={item.id}
                   type="button"
                   className={"paletteItem" + (isActive ? " paletteItemActive" : "")}
-                  onMouseDown={(e) => {
-                    e.preventDefault();
+                  role="option"
+                  aria-selected={isActive}
+                  onClick={() => {
                     onMoveIndex(idx);
                     onRunItem(item.id);
                   }}
@@ -132,6 +120,7 @@ export function CommandPaletteModal({
                 </button>
               );
             })}
+            {items.length === 0 ? <div className="paletteEmpty">{text.empty}</div> : null}
           </div>
         </div>
 
@@ -139,10 +128,7 @@ export function CommandPaletteModal({
           <button
             type="button"
             className="modalButton"
-            onMouseDown={(e) => {
-              e.preventDefault();
-              onRunActive();
-            }}
+            onClick={onRunActive}
             disabled={items.length === 0}
           >
             {text.run}
@@ -150,15 +136,11 @@ export function CommandPaletteModal({
           <button
             type="button"
             className="modalButton"
-            onMouseDown={(e) => {
-              e.preventDefault();
-              onClose();
-            }}
+            onClick={onClose}
           >
             {text.close}
           </button>
         </div>
-      </div>
-    </div>
+    </Dialog>
   );
 }

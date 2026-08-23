@@ -1,0 +1,38 @@
+.selectionToolbar {
+  position: fixed;
+  z-index: 120;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--panel), transparent 3%);
+  box-shadow: 0 10px 28px color-mix(in srgb, #000 26%, transparent);
+  backdrop-filter: blur(12px);
+}
+.selectionToolbar button {
+  min-width: 36px;
+  min-height: 36px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+.selectionToolbar button:hover { background: var(--surfaceHover); }
+.selectionToolbarCount { padding: 0 8px; color: var(--muted); font-size: 12px; white-space: nowrap; }
+.selectionToolbarMenu {
+  position: absolute;
+  top: calc(100% + 7px);
+  right: 0;
+  display: grid;
+  min-width: 144px;
+  padding: 5px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+  box-shadow: var(--shadowPanel);
+}
+.selectionToolbarMenu button { width: 100%; min-width: 0; justify-content: flex-start; padding: 0 10px; text-align: left; font-size: 12px; }
+.selectionToolbarDanger { color: #ff9b9b !important; }

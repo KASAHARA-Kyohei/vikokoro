@@ -1,6 +1,7 @@
 import type { EditorAction } from "../../editor/state";
 import type { SpatialDirection } from "../../editor/domain/spatialNavigation";
 import type { KeyboardCommand } from "./types";
+import type { AppCommandId } from "../commands/AppCommandDefinition";
 
 type CommandExecutor = {
   dispatch: (action: EditorAction) => void;
@@ -19,12 +20,16 @@ type CommandExecutor = {
   selectNode: (nodeId: string) => void;
   nudgeSelection: (dx: number, dy: number) => void;
   moveCursorVisual: (direction: SpatialDirection) => void;
+  runAppCommand: (commandId: AppCommandId) => void;
 };
 
 export function executeKeyboardCommand(command: KeyboardCommand, executor: CommandExecutor): void {
   switch (command.type) {
     case "none":
     case "preventOnly":
+      return;
+    case "appCommand":
+      executor.runAppCommand(command.commandId);
       return;
     case "multi":
       for (const next of command.commands) {

@@ -1,5 +1,6 @@
 import type { Mode } from "../editor/types";
 import type { AppLanguage, ThemeName } from "../hooks/useAppPreferences";
+import type { PersistenceIssue } from "../persistence/types";
 
 export type SaveStatusLabel = "saved" | "saving" | "error" | "unavailable";
 
@@ -22,12 +23,36 @@ export const APP_TEXT = {
       normal: "hjkl: 画面方向移動 · 矢印: 階層移動 · a: 8方向追加",
       insert: "入力中: Enterで確定 · Tabで子ノード · Escで取消",
       direction: "方向を選択: Q/W/E/A/D/Z/X/C · Escで取消",
-      sticky: "付箋を配置中: クリックで配置 · Escで取消",
-      selected: "選択中: ⌘Enterでノード作成 · Shift+H/Lで階層移動",
+      sticky: "付箋を配置中: 空白をダブルクリックで配置 · Escで取消",
+      selected: "選択中: 近くの操作バーで追加・編集 · ?で全操作",
+    },
+    canvas: {
+      label: "マインドマップキャンバス",
+      emptyRoot: "中心テーマを入力",
+      undo: "元に戻す",
+      redo: "やり直す",
+      centerSelected: "選択を中央",
+      centerRoot: "ルートを中央",
+      fit: "全体表示",
+      view: "表示",
+      zoomOut: "ズームアウト",
+      resetZoom: "ズームをリセット",
+      zoomIn: "ズームイン",
+    },
+    onboarding: {
+      topic: "まず、中心テーマを入力しましょう",
+      branch: "次に、最初の枝を追加しましょう",
+      arrange: "ドラッグで配置を整えられます",
+      addBranch: "＋で枝を追加",
+      finish: "ガイドを終了",
+      typeTopic: "中央の入力欄にテーマを入力し、Enterで確定してください。",
+      detail: "Space＋ドラッグでパン、?ですべての操作を確認できます。",
     },
     tabs: {
       untitled: "無題",
       missing: "(不明)",
+      new: "新規マップを作成",
+      close: "このタブを閉じる",
     },
     focus: {
       breadcrumbLabel: "フォーカス中の階層",
@@ -67,6 +92,8 @@ export const APP_TEXT = {
       layoutAllTitle: "マップ全体を自動整列",
       resetConnectorAnchorsTitle: "選択した接続線を自動接続へ戻す",
       resetConnectorAnchorsSubtitle: "親子線を選択中のみ",
+      organizePreviewTitle: "整理案（試験機能）",
+      organizePreviewSubtitle: "複数の内容があるノードを選択したときにプレビューを表示",
     },
   },
   en: {
@@ -87,12 +114,36 @@ export const APP_TEXT = {
       normal: "HJKL: move by screen direction · Arrows: tree navigation · A: add in 8 directions",
       insert: "Insert mode: Enter to commit · Tab for child · Esc to cancel",
       direction: "Choose a direction: Q/W/E/A/D/Z/X/C · Esc to cancel",
-      sticky: "Placing a sticky note: click to place · Esc to cancel",
-      selected: "Selected: ⌘Enter to create a node · Shift+H/L to change hierarchy",
+      sticky: "Placing a sticky note: double-click blank space · Esc to cancel",
+      selected: "Selected: use the nearby toolbar to add or edit · ? for all shortcuts",
+    },
+    canvas: {
+      label: "Mind map canvas",
+      emptyRoot: "Enter a central topic",
+      undo: "Undo",
+      redo: "Redo",
+      centerSelected: "Center selection",
+      centerRoot: "Center root",
+      fit: "Fit map",
+      view: "View",
+      zoomOut: "Zoom out",
+      resetZoom: "Reset zoom",
+      zoomIn: "Zoom in",
+    },
+    onboarding: {
+      topic: "Start by naming the central topic",
+      branch: "Add the first branch next",
+      arrange: "Drag to arrange your ideas",
+      addBranch: "Add a branch with +",
+      finish: "Finish guide",
+      typeTopic: "Type a topic in the central field, then press Enter.",
+      detail: "Space + drag pans the canvas. Press ? to see every shortcut.",
     },
     tabs: {
       untitled: "Untitled",
       missing: "(missing)",
+      new: "Create a new map",
+      close: "Close this tab",
     },
     focus: {
       breadcrumbLabel: "Focused branch path",
@@ -132,6 +183,8 @@ export const APP_TEXT = {
       layoutAllTitle: "Auto-layout entire map",
       resetConnectorAnchorsTitle: "Reset selected connector to auto",
       resetConnectorAnchorsSubtitle: "Available when an edge is selected",
+      organizePreviewTitle: "Organize preview (experimental)",
+      organizePreviewSubtitle: "Preview suggestions for multiple non-empty selected nodes",
     },
   },
 } as const;
@@ -151,6 +204,23 @@ export function getContextualHint(
   if (options.mode === "insert") return hints.insert;
   if (options.selectedCount > 0) return hints.selected;
   return hints.normal;
+}
+
+export function getPersistenceIssueLabel(issue: PersistenceIssue, language: AppLanguage): string {
+  const labels = language === "ja"
+    ? {
+        corrupt: "保存データが破損しています。元ファイルは上書きしていません。",
+        "invalid-schema": "保存データの構造が正しくありません。再試行するか新規開始してください。",
+        io: "保存データを読み込めませんでした。ファイル権限や保存先を確認してください。",
+        unavailable: "ブラウザモードでは端末へ保存されません。",
+      }
+    : {
+        corrupt: "Saved data is corrupted. The original file has not been overwritten.",
+        "invalid-schema": "Saved data has an invalid structure. Retry or start a new workspace.",
+        io: "Saved data could not be loaded. Check file permissions and the storage location.",
+        unavailable: "Browser mode does not persist data to your device.",
+      };
+  return labels[issue.code];
 }
 
 const THEME_LABELS: Record<AppLanguage, Record<ThemeName, string>> = {
@@ -195,13 +265,13 @@ const SAVE_STATUS_LABELS: Record<AppLanguage, Record<SaveStatusLabel, string>> =
     saved: "保存済み",
     saving: "保存中…",
     error: "保存失敗・再試行",
-    unavailable: "ローカル",
+    unavailable: "保存なし（ブラウザ）",
   },
   en: {
     saved: "Saved",
     saving: "Saving…",
     error: "Save failed · Retry",
-    unavailable: "Local",
+    unavailable: "Not saved (browser)",
   },
 };
 

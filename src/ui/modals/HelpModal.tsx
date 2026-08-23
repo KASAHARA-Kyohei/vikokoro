@@ -1,4 +1,6 @@
+import { useMemo, useRef, useState } from "react";
 import type { AppLanguage } from "../../hooks/useAppPreferences";
+import { Dialog } from "../Dialog";
 import "./HelpModal.scss";
 
 type Props = {
@@ -11,6 +13,16 @@ type HelpRow = {
   keys: string;
   description: string;
 };
+
+type HelpCategory = "start" | "mouse" | "vim" | "organize" | "view";
+
+function categoryForRow(row: HelpRow, index: number): HelpCategory {
+  if (index < 5) return "start";
+  if (/Drag|Click|Double|線|付箋|Sticky|Edge|Wheel/.test(row.keys)) return "mouse";
+  if (/= \/ \+/.test(row.keys)) return "organize";
+  if (/^(f|F|zz|za|zM|Ctrl \+ Wheel|Space \+ Drag)/.test(row.keys)) return "view";
+  return "vim";
+}
 
 function buildRows(language: AppLanguage): HelpRow[] {
   if (language === "ja") {
@@ -99,7 +111,9 @@ function buildRows(language: AppLanguage): HelpRow[] {
 }
 
 export function HelpModal({ open, language, onClose }: Props) {
-  if (!open) return null;
+  const [query, setQuery] = useState("");
+  const [category, setCategory] = useState<HelpCategory>("start");
+  const searchRef = useRef<HTMLInputElement | null>(null);
 
   const text =
     language === "ja"
@@ -112,32 +126,68 @@ export function HelpModal({ open, language, onClose }: Props) {
           close: "Close (Esc)",
         };
 
-  const rows = buildRows(language);
+  const rows = useMemo(() => buildRows(language), [language]);
+  const categories: Array<{ id: HelpCategory; label: string }> = language === "ja"
+    ? [
+        { id: "start", label: "最初の5操作" },
+        { id: "mouse", label: "マウス" },
+        { id: "vim", label: "Vim" },
+        { id: "organize", label: "整理" },
+        { id: "view", label: "表示" },
+      ]
+    : [
+        { id: "start", label: "First 5" },
+        { id: "mouse", label: "Mouse" },
+        { id: "vim", label: "Vim" },
+        { id: "organize", label: "Organize" },
+        { id: "view", label: "View" },
+      ];
+  const filteredRows = useMemo(() => {
+    const normalized = query.trim().toLocaleLowerCase();
+    return rows.filter((row, index) => {
+      if (!normalized && categoryForRow(row, index) !== category) return false;
+      return !normalized || `${row.keys} ${row.description}`.toLocaleLowerCase().includes(normalized);
+    });
+  }, [category, query, rows]);
 
   return (
-    <div
-      className="modalOverlay"
-      onMouseDown={(e) => {
-        if (e.target !== e.currentTarget) return;
-        e.preventDefault();
-        onClose();
-      }}
-    >
-      <div
-        className="modal helpModal"
-        onMouseDown={(e) => {
-          e.stopPropagation();
-        }}
-      >
-        <div className="modalTitle">{text.title}</div>
+    <Dialog open={open} title={text.title} className="helpModal" initialFocusRef={searchRef} isolateKeyboard onClose={onClose}>
         <div className="modalBody">
+          <input
+            ref={searchRef}
+            className="helpSearch"
+            value={query}
+            placeholder={language === "ja" ? "操作を検索..." : "Search actions..."}
+            aria-label={language === "ja" ? "ヘルプを検索" : "Search help"}
+            onChange={(event) => setQuery(event.currentTarget.value)}
+          />
+          <div className="helpCategories" role="tablist">
+            {categories.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                role="tab"
+                aria-selected={category === item.id}
+                className={category === item.id ? "helpCategoryActive" : ""}
+                onClick={() => {
+                  setQuery("");
+                  setCategory(item.id);
+                }}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
           <div className="helpGrid">
-            {rows.map((row) => (
+            {filteredRows.map((row) => (
               <div key={`${row.keys}-${row.description}`} className="helpRow">
                 <div className="helpKeys">{row.keys}</div>
                 <div className="helpDesc">{row.description}</div>
               </div>
             ))}
+            {filteredRows.length === 0 ? (
+              <div className="helpEmpty">{language === "ja" ? "一致する操作がありません" : "No matching actions"}</div>
+            ) : null}
           </div>
         </div>
 
@@ -145,15 +195,11 @@ export function HelpModal({ open, language, onClose }: Props) {
           <button
             type="button"
             className="modalButton"
-            onMouseDown={(e) => {
-              e.preventDefault();
-              onClose();
-            }}
+            onClick={onClose}
           >
             {text.close}
           </button>
         </div>
-      </div>
-    </div>
+    </Dialog>
   );
 }

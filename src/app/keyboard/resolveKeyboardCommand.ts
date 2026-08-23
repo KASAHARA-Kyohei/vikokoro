@@ -16,6 +16,7 @@ export function resolveKeyboardCommand(
   input: KeyboardInput,
 ): KeyboardResolution {
   const { key, code, ctrlKey, metaKey, altKey, shiftKey } = input;
+  const commandKey = ctrlKey || metaKey;
 
   if (ctx.helpOpen) {
     if (key === "Escape") {
@@ -28,7 +29,7 @@ export function resolveKeyboardCommand(
     if (key === "Escape") {
       return { preventDefault: true, command: { type: "setSearchOpen", open: false } };
     }
-    if (ctrlKey && (key === "w" || key === "t" || key === "Tab")) {
+    if (commandKey && (key === "w" || key === "t" || key === "Tab")) {
       return { preventDefault: true, command: { type: "preventOnly" } };
     }
     return { preventDefault: false, command: { type: "none" } };
@@ -38,7 +39,7 @@ export function resolveKeyboardCommand(
     if (key === "Escape") {
       return { preventDefault: true, command: { type: "setPaletteOpen", open: false } };
     }
-    if (ctrlKey && (key === "w" || key === "t" || key === "Tab")) {
+    if (commandKey && (key === "w" || key === "t" || key === "Tab")) {
       return { preventDefault: true, command: { type: "preventOnly" } };
     }
     return { preventDefault: false, command: { type: "none" } };
@@ -89,7 +90,7 @@ export function resolveKeyboardCommand(
         },
       };
     }
-    if (ctrlKey && (key === "w" || key === "t" || key === "Tab")) {
+    if (commandKey && (key === "w" || key === "t" || key === "Tab")) {
       return { preventDefault: true, command: { type: "preventOnly" } };
     }
     return { preventDefault: false, command: { type: "none" } };
@@ -99,7 +100,7 @@ export function resolveKeyboardCommand(
     if (key === "Escape") {
       return { preventDefault: true, command: { type: "setSettingsOpen", open: false } };
     }
-    if (ctrlKey && (key === "w" || key === "t" || key === "Tab")) {
+    if (commandKey && (key === "w" || key === "t" || key === "Tab")) {
       return { preventDefault: true, command: { type: "preventOnly" } };
     }
     return { preventDefault: true, command: { type: "preventOnly" } };
@@ -153,7 +154,7 @@ export function resolveKeyboardCommand(
     return { preventDefault: true, command: { type: "setHelpOpen", open: true } };
   }
 
-  if (ctx.mode === "normal" && ctrlKey && (key === "f" || key === "F")) {
+  if (ctx.mode === "normal" && commandKey && (key === "f" || key === "F")) {
     return {
       preventDefault: true,
       command: {
@@ -166,7 +167,7 @@ export function resolveKeyboardCommand(
     };
   }
 
-  if (ctx.mode === "normal" && ctrlKey && (key === "p" || key === "P")) {
+  if (ctx.mode === "normal" && commandKey && (key === "p" || key === "P")) {
     return {
       preventDefault: true,
       command: {
@@ -185,10 +186,10 @@ export function resolveKeyboardCommand(
     if (key === "Escape") {
       return { preventDefault: true, command: { type: "dispatch", action: { type: "cancelInsert" } } };
     }
-    if (key === "Tab" || (ctrlKey && key === "Tab")) {
+    if (key === "Tab" || (commandKey && key === "Tab")) {
       return { preventDefault: true, command: { type: "preventOnly" } };
     }
-    if (ctrlKey && (key === "t" || key === "w")) {
+    if (commandKey && (key === "t" || key === "w")) {
       return { preventDefault: true, command: { type: "preventOnly" } };
     }
     return { preventDefault: false, command: { type: "none" } };
@@ -197,7 +198,7 @@ export function resolveKeyboardCommand(
   if ((metaKey || ctrlKey) && !altKey && key.toLowerCase() === "z") {
     return {
       preventDefault: true,
-      command: { type: "dispatch", action: { type: shiftKey ? "redo" : "undo" } },
+      command: { type: "appCommand", commandId: shiftKey ? "redo" : "undo" },
     };
   }
 
@@ -257,18 +258,18 @@ export function resolveKeyboardCommand(
     };
   }
 
-  if (ctrlKey && (key === "t" || key === "T")) {
-    return { preventDefault: true, command: { type: "dispatch", action: { type: "createDoc" } } };
+  if (commandKey && (key === "t" || key === "T")) {
+    return { preventDefault: true, command: { type: "appCommand", commandId: "newDocument" } };
   }
 
-  if (ctrlKey && (key === "w" || key === "W")) {
+  if (commandKey && (key === "w" || key === "W")) {
     return {
       preventDefault: true,
-      command: { type: "dispatch", action: { type: "requestCloseActiveDoc" } },
+      command: { type: "appCommand", commandId: "closeDocument" },
     };
   }
 
-  if (ctrlKey && key === "Tab") {
+  if (commandKey && key === "Tab") {
     return {
       preventDefault: true,
       command: {
@@ -377,11 +378,11 @@ export function resolveKeyboardCommand(
   }
 
   if (key === "u") {
-    return { preventDefault: true, command: { type: "dispatch", action: { type: "undo" } } };
+    return { preventDefault: true, command: { type: "appCommand", commandId: "undo" } };
   }
 
-  if (ctrlKey && key === "r") {
-    return { preventDefault: true, command: { type: "dispatch", action: { type: "redo" } } };
+  if (commandKey && key === "r") {
+    return { preventDefault: true, command: { type: "appCommand", commandId: "redo" } };
   }
 
   return { preventDefault: false, command: { type: "none" } };

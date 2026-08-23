@@ -25,6 +25,8 @@ export function useAppPreferences() {
   }, [theme]);
 
   useEffect(() => {
+    document.documentElement.lang = language;
+    document.title = language === "ja" ? "vikokoro — 思考をつなぐ" : "vikokoro — Connect your thoughts";
     localStorage.setItem("vikokoro.language", language);
   }, [language]);
 

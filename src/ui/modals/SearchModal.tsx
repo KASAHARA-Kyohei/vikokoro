@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef } from "react";
 import type { NodeId } from "../../editor/types";
 import type { AppLanguage } from "../../hooks/useAppPreferences";
+import { Dialog } from "../Dialog";
 import "./SearchModal.scss";
 
 export type SearchResultItem = {
@@ -56,6 +57,7 @@ export function SearchModal({
           prev: "前へ (Shift+Enter)",
           next: "次へ (Enter)",
           close: "閉じる (Esc)",
+          empty: query.trim() ? "一致するノードがありません" : "検索語を入力してください",
         }
       : {
           title: "Search",
@@ -66,6 +68,7 @@ export function SearchModal({
           prev: "Prev (Shift+Enter)",
           next: "Next (Enter)",
           close: "Close (Esc)",
+          empty: query.trim() ? "No matching nodes" : "Type to search your map",
         };
 
   useEffect(() => {
@@ -83,24 +86,8 @@ export function SearchModal({
     return Math.max(0, Math.min(activeIndex - 3, len - 8));
   }, [activeIndex, results.length]);
 
-  if (!open) return null;
-
   return (
-    <div
-      className="modalOverlay"
-      onMouseDown={(e) => {
-        if (e.target !== e.currentTarget) return;
-        e.preventDefault();
-        onClose();
-      }}
-    >
-      <div
-        className="modal searchModal"
-        onMouseDown={(e) => {
-          e.stopPropagation();
-        }}
-      >
-        <div className="modalTitle">{title ?? text.title}</div>
+    <Dialog open={open} title={title ?? text.title} className="searchModal" initialFocusRef={inputRef} onClose={onClose}>
         <div className="modalBody">
           <div className="searchBar">
             <input
@@ -142,10 +129,9 @@ export function SearchModal({
                     type="button"
                     className={"searchItem" + (isActive ? " searchItemActive" : "")}
                     title={`${result.subtitle} › ${result.title}`}
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      onSelectNode(result.nodeId);
-                    }}
+                    role="option"
+                    aria-selected={isActive}
+                    onClick={() => onSelectNode(result.nodeId)}
                   >
                     <div className="searchItemTitle">{result.title}</div>
                     <div className="searchItemSubtitle">{result.subtitle}</div>
@@ -153,17 +139,14 @@ export function SearchModal({
                 );
               })}
             </div>
-          ) : null}
+          ) : <div className="searchEmpty">{text.empty}</div>}
         </div>
 
         <div className="modalActions">
           <button
             type="button"
             className="modalButton"
-            onMouseDown={(e) => {
-              e.preventDefault();
-              onMovePrev();
-            }}
+            onClick={onMovePrev}
             disabled={results.length === 0}
           >
             {prevLabel ?? text.prev}
@@ -171,10 +154,7 @@ export function SearchModal({
           <button
             type="button"
             className="modalButton"
-            onMouseDown={(e) => {
-              e.preventDefault();
-              onMoveNext();
-            }}
+            onClick={onMoveNext}
             disabled={results.length === 0}
           >
             {nextLabel ?? text.next}
@@ -182,15 +162,11 @@ export function SearchModal({
           <button
             type="button"
             className="modalButton"
-            onMouseDown={(e) => {
-              e.preventDefault();
-              onClose();
-            }}
+            onClick={onClose}
           >
             {text.close}
           </button>
         </div>
-      </div>
-    </div>
+    </Dialog>
   );
 }

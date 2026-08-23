@@ -1,0 +1,38 @@
+.onboardingGuide {
+  position: fixed;
+  z-index: 180;
+  left: 50%;
+  bottom: 54px;
+  transform: translateX(-50%);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  width: min(520px, calc(100% - 32px));
+  box-sizing: border-box;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--accentBorder), var(--border) 45%);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--panel), transparent 6%);
+  box-shadow: 0 16px 40px color-mix(in srgb, #000 28%, transparent);
+  backdrop-filter: blur(14px);
+}
+
+.onboardingGuide strong { display: block; color: var(--text); font-size: 13px; }
+.onboardingGuide p { margin: 2px 0 0; color: var(--muted); font-size: 11px; }
+.onboardingStep { color: var(--accent); font: 700 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.onboardingGuide button {
+  min-height: 36px;
+  border: 1px solid var(--accentBorder);
+  border-radius: 9px;
+  background: var(--accentBg);
+  color: var(--text);
+  padding: 0 10px;
+  cursor: pointer;
+}
+.onboardingGuide button:hover { background: color-mix(in srgb, var(--accentBg), var(--surfaceHover) 45%); }
+
+@media (max-width: 620px) {
+  .onboardingGuide { grid-template-columns: auto 1fr; bottom: 14px; }
+  .onboardingGuide button { grid-column: 2; justify-self: start; }
+}

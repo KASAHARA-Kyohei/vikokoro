@@ -1,8 +1,14 @@
 .settingsModal {
-  width: min(640px, calc(100% - 32px));
+  width: min(420px, calc(100% - 32px));
   max-height: calc(100vh - 32px);
   display: flex;
   flex-direction: column;
+}
+
+.settingsIntro {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .settingsGrid {
@@ -10,6 +16,10 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
   padding: 18px;
+}
+
+@media (max-width: 520px) {
+  .settingsGrid { grid-template-columns: 1fr; }
 }
 
 .settingsGrid label { display: grid; gap: 7px; color: var(--muted); font-size: 12px; }

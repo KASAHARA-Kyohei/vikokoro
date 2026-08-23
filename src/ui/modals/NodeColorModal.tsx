@@ -1,5 +1,6 @@
 import type { NodeColor } from "../../editor/types";
 import type { AppLanguage } from "../../hooks/useAppPreferences";
+import { Dialog } from "../Dialog";
 import "./NodeColorModal.scss";
 
 type ColorOption = {
@@ -46,8 +47,6 @@ export function NodeColorModal({
   onClear,
   onClose,
 }: Props) {
-  if (!open) return null;
-
   const text =
     language === "ja"
       ? {
@@ -65,21 +64,7 @@ export function NodeColorModal({
   const colorOptions = buildColorOptions(language);
 
   return (
-    <div
-      className="modalOverlay"
-      onMouseDown={(e) => {
-        if (e.target !== e.currentTarget) return;
-        e.preventDefault();
-        onClose();
-      }}
-    >
-      <div
-        className="modal nodeColorModal"
-        onMouseDown={(e) => {
-          e.stopPropagation();
-        }}
-      >
-        <div className="modalTitle">{text.title}</div>
+    <Dialog open={open} title={text.title} className="nodeColorModal" onClose={onClose}>
         <div className="modalBody">
           <div className="nodeColorHint">{text.hint}</div>
           <div className="nodeColorList">
@@ -90,10 +75,7 @@ export function NodeColorModal({
                   key={option.color}
                   type="button"
                   className={"nodeColorItem" + (isActive ? " nodeColorItemActive" : "")}
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    onApplyColor(option.color);
-                  }}
+                  onClick={() => onApplyColor(option.color)}
                 >
                   <div className="nodeColorItemMain">
                     <span className={"nodeColorSwatch nodeColorSwatch-" + option.color} />
@@ -111,25 +93,18 @@ export function NodeColorModal({
           <button
             type="button"
             className="modalButton"
-            onMouseDown={(e) => {
-              e.preventDefault();
-              onClear();
-            }}
+            onClick={onClear}
           >
             {text.clear}
           </button>
           <button
             type="button"
             className="modalButton"
-            onMouseDown={(e) => {
-              e.preventDefault();
-              onClose();
-            }}
+            onClick={onClose}
           >
             {text.close}
           </button>
         </div>
-      </div>
-    </div>
+    </Dialog>
   );
 }
