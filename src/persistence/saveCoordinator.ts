@@ -22,6 +22,7 @@ export type SaveCoordinator = {
   setRepository: (repository: WorkspaceRepository) => void;
   schedule: (revision: number, workspace: Workspace) => void;
   flush: () => Promise<boolean>;
+  flushLatest: (revision: number, workspace: Workspace) => Promise<boolean>;
   retry: () => Promise<boolean>;
   dispose: () => void;
   getState: () => SaveCoordinatorState;
@@ -59,6 +60,10 @@ export function createSaveCoordinator(
     timer = null;
   };
 
+  const queueLatest = (next: QueuedSave) => {
+    if (!queued || next.revision >= queued.revision) queued = next;
+  };
+
   const saveQueued = async (): Promise<boolean> => {
     if (disposed || repository.name === "unavailable" || !queued) return false;
     const current = queued;
@@ -66,18 +71,21 @@ export function createSaveCoordinator(
     publish({ status: "saving", pendingRevision: null, error: null });
     try {
       await repository.save(current.workspace);
+      const pending = queued as QueuedSave | null;
+      const pendingRevision = pending?.revision ?? null;
       publish({
-        status: "saved",
+        status: pendingRevision === null ? "saved" : "saving",
         lastSavedRevision: Math.max(state.lastSavedRevision, current.revision),
         lastSavedAt: Date.now(),
-        pendingRevision: (queued as QueuedSave | null)?.revision ?? null,
+        pendingRevision,
         error: null,
       });
       return true;
     } catch (error) {
-      queued = current;
+      queueLatest(current);
       const resolved = error instanceof Error ? error : new Error(String(error));
-      publish({ status: "error", pendingRevision: current.revision, error: resolved });
+      const pending = queued as QueuedSave | null;
+      publish({ status: "error", pendingRevision: pending?.revision ?? current.revision, error: resolved });
       return false;
     }
   };
@@ -86,13 +94,16 @@ export function createSaveCoordinator(
     clearTimer();
     if (disposed || repository.name === "unavailable") return false;
     if (inFlight) await inFlight;
-    if (!queued) return state.status === "saved";
-    inFlight = saveQueued();
-    try {
-      return await inFlight;
-    } finally {
-      inFlight = null;
+    while (queued) {
+      inFlight = saveQueued();
+      try {
+        const saved = await inFlight;
+        if (!saved) return false;
+      } finally {
+        inFlight = null;
+      }
     }
+    return state.status === "saved";
   };
 
   const schedule = (revision: number, workspace: Workspace) => {
@@ -101,8 +112,8 @@ export function createSaveCoordinator(
       publish({ status: "unavailable", pendingRevision: null, error: null });
       return;
     }
-    queued = { revision, workspace };
-    publish({ status: "saving", pendingRevision: revision, error: null });
+    queueLatest({ revision, workspace });
+    publish({ status: "saving", pendingRevision: queued?.revision ?? revision, error: null });
     clearTimer();
     timer = setTimeout(() => {
       timer = null;
@@ -121,6 +132,17 @@ export function createSaveCoordinator(
     },
     schedule,
     flush,
+    flushLatest: async (revision, workspace) => {
+      if (disposed || repository.name === "unavailable") return false;
+      const effectiveRevision = Math.max(
+        revision,
+        state.lastSavedRevision + 1,
+        (queued?.revision ?? 0) + 1,
+      );
+      queueLatest({ revision: effectiveRevision, workspace });
+      publish({ status: "saving", pendingRevision: queued?.revision ?? effectiveRevision, error: null });
+      return flush();
+    },
     retry: flush,
     dispose: () => {
       disposed = true;

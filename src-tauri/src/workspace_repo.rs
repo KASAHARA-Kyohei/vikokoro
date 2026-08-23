@@ -1,3 +1,4 @@
+use serde::Serialize;
 use serde_json::Value;
 use std::{
     fs,
@@ -8,6 +9,32 @@ use std::{
 use tauri::Manager;
 
 pub type Workspace = Value;
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum WorkspaceLoadResult {
+    Loaded {
+        workspace: Workspace,
+        source: WorkspaceLoadSource,
+        warning: Option<WorkspaceLoadWarning>,
+    },
+    Empty {
+        warning: Option<WorkspaceLoadWarning>,
+    },
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum WorkspaceLoadSource {
+    Primary,
+    Backup,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum WorkspaceLoadWarning {
+    Corrupt,
+}
 
 fn workspace_json_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     let path = app
@@ -105,18 +132,42 @@ fn write_workspace_json_atomic(path: &Path, text: &str) -> Result<(), String> {
     }
 }
 
-pub fn load_workspace_from_disk(app: &tauri::AppHandle) -> Result<Option<Workspace>, String> {
+pub fn load_workspace_from_disk(app: &tauri::AppHandle) -> Result<WorkspaceLoadResult, String> {
     let path = workspace_json_path(app)?;
+    load_workspace_from_path(&path)
+}
+
+fn load_workspace_from_path(path: &Path) -> Result<WorkspaceLoadResult, String> {
     if !path.exists() {
-        return load_latest_backup(&path);
+        return Ok(match load_latest_backup(path)? {
+            Some(workspace) => WorkspaceLoadResult::Loaded {
+                workspace,
+                source: WorkspaceLoadSource::Backup,
+                warning: None,
+            },
+            None => WorkspaceLoadResult::Empty { warning: None },
+        });
     }
-    let text = fs::read_to_string(&path).map_err(|error| error.to_string())?;
+    let text = fs::read_to_string(path).map_err(|error| error.to_string())?;
     match serde_json::from_str::<Workspace>(&text) {
-        Ok(workspace) => Ok(Some(workspace)),
+        Ok(workspace) => Ok(WorkspaceLoadResult::Loaded {
+            workspace,
+            source: WorkspaceLoadSource::Primary,
+            warning: None,
+        }),
         Err(_) => {
-            let backup_path = workspace_broken_backup_path(&path);
-            let _ = fs::rename(&path, backup_path);
-            load_latest_backup(&path)
+            let backup_path = workspace_broken_backup_path(path);
+            fs::rename(path, backup_path).map_err(|error| error.to_string())?;
+            Ok(match load_latest_backup(path)? {
+                Some(workspace) => WorkspaceLoadResult::Loaded {
+                    workspace,
+                    source: WorkspaceLoadSource::Backup,
+                    warning: Some(WorkspaceLoadWarning::Corrupt),
+                },
+                None => WorkspaceLoadResult::Empty {
+                    warning: Some(WorkspaceLoadWarning::Corrupt),
+                },
+            })
         }
     }
 }
@@ -129,8 +180,15 @@ pub fn save_workspace_to_disk(app: &tauri::AppHandle, workspace: Workspace) -> R
 
 #[cfg(test)]
 mod tests {
-    use super::{write_workspace_json_atomic, Workspace};
-    use std::{fs, path::PathBuf, time::{SystemTime, UNIX_EPOCH}};
+    use super::{
+        load_workspace_from_path, write_workspace_json_atomic, Workspace, WorkspaceLoadResult,
+        WorkspaceLoadSource, WorkspaceLoadWarning,
+    };
+    use std::{
+        fs,
+        path::PathBuf,
+        time::{SystemTime, UNIX_EPOCH},
+    };
 
     #[test]
     fn generic_workspace_keeps_future_canvas_fields() {
@@ -139,7 +197,10 @@ mod tests {
         let encoded = serde_json::to_string(&workspace).unwrap();
         let round_trip: Workspace = serde_json::from_str(&encoded).unwrap();
         assert_eq!(round_trip["schemaVersion"], 2);
-        assert_eq!(round_trip["documents"]["doc"]["groups"]["g"]["title"], "ideas");
+        assert_eq!(
+            round_trip["documents"]["doc"]["groups"]["g"]["title"],
+            "ideas"
+        );
         assert_eq!(round_trip["documents"]["doc"]["viewport"]["zoom"], 1.25);
     }
 
@@ -160,8 +221,85 @@ mod tests {
         assert!(fs::read_dir(&directory)
             .unwrap()
             .filter_map(Result::ok)
-            .any(|entry| entry.file_name().to_string_lossy().starts_with("workspace.json.backup-")));
+            .any(|entry| entry
+                .file_name()
+                .to_string_lossy()
+                .starts_with("workspace.json.backup-")));
 
         fs::remove_dir_all(directory).unwrap();
+    }
+
+    fn temp_workspace_path(label: &str) -> PathBuf {
+        let suffix = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let directory = std::env::temp_dir().join(format!("vikokoro-{label}-{suffix}"));
+        fs::create_dir_all(&directory).unwrap();
+        directory.join("workspace.json")
+    }
+
+    #[test]
+    fn load_classifies_primary_backup_and_empty() {
+        let path = temp_workspace_path("load-classification");
+        assert!(matches!(
+            load_workspace_from_path(&path).unwrap(),
+            WorkspaceLoadResult::Empty { warning: None }
+        ));
+
+        fs::write(&path, r#"{"source":"primary"}"#).unwrap();
+        assert!(matches!(
+            load_workspace_from_path(&path).unwrap(),
+            WorkspaceLoadResult::Loaded {
+                source: WorkspaceLoadSource::Primary,
+                warning: None,
+                ..
+            }
+        ));
+
+        fs::remove_file(&path).unwrap();
+        fs::write(
+            path.with_file_name("workspace.json.backup-1"),
+            r#"{"source":"backup"}"#,
+        )
+        .unwrap();
+        assert!(matches!(
+            load_workspace_from_path(&path).unwrap(),
+            WorkspaceLoadResult::Loaded {
+                source: WorkspaceLoadSource::Backup,
+                warning: None,
+                ..
+            }
+        ));
+        fs::remove_dir_all(path.parent().unwrap()).unwrap();
+    }
+
+    #[test]
+    fn corrupt_primary_is_moved_and_recovers_latest_backup() {
+        let path = temp_workspace_path("corrupt-recovery");
+        fs::write(&path, "not-json").unwrap();
+        fs::write(
+            path.with_file_name("workspace.json.backup-1"),
+            r#"{"revision":1}"#,
+        )
+        .unwrap();
+
+        assert!(matches!(
+            load_workspace_from_path(&path).unwrap(),
+            WorkspaceLoadResult::Loaded {
+                source: WorkspaceLoadSource::Backup,
+                warning: Some(WorkspaceLoadWarning::Corrupt),
+                ..
+            }
+        ));
+        assert!(!path.exists());
+        assert!(fs::read_dir(path.parent().unwrap())
+            .unwrap()
+            .filter_map(Result::ok)
+            .any(|entry| entry
+                .file_name()
+                .to_string_lossy()
+                .starts_with("workspace.json.broken-")));
+        fs::remove_dir_all(path.parent().unwrap()).unwrap();
     }
 }

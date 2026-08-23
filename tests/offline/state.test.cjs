@@ -190,6 +190,46 @@ test("outdenting the cursor outside the focused branch exits focus", () => {
   assert.equal(state.workspace.documents[docId].nodes.a1.parentId, "root");
 });
 
+test("親変更は1回のUndo/Redoで戻せる", () => {
+  let state = withTree(makeReadyState());
+  const docId = state.workspace.activeDocId;
+  state.workspace.documents[docId].cursorId = "a1";
+
+  state = editorReducer(state, { type: "reparentNode", direction: "left" });
+  assert.equal(state.workspace.documents[docId].nodes.a1.parentId, "root");
+  assert.equal(state.workspace.documents[docId].undoStack.length, 1);
+
+  state = editorReducer(state, { type: "undo" });
+  assert.equal(state.workspace.documents[docId].nodes.a1.parentId, "a");
+  state = editorReducer(state, { type: "redo" });
+  assert.equal(state.workspace.documents[docId].nodes.a1.parentId, "root");
+});
+
+test("入力途中の本文変更も保存revisionを進める", () => {
+  let state = makeReadyState();
+  state = editorReducer(state, { type: "enterInsert" });
+  state = editorReducer(state, { type: "setCursorText", text: "draft" });
+  assert.equal(state.saveRevision, 1);
+});
+
+test("履歴は文書ごとに100件へ制限される", () => {
+  let state = withTree(makeReadyState());
+  for (let index = 0; index < 110; index += 1) {
+    state = editorReducer(state, { type: "moveNodes", nodeIds: ["a"], dx: 1, dy: 0 });
+  }
+  const doc = state.workspace.documents[state.workspace.activeDocId];
+  assert.equal(doc.undoStack.length, 100);
+});
+
+test("構造不正後の新規開始は空ルートの入力モードへ戻る", () => {
+  let state = withTree(makeReadyState());
+  state = editorReducer(state, { type: "startFreshWorkspace" });
+  const doc = state.workspace.documents[state.workspace.activeDocId];
+  assert.equal(state.mode, "insert");
+  assert.equal(Object.keys(doc.nodes).length, 1);
+  assert.equal(doc.nodes[doc.rootId].text, "");
+});
+
 test("moving multiple nodes is one undo step and undo restores positions", () => {
   let state = withTree(makeReadyState());
   const docId = state.workspace.activeDocId;
@@ -285,6 +325,7 @@ test("タブ作成・削除後もworkspace schema version 3を維持する", () 
   assert.equal(state.workspace.schemaVersion, 3);
   assert.equal(state.workspace.tabs.length, 2);
 
+  state = editorReducer(state, { type: "commitInsert" });
   state = editorReducer(state, { type: "closeActiveDoc" });
   assert.equal(state.workspace.schemaVersion, 3);
   assert.equal(state.workspace.tabs.length, 1);

@@ -4,7 +4,13 @@ export function createUnavailableWorkspaceRepository(): WorkspaceRepository {
   return {
     name: "unavailable",
     async load() {
-      return null;
+      return {
+        kind: "unavailable" as const,
+        issue: {
+          code: "unavailable" as const,
+          message: "ブラウザモードではワークスペースを保存できません。",
+        },
+      };
     },
     async save() {
       throw new Error("workspace repository is unavailable");
