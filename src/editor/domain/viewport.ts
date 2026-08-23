@@ -1,14 +1,21 @@
 import type { CanvasPoint, Viewport } from "../types";
 import type { NodeSize } from "../layout";
 
-type Rect = {
+export type Rect = {
   left: number;
   top: number;
   width: number;
   height: number;
 };
 
-type ViewportSize = { width: number; height: number };
+export type ViewportSize = { width: number; height: number };
+
+export type ViewportBounds = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
 
 export function isUsableViewportSize(viewportSize: ViewportSize): boolean {
   return viewportSize.width > 0 && viewportSize.height > 0;
@@ -76,5 +83,28 @@ export function computeInitialScrollForRoot(
       0,
       (rootPoint.y + rootSize.height / 2) * zoom - viewportSize.height / 2,
     ),
+  };
+}
+
+export function computeFitViewport(
+  bounds: ViewportBounds,
+  viewportSize: ViewportSize,
+  currentZoom: number,
+  padding = 64,
+): Viewport {
+  if (!isUsableViewportSize(viewportSize) || bounds.width <= 0 || bounds.height <= 0) {
+    return { x: 0, y: 0, zoom: currentZoom, initialized: true };
+  }
+  const availableWidth = Math.max(1, viewportSize.width - padding * 2);
+  const availableHeight = Math.max(1, viewportSize.height - padding * 2);
+  const zoom = Math.min(2, Math.max(0.5, Math.min(
+    availableWidth / bounds.width,
+    availableHeight / bounds.height,
+  )));
+  return {
+    x: Math.max(0, (bounds.x + bounds.width / 2) * zoom - viewportSize.width / 2),
+    y: Math.max(0, (bounds.y + bounds.height / 2) * zoom - viewportSize.height / 2),
+    zoom,
+    initialized: true,
   };
 }

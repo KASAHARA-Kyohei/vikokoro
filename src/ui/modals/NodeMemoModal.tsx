@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import type { AppLanguage } from "../../hooks/useAppPreferences";
+import { Dialog } from "../Dialog";
 import "./NodeMemoModal.scss";
 
 type Props = {
@@ -31,8 +32,6 @@ export function NodeMemoModal({
     return () => cancelAnimationFrame(id);
   }, [open]);
 
-  if (!open) return null;
-
   const text =
     language === "ja"
       ? {
@@ -51,21 +50,7 @@ export function NodeMemoModal({
         };
 
   return (
-    <div
-      className="modalOverlay"
-      onMouseDown={(e) => {
-        if (e.target !== e.currentTarget) return;
-        e.preventDefault();
-        onClose();
-      }}
-    >
-      <div
-        className="modal nodeMemoModal"
-        onMouseDown={(e) => {
-          e.stopPropagation();
-        }}
-      >
-        <div className="modalTitle">{text.title}</div>
+    <Dialog open={open} title={text.title} className="nodeMemoModal" initialFocusRef={textareaRef} onClose={onClose}>
         <div className="modalBody">
           <div className="nodeMemoSubjectLabel">{text.subject}</div>
           <div className="nodeMemoSubjectValue" title={nodeTitle}>
@@ -92,15 +77,11 @@ export function NodeMemoModal({
           <button
             type="button"
             className="modalButton"
-            onMouseDown={(e) => {
-              e.preventDefault();
-              onClose();
-            }}
+            onClick={onClose}
           >
             {text.close}
           </button>
         </div>
-      </div>
-    </div>
+    </Dialog>
   );
 }

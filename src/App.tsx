@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { isTauri } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import "./App.scss";
 import { executeKeyboardCommand } from "./app/keyboard/executeKeyboardCommand";
 import { resolveKeyboardCommand } from "./app/keyboard/resolveKeyboardCommand";
 import { useDeleteChord } from "./app/keyboard/useDeleteChord";
 import { useFoldChord } from "./app/keyboard/useFoldChord";
+import type { AppCommandDefinition, AppCommandId } from "./app/commands/AppCommandDefinition";
 import { useEditorUiSession } from "./app/session/useEditorUiSession";
 import { EditorView } from "./editor/EditorView";
-import { computeLayout } from "./editor/layout";
+import { computeLayout, STICKY_NOTE_HEIGHT, STICKY_NOTE_WIDTH } from "./editor/layout";
 import { findSpatialNeighbor } from "./editor/domain/spatialNavigation";
 import { TabBar } from "./editor/TabBar";
 import { canCreateCustomLink } from "./editor/domain/customLinks";
@@ -35,8 +38,14 @@ import { buildSearchResults } from "./features/search/model";
 import { useAppPreferences } from "./hooks/useAppPreferences";
 import { useWorkspacePersistence } from "./hooks/useWorkspacePersistence";
 import { useZoomPan } from "./hooks/useZoomPan";
-import { APP_TEXT, getModeLabel, getSaveStatusLabel } from "./i18n/uiText";
-import { createTauriWorkspaceRepository } from "./persistence";
+import {
+  APP_TEXT,
+  getContextualHint,
+  getModeLabel,
+  getPersistenceIssueLabel,
+  getSaveStatusLabel,
+} from "./i18n/uiText";
+import { createTauriWorkspaceRepository, createUnavailableWorkspaceRepository } from "./persistence";
 import { CloseConfirmModal } from "./ui/modals/CloseConfirmModal";
 import { CommandPaletteModal } from "./ui/modals/CommandPaletteModal";
 import { HelpModal } from "./ui/modals/HelpModal";
@@ -44,6 +53,8 @@ import { NodeColorModal } from "./ui/modals/NodeColorModal";
 import { NodeMemoModal } from "./ui/modals/NodeMemoModal";
 import { SearchModal } from "./ui/modals/SearchModal";
 import { SettingsModal } from "./ui/modals/SettingsModal";
+import { OnboardingGuide, type OnboardingStage } from "./ui/OnboardingGuide";
+import { SelectionToolbar } from "./ui/SelectionToolbar";
 import { clamp } from "./utils/number";
 
 function App() {
@@ -51,10 +62,39 @@ function App() {
   const { theme, setTheme, language, setLanguage } = useAppPreferences();
   const text = APP_TEXT[language];
   const viewportRef = useRef<HTMLDivElement | null>(null);
+  const closingWindowRef = useRef(false);
   const { reset: resetDeleteChord, consumeD: consumeDeleteChord } = useDeleteChord();
   const { reset: resetFoldChord, consume: consumeFoldChord } = useFoldChord();
   const [centerCursorRequest, setCenterCursorRequest] = useState(0);
   const [directionPickerNodeId, setDirectionPickerNodeId] = useState<NodeId | null>(null);
+  const [operationNotice, setOperationNotice] = useState<string | null>(null);
+  const [onboardingComplete, setOnboardingComplete] = useState(
+    () => window.localStorage.getItem("vikokoro.onboarding.v1") === "complete",
+  );
+  const [selectionToolbarPosition, setSelectionToolbarPosition] = useState<{
+    left: number;
+    top: number;
+  } | null>(null);
+  const [selectionToolbarMenuOpen, setSelectionToolbarMenuOpen] = useState(false);
+  const [dismissedPersistenceNotice, setDismissedPersistenceNotice] = useState(false);
+  const operationNoticeTimerRef = useRef<number | null>(null);
+
+  const showOperationNotice = useCallback((message: string) => {
+    setOperationNotice(message);
+    if (operationNoticeTimerRef.current !== null) {
+      window.clearTimeout(operationNoticeTimerRef.current);
+    }
+    operationNoticeTimerRef.current = window.setTimeout(() => {
+      operationNoticeTimerRef.current = null;
+      setOperationNotice(null);
+    }, 2400);
+  }, []);
+
+  useEffect(() => () => {
+    if (operationNoticeTimerRef.current !== null) {
+      window.clearTimeout(operationNoticeTimerRef.current);
+    }
+  }, []);
 
   const {
     helpOpen,
@@ -95,6 +135,32 @@ function App() {
     () => ({ ...activeDoc, ...visibleProjection.state }),
     [activeDoc, visibleProjection.state],
   );
+  const visibleLayout = useMemo(() => computeLayout(visibleDoc), [visibleDoc]);
+  const visibleBounds = useMemo(() => {
+    const entries = Object.keys(visibleLayout.positions)
+      .map((nodeId) => {
+        const position = visibleLayout.positions[nodeId];
+        const size = visibleLayout.sizes[nodeId];
+        return position && size
+          ? { left: position.x, top: position.y, right: position.x + size.width, bottom: position.y + size.height }
+          : null;
+      })
+      .filter((entry): entry is { left: number; top: number; right: number; bottom: number } => Boolean(entry));
+    for (const note of Object.values(visibleDoc.stickyNotes ?? {})) {
+      entries.push({
+        left: note.position.x,
+        top: note.position.y,
+        right: note.position.x + STICKY_NOTE_WIDTH,
+        bottom: note.position.y + STICKY_NOTE_HEIGHT,
+      });
+    }
+    if (entries.length === 0) return null;
+    const left = Math.min(...entries.map((entry) => entry.left));
+    const top = Math.min(...entries.map((entry) => entry.top));
+    const right = Math.max(...entries.map((entry) => entry.right));
+    const bottom = Math.max(...entries.map((entry) => entry.bottom));
+    return { x: left, y: top, width: right - left, height: bottom - top };
+  }, [visibleDoc.stickyNotes, visibleLayout]);
   const collapsibleNodeIds = useMemo(() => {
     const ids = new Set<NodeId>();
     for (const nodeId of visibleProjection.visibleNodeIds) {
@@ -117,13 +183,73 @@ function App() {
   const [selectedNodeIds, setSelectedNodeIds] = useState<Set<NodeId>>(new Set());
   const [organizePreview, setOrganizePreview] = useState<OrganizePreview | null>(null);
   const thoughtOrganizer = useMemo(() => createMockThoughtOrganizer(), []);
+  const appCommands = useMemo<Record<AppCommandId, AppCommandDefinition>>(() => ({
+    newDocument: {
+      id: "newDocument",
+      title: text.palette.newTabTitle,
+      shortcut: "Ctrl/Cmd+T",
+      isEnabled: state.mode === "normal",
+      run: () => dispatch({ type: "createDoc" }),
+    },
+    closeDocument: {
+      id: "closeDocument",
+      title: text.palette.closeTabTitle,
+      shortcut: "Ctrl/Cmd+W",
+      isEnabled: state.mode === "normal" && state.workspace.tabs.length > 1,
+      run: () => dispatch({ type: "requestCloseActiveDoc" }),
+    },
+    undo: {
+      id: "undo",
+      title: text.canvas.undo,
+      shortcut: "Ctrl/Cmd+Z",
+      isEnabled: state.mode === "normal" && activeDoc.undoStack.length > 0,
+      run: () => dispatch({ type: "undo" }),
+    },
+    redo: {
+      id: "redo",
+      title: text.canvas.redo,
+      shortcut: "Ctrl/Cmd+Shift+Z",
+      isEnabled: state.mode === "normal" && activeDoc.redoStack.length > 0,
+      run: () => dispatch({ type: "redo" }),
+    },
+    duplicateSelection: {
+      id: "duplicateSelection",
+      title: language === "ja" ? "選択を複製" : "Duplicate selection",
+      shortcut: "Ctrl/Cmd+D",
+      isEnabled: state.mode === "normal" && selectedNodeIds.size > 0,
+      run: () => dispatch({ type: "duplicateNodes", nodeIds: [...selectedNodeIds] }),
+    },
+    deleteSelection: {
+      id: "deleteSelection",
+      title: language === "ja" ? "選択を削除" : "Delete selection",
+      shortcut: "Delete",
+      isEnabled: state.mode === "normal" && selectedNodeIds.size > 0,
+      run: () => dispatch({ type: "deleteNodes", nodeIds: [...selectedNodeIds] }),
+    },
+  }), [
+    activeDoc.redoStack.length,
+    activeDoc.undoStack.length,
+    language,
+    selectedNodeIds,
+    state.mode,
+    state.workspace.tabs.length,
+    text.canvas.redo,
+    text.canvas.undo,
+    text.palette.closeTabTitle,
+    text.palette.newTabTitle,
+  ]);
+  const runAppCommand = useCallback((commandId: AppCommandId) => {
+    const command = appCommands[commandId];
+    if (command.isEnabled) command.run();
+  }, [appCommands]);
 
   const requestOrganizePreview = useCallback(async () => {
     const cards = [...selectedNodeIds]
       .map((id) => activeDoc.nodes[id])
       .filter((card): card is NonNullable<typeof card> => Boolean(card))
+      .filter((card) => card.text.trim().length > 0)
       .map(({ id, text: cardText }) => ({ id, text: cardText }));
-    if (cards.length === 0) return;
+    if (cards.length < 2) return;
     const request = { cards, instruction: "選択した思考を自然なまとまりに整理してください" };
     const suggestion = await thoughtOrganizer.organize(request);
     setOrganizePreview({ request, suggestion });
@@ -197,6 +323,22 @@ function App() {
     onViewportChange: persistViewport,
   });
 
+  const centerSelectedNode = useCallback(() => {
+    const position = visibleLayout.positions[activeDoc.cursorId];
+    const size = visibleLayout.sizes[activeDoc.cursorId];
+    if (!position || !size) return;
+    zoomPan.centerOnWorldBounds({ x: position.x, y: position.y, width: size.width, height: size.height });
+    showOperationNotice("選択ノードを中央に表示しました");
+  }, [activeDoc.cursorId, showOperationNotice, visibleLayout, zoomPan]);
+
+  const centerRootNode = useCallback(() => {
+    const position = visibleLayout.positions[visibleDoc.rootId];
+    const size = visibleLayout.sizes[visibleDoc.rootId];
+    if (!position || !size) return;
+    zoomPan.centerOnWorldBounds({ x: position.x, y: position.y, width: size.width, height: size.height });
+    showOperationNotice("ルートを中央に表示しました");
+  }, [showOperationNotice, visibleDoc.rootId, visibleLayout, zoomPan]);
+
   useEffect(() => {
     setSelectedEdgeKey(null);
     setSelectedCustomLinkId(null);
@@ -211,6 +353,7 @@ function App() {
     setDirectionPickerNodeId(null);
   }, [
     activeDoc.cursorId,
+    activeDoc.nodes,
     closeConfirmOpen,
     editingStickyNoteId,
     helpOpen,
@@ -232,9 +375,10 @@ function App() {
       setSelectedEdgeKey(null);
       setSelectedCustomLinkId(null);
       setSelectedStickyNoteId(null);
+      showOperationNotice("子ノードを作成中…");
       dispatch({ type: "addChildInDirectionAndInsert", parentId, direction });
     },
-    [applySelection],
+    [applySelection, showOperationNotice],
   );
 
   useEffect(() => {
@@ -320,18 +464,18 @@ function App() {
   const paletteItems = useMemo(() => {
     const paletteText = text.palette;
     const commands: PaletteCommand[] = [
-      {
+      ...(appCommands.newDocument.isEnabled ? [{
         id: "new-tab",
-        title: paletteText.newTabTitle,
+        title: appCommands.newDocument.title,
         subtitle: paletteText.newTabSubtitle,
-        run: () => dispatch({ type: "createDoc" }),
-      },
-      {
+        run: () => runAppCommand("newDocument"),
+      }] : []),
+      ...(appCommands.closeDocument.isEnabled ? [{
         id: "close-tab",
-        title: paletteText.closeTabTitle,
+        title: appCommands.closeDocument.title,
         subtitle: paletteText.closeTabSubtitle,
-        run: () => dispatch({ type: "requestCloseActiveDoc" }),
-      },
+        run: () => runAppCommand("closeDocument"),
+      }] : []),
       {
         id: "search",
         title: paletteText.searchTitle,
@@ -387,6 +531,17 @@ function App() {
           setPaletteOpen(false);
         },
       },
+      ...([...selectedNodeIds].filter((id) => activeDoc.nodes[id]?.text.trim()).length >= 2
+        ? [{
+            id: "organize-preview",
+            title: paletteText.organizePreviewTitle,
+            subtitle: paletteText.organizePreviewSubtitle,
+            run: () => {
+              void requestOrganizePreview();
+              setPaletteOpen(false);
+            },
+          }]
+        : []),
       ...(selectedCustomLinkId
         ? [{
             id: "delete-related-link",
@@ -479,11 +634,16 @@ function App() {
     return filterPaletteCommands(commands, paletteQuery);
   }, [
     activeDoc.cursorId,
+    activeDoc.nodes,
+    appCommands,
     applySelection,
     dispatch,
     paletteQuery,
     selectedCustomLinkId,
     selectedEdgeKey,
+    selectedNodeIds,
+    requestOrganizePreview,
+    runAppCommand,
     setHelpOpen,
     setSearchIndex,
     setPaletteOpen,
@@ -566,15 +726,60 @@ function App() {
     state.mode,
   ]);
 
-  const workspaceRepository = useMemo(() => createTauriWorkspaceRepository(), []);
+  const workspaceRepository = useMemo(
+    () => isTauri() ? createTauriWorkspaceRepository() : createUnavailableWorkspaceRepository(),
+    [],
+  );
 
-  const { saveStatus } = useWorkspacePersistence({
+  const {
+    saveStatus,
+    saveError,
+    tauriAvailable,
+    flushPendingSave,
+    retrySave,
+    loadIssue,
+    recoveredFromBackup,
+    loadBlocked,
+    startFreshPersistence,
+  } = useWorkspacePersistence({
     hydrated: state.hydrated,
     saveRevision: state.saveRevision,
     workspace: state.workspace,
     dispatch,
     repository: workspaceRepository,
   });
+
+  useEffect(() => {
+    if (!tauriAvailable || !isTauri()) return;
+    const currentWindow = getCurrentWindow();
+    let cancelled = false;
+    let unlisten: (() => void) | null = null;
+    void currentWindow
+      .onCloseRequested(async (event) => {
+        if (closingWindowRef.current) return;
+        event.preventDefault();
+        closingWindowRef.current = true;
+        const saved = await flushPendingSave();
+        if (cancelled) return;
+        if (saved) {
+          await currentWindow.destroy();
+          return;
+        }
+        closingWindowRef.current = false;
+      })
+      .then((remove) => {
+        if (cancelled) {
+          remove();
+          return;
+        }
+        unlisten = remove;
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, [flushPendingSave, tauriAvailable]);
 
   const moveSearch = (delta: number) => {
     if (searchResults.length === 0) return;
@@ -640,6 +845,82 @@ function App() {
   };
 
   const saveStatusLabel = getSaveStatusLabel(saveStatus, language);
+  const contextualHint = getContextualHint(language, {
+    mode: state.mode,
+    directionPickerOpen: directionPickerNodeId !== null,
+    stickyPlacementActive,
+    selectedCount: selectedNodeIds.size,
+  });
+  const rootNode = activeDoc.nodes[activeDoc.rootId];
+  const onboardingStage: OnboardingStage | null = onboardingComplete
+    ? null
+    : state.mode === "insert" || !rootNode?.text.trim()
+      ? "topic"
+      : rootNode.childrenIds.length === 0
+        ? "branch"
+        : "arrange";
+
+  const completeOnboarding = useCallback(() => {
+    window.localStorage.setItem("vikokoro.onboarding.v1", "complete");
+    setOnboardingComplete(true);
+  }, []);
+
+  useEffect(() => {
+    const auxiliarySelection = selectedStickyNoteId ?? selectedCustomLinkId ?? selectedEdgeKey;
+    if (
+      (selectedNodeIds.size === 0 && !auxiliarySelection) ||
+      state.mode !== "normal" ||
+      directionPickerNodeId
+    ) {
+      setSelectionToolbarPosition(null);
+      setSelectionToolbarMenuOpen(false);
+      return;
+    }
+    const updatePosition = () => {
+      const viewport = viewportRef.current;
+      const nodeId = selectedNodeIds.has(activeDoc.cursorId)
+        ? activeDoc.cursorId
+        : [...selectedNodeIds][0];
+      const candidates = viewport?.querySelectorAll<HTMLElement>(
+        "[data-node-id], [data-sticky-note-id], [data-custom-link-id], [data-edge-key]",
+      );
+      const target = [...(candidates ?? [])].find((element) =>
+        (nodeId && element.dataset.nodeId === nodeId) ||
+        (selectedStickyNoteId && element.dataset.stickyNoteId === selectedStickyNoteId) ||
+        (selectedCustomLinkId && element.dataset.customLinkId === selectedCustomLinkId) ||
+        (selectedEdgeKey && element.dataset.edgeKey === selectedEdgeKey),
+      );
+      if (!target) return setSelectionToolbarPosition(null);
+      const rect = target.getBoundingClientRect();
+      setSelectionToolbarPosition({
+        left: Math.max(8, Math.min(window.innerWidth - 260, rect.left + rect.width / 2 - 112)),
+        top: Math.max(8, rect.top - 48),
+      });
+    };
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    const viewport = viewportRef.current;
+    viewport?.addEventListener("scroll", updatePosition);
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      viewport?.removeEventListener("scroll", updatePosition);
+    };
+  }, [
+    directionPickerNodeId,
+    selectedCustomLinkId,
+    selectedEdgeKey,
+    selectedNodeIds,
+    selectedStickyNoteId,
+    activeDoc.cursorId,
+    state.mode,
+    zoomPan.zoom,
+  ]);
+
+  useEffect(() => {
+    if (saveStatus === "error") {
+      showOperationNotice(saveError?.message ?? saveStatusLabel);
+    }
+  }, [saveError?.message, saveStatus, saveStatusLabel, showOperationNotice]);
 
   useEffect(() => {
     if (state.mode === "normal") {
@@ -725,8 +1006,8 @@ function App() {
 
       if (commandLayerActive && commandKey && event.key.toLowerCase() === "d") {
         event.preventDefault();
-        const ids = selectedNodeIds.size > 0 ? [...selectedNodeIds] : [activeDoc.cursorId];
-        dispatch({ type: "duplicateNodes", nodeIds: ids });
+        if (selectedNodeIds.size > 0) runAppCommand("duplicateSelection");
+        else dispatch({ type: "duplicateNodes", nodeIds: [activeDoc.cursorId] });
         return;
       }
 
@@ -863,6 +1144,7 @@ function App() {
           const nodeId = findSpatialNeighbor(layout, visibleDoc.cursorId, direction);
           if (nodeId) dispatch({ type: "selectNode", nodeId });
         },
+        runAppCommand,
       });
     };
 
@@ -889,6 +1171,7 @@ function App() {
     relatedLinkJumpSourceNodeId,
     resetDeleteChord,
     resetFoldChord,
+    runAppCommand,
     searchOpen,
     setHelpOpen,
     setJumpPrefix,
@@ -932,26 +1215,144 @@ function App() {
         disabled={closeConfirmOpen || nodeMemoOpen}
         onSelect={(docId) => dispatch({ type: "setActiveDoc", docId })}
         onNew={() => dispatch({ type: "createDoc" })}
+        onRequestClose={(docId) => dispatch({ type: "requestCloseDoc", docId })}
         language={language}
       />
-      <div className="canvasToolbar" aria-label="マインドマップの操作">
-        <div className="canvasToolbarRight">
+      <div className="canvasToolbar" role="toolbar" aria-label={text.canvas.label}>
+        <div className="canvasToolbarPrimary">
           <button
             type="button"
-            className="organizeButton"
-            disabled={selectedNodeIds.size === 0}
-            onClick={() => void requestOrganizePreview()}
+            className="viewActionButton viewActionIcon"
+            aria-label={text.canvas.undo}
+            title={text.canvas.undo}
+            disabled={!appCommands.undo.isEnabled}
+            onClick={appCommands.undo.run}
           >
-            整理案
+            ↶
           </button>
-          <span className="canvasToolbarHint">⌘Enter ノード · Space ドラッグ</span>
-          <div className="zoomControls" aria-label="ズーム">
-            <button type="button" onClick={zoomPan.zoomOut} aria-label="ズームアウト">−</button>
-            <button type="button" onClick={zoomPan.resetZoom}>{Math.round(zoomPan.zoom * 100)}%</button>
-            <button type="button" onClick={zoomPan.zoomIn} aria-label="ズームイン">＋</button>
+          <button
+            type="button"
+            className="viewActionButton viewActionIcon"
+            aria-label={text.canvas.redo}
+            title={text.canvas.redo}
+            disabled={!appCommands.redo.isEnabled}
+            onClick={appCommands.redo.run}
+          >
+            ↷
+          </button>
+        </div>
+        <div className="canvasToolbarRight">
+          <details className="viewMenu">
+            <summary>{text.canvas.view}</summary>
+            <div className="viewMenuPanel">
+              <button type="button" onClick={centerSelectedNode}>{text.canvas.centerSelected}</button>
+              <button type="button" onClick={centerRootNode}>{text.canvas.centerRoot}</button>
+              <button type="button" disabled={!visibleBounds} onClick={() => visibleBounds && zoomPan.fitToWorldBounds(visibleBounds)}>{text.canvas.fit}</button>
+              <button type="button" onClick={zoomPan.zoomOut}>{text.canvas.zoomOut}</button>
+              <button type="button" onClick={zoomPan.resetZoom}>{Math.round(zoomPan.zoom * 100)}%</button>
+              <button type="button" onClick={zoomPan.zoomIn}>{text.canvas.zoomIn}</button>
+            </div>
+          </details>
+          <div className="viewActionGroup" aria-label={text.canvas.view}>
+          <button type="button" className="viewActionButton" onClick={centerSelectedNode}>
+            {text.canvas.centerSelected}
+          </button>
+          <button type="button" className="viewActionButton" onClick={centerRootNode}>
+            {text.canvas.centerRoot}
+          </button>
+          <button
+            type="button"
+            className="viewActionButton"
+            disabled={!visibleBounds}
+            onClick={() => visibleBounds && zoomPan.fitToWorldBounds(visibleBounds)}
+          >
+            {text.canvas.fit}
+          </button>
+          <div className="zoomControls" role="group" aria-label={text.canvas.view}>
+            <button type="button" onClick={zoomPan.zoomOut} aria-label={text.canvas.zoomOut}>−</button>
+            <button type="button" onClick={zoomPan.resetZoom} aria-label={text.canvas.resetZoom}>{Math.round(zoomPan.zoom * 100)}%</button>
+            <button type="button" onClick={zoomPan.zoomIn} aria-label={text.canvas.zoomIn}>＋</button>
           </div>
+          </div>
+          <span className="canvasToolbarHint" aria-live="polite">{contextualHint}</span>
         </div>
       </div>
+      {(recoveredFromBackup || loadIssue) && !dismissedPersistenceNotice ? (
+        <aside className="persistenceBanner" role="status">
+          <span>
+            {recoveredFromBackup
+              ? language === "ja"
+                ? "バックアップから復旧しました。保存元を確認してください。"
+                : "Recovered from a backup. Please verify your map."
+              : loadIssue
+                ? getPersistenceIssueLabel(loadIssue, language)
+                : null}
+          </span>
+          {loadBlocked ? (
+            <>
+              <button type="button" onClick={() => window.location.reload()}>
+                {language === "ja" ? "再試行" : "Retry"}
+              </button>
+              <button type="button" onClick={() => {
+                startFreshPersistence();
+                dispatch({ type: "startFreshWorkspace" });
+                setDismissedPersistenceNotice(true);
+              }}>
+                {language === "ja" ? "新規開始" : "Start fresh"}
+              </button>
+            </>
+          ) : null}
+          <button type="button" aria-label={language === "ja" ? "通知を閉じる" : "Dismiss notice"} onClick={() => setDismissedPersistenceNotice(true)}>×</button>
+        </aside>
+      ) : null}
+      {operationNotice ? (
+        <div className="operationNotice" role="status" aria-live="polite">
+          {operationNotice}
+        </div>
+      ) : null}
+      {selectionToolbarPosition ? (
+        <SelectionToolbar
+          language={language}
+          position={selectionToolbarPosition}
+          multiCount={selectedNodeIds.size}
+          isRoot={activeDoc.cursorId === activeDoc.rootId}
+          menuOpen={selectionToolbarMenuOpen}
+          kind={selectedStickyNoteId ? "sticky" : selectedCustomLinkId ? "link" : selectedEdgeKey ? "edge" : "nodes"}
+          onAddChild={() => {
+            setDirectionPickerNodeId(activeDoc.cursorId);
+            setSelectionToolbarMenuOpen(false);
+          }}
+          onAddSibling={() => dispatch({ type: "addSiblingAndInsert" })}
+          onEdit={() => dispatch({ type: "enterInsert" })}
+          onToggleMenu={() => setSelectionToolbarMenuOpen((open) => !open)}
+          onMemo={() => {
+            dispatch({ type: "beginNoteEdit" });
+            setNodeMemoOpen(true);
+          }}
+          onColor={() => setNodeColorOpen(true)}
+          onDuplicate={appCommands.duplicateSelection.run}
+          onToggleCollapse={() => dispatch({ type: "toggleNodeCollapsed" })}
+          onFocus={() => dispatch({ type: "enterFocus" })}
+          onEditAuxiliary={selectedStickyNoteId ? () => {
+            setEditingStickyNoteId(selectedStickyNoteId);
+            dispatch({ type: "beginStickyEdit" });
+          } : undefined}
+          onAutoAnchor={selectedEdgeKey ? () => dispatch({ type: "resetEdgeAnchors", edgeKey: selectedEdgeKey }) : undefined}
+          onDelete={() => {
+            if (selectedStickyNoteId) {
+              dispatch({ type: "deleteStickyNote", noteId: selectedStickyNoteId });
+              setSelectedStickyNoteId(null);
+              return;
+            }
+            if (selectedCustomLinkId) {
+              dispatch({ type: "deleteCustomLink", linkId: selectedCustomLinkId });
+              setSelectedCustomLinkId(null);
+              return;
+            }
+            appCommands.deleteSelection.run();
+          }}
+        />
+      ) : null}
       {organizePreview ? (
         <aside className="organizePreview" aria-label="AI整理案のプレビュー">
           <div>
@@ -973,8 +1374,7 @@ function App() {
           <button
             type="button"
             className="focusBreadcrumbButton"
-            onMouseDown={(event) => {
-              event.preventDefault();
+            onClick={() => {
               dispatch({ type: "exitFocus" });
             }}
           >
@@ -994,8 +1394,7 @@ function App() {
                     (isCurrent ? " focusBreadcrumbButtonCurrent" : "")
                   }
                   disabled={isCurrent}
-                  onMouseDown={(event) => {
-                    event.preventDefault();
+                  onClick={() => {
                     dispatch({ type: "setFocusRoot", nodeId });
                   }}
                 >
@@ -1012,6 +1411,11 @@ function App() {
         ref={viewportRef}
         onMouseDown={zoomPan.onViewportMouseDown}
         onWheel={zoomPan.onViewportWheel}
+        onScroll={zoomPan.onViewportScroll}
+        role="tree"
+        aria-label={text.canvas.label}
+        aria-activedescendant={`mindmap-node-${activeDoc.cursorId}`}
+        aria-multiselectable="true"
         tabIndex={0}
       >
         <EditorView
@@ -1034,6 +1438,10 @@ function App() {
           viewSessionKey={`${state.workspace.activeDocId}:${visibleProjection.state.rootId}`}
           centerRootOnInitialView={!hasSavedViewport(activeDoc.viewport)}
           centerCursorRequest={centerCursorRequest}
+          canvasLabel={text.canvas.label}
+          emptyRootLabel={text.canvas.emptyRoot}
+          directionPickerLabel={text.hints.direction}
+          language={language}
           highlightedNodeIds={highlightedNodeIds}
           activeHighlightedNodeId={activeSearchNodeId}
           jumpHints={jumpSession?.nodeToHint ?? null}
@@ -1058,7 +1466,12 @@ function App() {
             dispatch({ type: "selectNode", nodeId });
             dispatch({ type: "enterInsert" });
           }}
-          onSelectionChange={(nodeIds) => applySelection(nodeIds)}
+          onSelectionChange={(nodeIds) => {
+            setSelectedEdgeKey(null);
+            setSelectedCustomLinkId(null);
+            setSelectedStickyNoteId(null);
+            applySelection(nodeIds);
+          }}
           onSelectEdge={(edgeKey) => {
             applySelection([]);
             setSelectedEdgeKey(edgeKey);
@@ -1077,12 +1490,6 @@ function App() {
             setSelectedCustomLinkId(null);
             setSelectedStickyNoteId(noteId);
           }}
-          onClearSelection={() => {
-            applySelection([]);
-            setSelectedEdgeKey(null);
-            setSelectedCustomLinkId(null);
-            setSelectedStickyNoteId(null);
-          }}
           onBeginStickyEdit={(noteId) => {
             applySelection([]);
             setSelectedEdgeKey(null);
@@ -1099,9 +1506,6 @@ function App() {
             setEditingStickyNoteId(null);
           }}
           onChangeEdgeAnchor={changeEdgeAnchor}
-          onResetEdgeAnchors={(edgeKey) =>
-            dispatch({ type: "resetEdgeAnchors", edgeKey })
-          }
           onMoveNodes={(nodeIds, dx, dy) =>
             dispatch({ type: "moveNodes", nodeIds, dx, dy })
           }
@@ -1126,6 +1530,14 @@ function App() {
           onEsc={() => dispatch({ type: "cancelInsert" })}
           onViewportChange={persistViewport}
         />
+        {onboardingStage ? (
+          <OnboardingGuide
+            language={language}
+            stage={onboardingStage}
+            onAddBranch={() => setDirectionPickerNodeId(activeDoc.cursorId)}
+            onComplete={completeOnboarding}
+          />
+        ) : null}
         <CloseConfirmModal
           open={closeConfirmOpen}
           language={language}
@@ -1262,9 +1674,20 @@ function App() {
           </span>
           <span className="statusDot">•</span>
           <span className="statusLabel">{text.status.save}</span>
-          <span className={"statusValue " + (saveStatus === "saving" ? "statusValueSaving" : "")}>
-            {saveStatusLabel}
-          </span>
+          {saveStatus === "error" ? (
+            <button
+              type="button"
+              className="statusValue statusRetryButton"
+              title={saveError?.message}
+              onClick={() => void retrySave()}
+            >
+              {saveStatusLabel}
+            </button>
+          ) : (
+            <span className={"statusValue " + (saveStatus === "saving" ? "statusValueSaving" : "")}>
+              {saveStatusLabel}
+            </span>
+          )}
           {jumpActive ? (
             <>
               <span className="statusDot">•</span>
@@ -1284,8 +1707,7 @@ function App() {
           <button
             type="button"
             className="statusHelpButton"
-            onMouseDown={(e) => {
-              e.preventDefault();
+            onClick={() => {
               setSettingsOpen(true);
             }}
           >
@@ -1294,8 +1716,7 @@ function App() {
           <button
             type="button"
             className="statusHelpButton"
-            onMouseDown={(e) => {
-              e.preventDefault();
+            onClick={() => {
               setHelpOpen(true);
             }}
           >

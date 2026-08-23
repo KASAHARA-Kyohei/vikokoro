@@ -65,11 +65,13 @@ export type EditorAppState = {
 
 export type EditorAction =
   | { type: "finishHydration"; workspace: Workspace | null }
+  | { type: "startFreshWorkspace" }
   | { type: "setActiveDoc"; docId: DocId }
   | { type: "switchDocNext" }
   | { type: "switchDocPrev" }
   | { type: "createDoc" }
   | { type: "requestCloseActiveDoc" }
+  | { type: "requestCloseDoc"; docId: DocId }
   | { type: "cancelCloseConfirm" }
   | { type: "closeActiveDoc" }
   | { type: "deleteNode" }
@@ -132,6 +134,8 @@ export type EditorAction =
   | { type: "undo" }
   | { type: "redo" };
 
+export const HISTORY_LIMIT = 100;
+
 export function createInitialAppState(): EditorAppState {
   const doc1 = createInitialDocument("");
   const workspace: Workspace = {
@@ -162,6 +166,10 @@ function normalizeNote(note: string): string | undefined {
 
 function bumpSaveRevision(state: EditorAppState): EditorAppState {
   return { ...state, saveRevision: state.saveRevision + 1 };
+}
+
+function trimHistory<T>(history: T[]): T[] {
+  return history.length <= HISTORY_LIMIT ? history : history.slice(-HISTORY_LIMIT);
 }
 
 function withoutLegacyGroups<T extends object>(value: T): T {
@@ -236,8 +244,8 @@ function sanitizeWorkspace(workspace: Workspace): Workspace {
           return [id, saved ?? getNodeSize(node)];
         }),
       ),
-      undoStack: (doc.undoStack ?? []).map(sanitizeHistorySnapshot),
-      redoStack: (doc.redoStack ?? []).map(sanitizeHistorySnapshot),
+      undoStack: trimHistory((doc.undoStack ?? []).map(sanitizeHistorySnapshot)),
+      redoStack: trimHistory((doc.redoStack ?? []).map(sanitizeHistorySnapshot)),
       collapsedNodeIds: sanitizeCollapsedNodeIds(doc, doc.collapsedNodeIds),
       viewport: sanitizeViewport(doc.viewport),
       selection: sanitizeSelection(doc.selection, nodes, doc.cursorId),
@@ -421,13 +429,18 @@ function updateDocById(
   if (updated === current) {
     return state;
   }
+  const historyNormalized = {
+    ...updated,
+    undoStack: trimHistory(updated.undoStack),
+    redoStack: trimHistory(updated.redoStack),
+  };
   return {
     ...state,
     workspace: {
       ...state.workspace,
       documents: {
         ...state.workspace.documents,
-        [docId]: updated,
+        [docId]: historyNormalized,
       },
     },
   };
@@ -452,7 +465,14 @@ export function editorReducer(state: EditorAppState, action: EditorAction): Edit
     case "finishHydration": {
       if (state.hydrated) return state;
       if (!action.workspace) {
-        return { ...state, hydrated: true };
+        const docId = state.workspace.activeDocId;
+        const doc = state.workspace.documents[docId];
+        return {
+          ...state,
+          hydrated: true,
+          mode: "insert",
+          insertOrigin: { docId, snapshot: cloneDocumentState(doc) },
+        };
       }
       return {
         ...state,
@@ -463,6 +483,26 @@ export function editorReducer(state: EditorAppState, action: EditorAction): Edit
         closeConfirmDocId: null,
         focusRootId: null,
         workspace: sanitizeWorkspace(action.workspace),
+      };
+    }
+    case "startFreshWorkspace": {
+      const created = createInitialDocument("");
+      return {
+        ...state,
+        workspace: {
+          schemaVersion: 3,
+          tabs: [{ docId: created.docId }],
+          activeDocId: created.docId,
+          documents: { [created.docId]: created.doc },
+        },
+        mode: "insert",
+        insertOrigin: { docId: created.docId, snapshot: cloneDocumentState(created.doc) },
+        noteEditOrigin: null,
+        stickyEditOrigin: null,
+        closeConfirmDocId: null,
+        focusRootId: null,
+        hydrated: true,
+        saveRevision: state.saveRevision + 1,
       };
     }
     case "setActiveDoc": {
@@ -513,6 +553,10 @@ export function editorReducer(state: EditorAppState, action: EditorAction): Edit
       return bumpSaveRevision({
         ...state,
         focusRootId: null,
+        mode: "insert",
+        insertOrigin: { docId: created.docId, snapshot: cloneDocumentState(created.doc) },
+        noteEditOrigin: null,
+        stickyEditOrigin: null,
         workspace: {
           ...state.workspace,
           schemaVersion: 3,
@@ -526,10 +570,14 @@ export function editorReducer(state: EditorAppState, action: EditorAction): Edit
       });
     }
     case "requestCloseActiveDoc": {
+      return editorReducer(state, { type: "requestCloseDoc", docId: state.workspace.activeDocId });
+    }
+    case "requestCloseDoc": {
       if (state.mode === "insert") return state;
       if (state.workspace.tabs.length <= 1) return state;
       if (state.closeConfirmDocId) return state;
-      return { ...state, closeConfirmDocId: state.workspace.activeDocId };
+      if (!state.workspace.documents[action.docId]) return state;
+      return { ...state, closeConfirmDocId: action.docId };
     }
     case "cancelCloseConfirm": {
       if (!state.closeConfirmDocId) return state;
@@ -539,14 +587,14 @@ export function editorReducer(state: EditorAppState, action: EditorAction): Edit
       if (state.mode === "insert") return state;
       if (state.workspace.tabs.length <= 1) return state;
 
-      const activeIndex = state.workspace.tabs.findIndex(
-        (tab) => tab.docId === state.workspace.activeDocId,
+      const closingDocId = state.closeConfirmDocId ?? state.workspace.activeDocId;
+      const closingIndex = state.workspace.tabs.findIndex(
+        (tab) => tab.docId === closingDocId,
       );
-      if (activeIndex === -1) return state;
+      if (closingIndex === -1) return state;
 
-      const closingDocId = state.workspace.activeDocId;
       const nextTabs = state.workspace.tabs.filter((tab) => tab.docId !== closingDocId);
-      const nextActiveTab = nextTabs[Math.min(activeIndex, nextTabs.length - 1)];
+      const nextActiveTab = nextTabs[Math.min(closingIndex, nextTabs.length - 1)];
       const { [closingDocId]: _, ...restDocuments } = state.workspace.documents;
 
       return bumpSaveRevision({
@@ -557,7 +605,10 @@ export function editorReducer(state: EditorAppState, action: EditorAction): Edit
           ...state.workspace,
           schemaVersion: 3,
           tabs: nextTabs,
-          activeDocId: nextActiveTab.docId,
+          activeDocId:
+            closingDocId === state.workspace.activeDocId
+              ? nextActiveTab.docId
+              : state.workspace.activeDocId,
           documents: restDocuments,
         },
       });
@@ -870,9 +921,12 @@ export function editorReducer(state: EditorAppState, action: EditorAction): Edit
     }
     case "reparentNode": {
       if (state.mode === "insert") return state;
-      const next = updateActiveDoc(state, (doc) =>
-        sanitizeDocumentViewState(reparentNode(doc, action.direction)),
-      );
+      const next = updateActiveDoc(state, (doc) => {
+        const snapshot = cloneDocumentState(doc);
+        const updated = sanitizeDocumentViewState(reparentNode(doc, action.direction));
+        if (updated === doc) return doc;
+        return { ...updated, undoStack: [...doc.undoStack, snapshot], redoStack: [] };
+      });
       if (next === state) return state;
       return bumpSaveRevision(normalizeFocusRoot(next));
     }
@@ -989,7 +1043,7 @@ export function editorReducer(state: EditorAppState, action: EditorAction): Edit
     }
     case "setCursorText": {
       if (state.mode !== "insert") return state;
-      return updateActiveDoc(state, (doc) => {
+      const next = updateActiveDoc(state, (doc) => {
         const cursor = doc.nodes[doc.cursorId];
         if (!cursor) return doc;
         if (cursor.text === action.text) return doc;
@@ -1030,6 +1084,7 @@ export function editorReducer(state: EditorAppState, action: EditorAction): Edit
           ),
         };
       });
+      return next === state ? state : bumpSaveRevision(next);
     }
     case "beginNoteEdit": {
       if (state.mode === "insert") return state;
@@ -1042,7 +1097,7 @@ export function editorReducer(state: EditorAppState, action: EditorAction): Edit
     }
     case "setCursorNote": {
       if (state.mode === "insert") return state;
-      return updateActiveDoc(state, (doc) => {
+      const next = updateActiveDoc(state, (doc) => {
         const cursor = doc.nodes[doc.cursorId];
         if (!cursor) return doc;
         const nextNote = normalizeNote(action.note);
@@ -1055,6 +1110,7 @@ export function editorReducer(state: EditorAppState, action: EditorAction): Edit
           },
         };
       });
+      return next === state ? state : bumpSaveRevision(next);
     }
     case "commitNoteEdit": {
       if (state.mode === "insert") return state;
@@ -1086,7 +1142,7 @@ export function editorReducer(state: EditorAppState, action: EditorAction): Edit
     }
     case "setStickyNoteText": {
       if (state.mode === "insert") return state;
-      return updateActiveDoc(state, (doc) => {
+      const next = updateActiveDoc(state, (doc) => {
         const note = doc.stickyNotes[action.noteId];
         if (!note || note.text === action.text) return doc;
         return {
@@ -1097,6 +1153,7 @@ export function editorReducer(state: EditorAppState, action: EditorAction): Edit
           },
         };
       });
+      return next === state ? state : bumpSaveRevision(next);
     }
     case "commitStickyEdit": {
       if (state.mode === "insert") return state;
@@ -1195,17 +1252,26 @@ export function editorReducer(state: EditorAppState, action: EditorAction): Edit
       return next === state ? state : bumpSaveRevision(next);
     }
     case "setSelection": {
-      const next = updateActiveDoc(state, (doc) => ({
-        ...doc,
-        selection: sanitizeSelection(action.selection, doc.nodes, doc.cursorId),
-      }));
+      const next = updateActiveDoc(state, (doc) => {
+        const selection = sanitizeSelection(action.selection, doc.nodes, doc.cursorId);
+        const same =
+          selection.lastEditedCardId === doc.selection.lastEditedCardId &&
+          selection.cardIds.length === doc.selection.cardIds.length &&
+          selection.cardIds.every((id, index) => id === doc.selection.cardIds[index]);
+        return same ? doc : { ...doc, selection };
+      });
       return next === state ? state : bumpSaveRevision(next);
     }
     case "setViewport": {
-      const next = updateActiveDoc(state, (doc) => ({
-        ...doc,
-        viewport: sanitizeViewport(action.viewport),
-      }));
+      const next = updateActiveDoc(state, (doc) => {
+        const viewport = sanitizeViewport(action.viewport);
+        const same =
+          viewport.x === doc.viewport.x &&
+          viewport.y === doc.viewport.y &&
+          viewport.zoom === doc.viewport.zoom &&
+          viewport.initialized === doc.viewport.initialized;
+        return same ? doc : { ...doc, viewport };
+      });
       return next === state ? state : bumpSaveRevision(next);
     }
     case "addStickyNote": {

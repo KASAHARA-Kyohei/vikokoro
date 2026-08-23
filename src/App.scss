@@ -28,7 +28,7 @@
   min-height: 38px;
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
   gap: 12px;
   padding: 5px 10px;
   border-bottom: 1px solid var(--divider);
@@ -41,6 +41,22 @@
   letter-spacing: 0.02em;
 }
 
+.operationNotice {
+  position: fixed;
+  right: 16px;
+  bottom: 46px;
+  z-index: 20;
+  max-width: min(420px, calc(100vw - 32px));
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--surface), transparent 4%);
+  color: var(--text);
+  box-shadow: 0 8px 24px color-mix(in srgb, #000, transparent 78%);
+  font-size: 12px;
+}
+
+.canvasToolbarPrimary,
 .canvasToolbarRight,
 .zoomControls {
   display: flex;
@@ -53,8 +69,8 @@
 }
 
 .zoomControls button {
-  min-width: 28px;
-  height: 25px;
+  min-width: 36px;
+  height: 36px;
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--text);
@@ -65,6 +81,111 @@
 
 .zoomControls button:first-child { border-radius: 7px 0 0 7px; }
 .zoomControls button:last-child { border-radius: 0 7px 7px 0; }
+
+.statusRetryButton {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--dangerText, var(--text));
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.viewActionButton {
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.viewActionIcon {
+  min-width: 36px;
+  padding: 0;
+  font-size: 18px;
+}
+
+.viewActionGroup {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.viewMenu { display: none; position: relative; }
+.viewMenu summary {
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 11px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+  list-style: none;
+}
+.viewMenu summary::-webkit-details-marker { display: none; }
+.viewMenuPanel {
+  position: absolute;
+  z-index: 160;
+  top: calc(100% + 7px);
+  right: 0;
+  min-width: 180px;
+  display: grid;
+  gap: 3px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: var(--panel);
+  box-shadow: var(--shadowPanel);
+}
+.viewMenuPanel button {
+  min-height: 36px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+.viewMenuPanel button:hover { background: var(--surfaceHover); }
+
+.persistenceBanner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--accent), var(--divider) 60%);
+  background: color-mix(in srgb, var(--accentBg), var(--panel) 60%);
+  color: var(--text);
+  font-size: 12px;
+}
+
+.persistenceBanner span { flex: 1; }
+.persistenceBanner button {
+  min-width: 32px;
+  min-height: 32px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.viewActionButton:hover:not(:disabled) {
+  background: var(--surfaceHover);
+}
+
+.viewActionButton:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
 
 .organizeButton,
 .organizePreview button {
@@ -182,6 +303,21 @@
   color: var(--muted);
   font-size: 12px;
   line-height: 1.35;
+}
+
+@media (max-width: 900px) {
+  .canvasToolbarHint,
+  .viewActionGroup { display: none; }
+  .viewMenu { display: block; }
+}
+
+@media (max-width: 720px) {
+  .canvasToolbar {
+    padding: 4px 6px;
+  }
+  .statusBar {
+    min-height: 42px;
+  }
 }
 
 .statusLeft,

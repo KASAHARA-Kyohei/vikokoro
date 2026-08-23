@@ -1,17 +1,21 @@
 import { useCallback, useState } from "react";
 import type { JumpSession } from "../../features/jump/model";
 
+export type ActiveOverlay =
+  | "help"
+  | "search"
+  | "palette"
+  | "nodeColor"
+  | "nodeMemo"
+  | "settings"
+  | null;
+
 export function useEditorUiSession() {
-  const [helpOpen, setHelpOpen] = useState(false);
-  const [searchOpen, setSearchOpen] = useState(false);
+  const [activeOverlay, setActiveOverlay] = useState<ActiveOverlay>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchIndex, setSearchIndex] = useState(0);
-  const [paletteOpen, setPaletteOpen] = useState(false);
   const [paletteQuery, setPaletteQuery] = useState("");
   const [paletteIndex, setPaletteIndex] = useState(0);
-  const [nodeColorOpen, setNodeColorOpen] = useState(false);
-  const [nodeMemoOpen, setNodeMemoOpen] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const [jumpSession, setJumpSession] = useState<JumpSession | null>(null);
   const [jumpPrefix, setJumpPrefix] = useState("");
 
@@ -20,34 +24,46 @@ export function useEditorUiSession() {
     setJumpPrefix("");
   }, []);
 
+  const setOverlayOpen = useCallback((overlay: Exclude<ActiveOverlay, null>, open: boolean) => {
+    setActiveOverlay((current) => open ? overlay : current === overlay ? null : current);
+  }, []);
+  const setHelpOpen = useCallback((open: boolean) => setOverlayOpen("help", open), [setOverlayOpen]);
+  const setSearchOpen = useCallback((open: boolean) => setOverlayOpen("search", open), [setOverlayOpen]);
+  const setPaletteOpen = useCallback((open: boolean) => setOverlayOpen("palette", open), [setOverlayOpen]);
+  const setNodeColorOpen = useCallback((open: boolean) => setOverlayOpen("nodeColor", open), [setOverlayOpen]);
+  const setNodeMemoOpen = useCallback((open: boolean) => setOverlayOpen("nodeMemo", open), [setOverlayOpen]);
+  const setSettingsOpen = useCallback((open: boolean) => setOverlayOpen("settings", open), [setOverlayOpen]);
+
   const closeAllTransientPanels = useCallback(() => {
-    setSearchOpen(false);
-    setPaletteOpen(false);
-    setNodeColorOpen(false);
-    setSettingsOpen(false);
+    setActiveOverlay((current) =>
+      current === "search" || current === "palette" || current === "nodeColor" || current === "settings"
+        ? null
+        : current,
+    );
     closeJump();
   }, [closeJump]);
 
   return {
-    helpOpen,
+    activeOverlay,
+    helpOpen: activeOverlay === "help",
     setHelpOpen,
-    searchOpen,
+    searchOpen: activeOverlay === "search",
     setSearchOpen,
     searchQuery,
     setSearchQuery,
     searchIndex,
     setSearchIndex,
-    paletteOpen,
+    paletteOpen: activeOverlay === "palette",
     setPaletteOpen,
     paletteQuery,
     setPaletteQuery,
     paletteIndex,
     setPaletteIndex,
-    nodeColorOpen,
+    nodeColorOpen: activeOverlay === "nodeColor",
     setNodeColorOpen,
-    nodeMemoOpen,
+    nodeMemoOpen: activeOverlay === "nodeMemo",
     setNodeMemoOpen,
-    settingsOpen,
+    settingsOpen: activeOverlay === "settings",
     setSettingsOpen,
     jumpSession,
     setJumpSession,

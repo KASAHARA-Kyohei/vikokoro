@@ -1,4 +1,5 @@
 import type { AppLanguage } from "../../hooks/useAppPreferences";
+import { Dialog } from "../Dialog";
 
 type Props = {
   open: boolean;
@@ -8,8 +9,6 @@ type Props = {
 };
 
 export function CloseConfirmModal({ open, language, onConfirm, onCancel }: Props) {
-  if (!open) return null;
-
   const text =
     language === "ja"
       ? {
@@ -26,33 +25,24 @@ export function CloseConfirmModal({ open, language, onConfirm, onCancel }: Props
         };
 
   return (
-    <div className="modalOverlay" onMouseDown={(e) => e.preventDefault()}>
-      <div className="modal">
-        <div className="modalTitle">{text.title}</div>
+    <Dialog open={open} title={text.title} closeOnBackdrop={false} onClose={onCancel}>
         <div className="modalBody">{text.body}</div>
         <div className="modalActions">
           <button
             type="button"
             className="modalButton modalButtonDanger"
-            onMouseDown={(e) => {
-              e.preventDefault();
-              onConfirm();
-            }}
+            onClick={onConfirm}
           >
             {text.confirm}
           </button>
           <button
             type="button"
             className="modalButton"
-            onMouseDown={(e) => {
-              e.preventDefault();
-              onCancel();
-            }}
+            onClick={onCancel}
           >
             {text.cancel}
           </button>
         </div>
-      </div>
-    </div>
+    </Dialog>
   );
 }

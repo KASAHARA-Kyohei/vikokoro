@@ -1,4 +1,5 @@
 import type { AppLanguage, ThemeName } from "../../hooks/useAppPreferences";
+import { Dialog } from "../Dialog";
 import "./SettingsModal.scss";
 
 type Props = {
@@ -18,17 +19,10 @@ export function SettingsModal({
   onChangeTheme,
   onClose,
 }: Props) {
-  if (!open) return null;
+  const title = language === "ja" ? "設定" : "Settings";
   return (
-    <div className="modalBackdrop" onMouseDown={onClose}>
-      <section className="modal settingsModal" onMouseDown={(event) => event.stopPropagation()}>
-        <header className="modalHeader">
-          <div>
-            <h2>{language === "ja" ? "設定" : "Settings"}</h2>
-            <p>{language === "ja" ? "表示と言語" : "Appearance and language"}</p>
-          </div>
-          <button type="button" className="modalClose" onClick={onClose}>×</button>
-        </header>
+    <Dialog open={open} title={title} className="settingsModal" isolateKeyboard onClose={onClose}>
+        <p className="settingsIntro">{language === "ja" ? "表示と言語" : "Appearance and language"}</p>
         <div className="settingsGrid">
           <label>
             <span>{language === "ja" ? "言語" : "Language"}</span>
@@ -47,7 +41,11 @@ export function SettingsModal({
             </select>
           </label>
         </div>
-      </section>
-    </div>
+        <div className="modalActions">
+          <button type="button" className="modalButton" onClick={onClose}>
+            {language === "ja" ? "閉じる" : "Close"}
+          </button>
+        </div>
+    </Dialog>
   );
 }

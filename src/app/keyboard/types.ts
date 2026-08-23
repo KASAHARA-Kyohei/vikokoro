@@ -2,6 +2,7 @@ import type { EditorAction } from "../../editor/state";
 import type { Mode, NodeColor, NodeId } from "../../editor/types";
 import type { JumpSession } from "../../features/jump/model";
 import type { SpatialDirection } from "../../editor/domain/spatialNavigation";
+import type { AppCommandId } from "../commands/AppCommandDefinition";
 
 export type KeyboardInput = {
   key: string;
@@ -29,6 +30,7 @@ export type KeyboardResolverContext = {
 export type KeyboardCommand =
   | { type: "none" }
   | { type: "preventOnly" }
+  | { type: "appCommand"; commandId: AppCommandId }
   | { type: "setHelpOpen"; open: boolean }
   | { type: "setSearchOpen"; open: boolean }
   | { type: "setPaletteOpen"; open: boolean }

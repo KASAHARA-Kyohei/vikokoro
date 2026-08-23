@@ -18,6 +18,52 @@
   margin-top: 10px;
 }
 
+.helpSearch {
+  width: 100%;
+  min-height: 36px;
+  box-sizing: border-box;
+  margin-bottom: 10px;
+  padding: 0 11px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+
+.helpCategories {
+  display: flex;
+  gap: 5px;
+  margin-bottom: 10px;
+  overflow-x: auto;
+}
+
+.helpCategories button {
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.helpCategories .helpCategoryActive {
+  border-color: var(--accentBorder);
+  background: var(--accentBg);
+  color: var(--text);
+}
+
+.helpEmpty,
+.searchEmpty,
+.paletteEmpty {
+  padding: 22px 12px;
+  color: var(--muted);
+  text-align: center;
+  font-size: 12px;
+}
+
 .helpRow {
   display: grid;
   grid-template-columns: 220px 1fr;

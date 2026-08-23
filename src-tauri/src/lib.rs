@@ -1,8 +1,10 @@
 mod workspace_repo;
-use workspace_repo::{load_workspace_from_disk, save_workspace_to_disk, Workspace};
+use workspace_repo::{
+    load_workspace_from_disk, save_workspace_to_disk, Workspace, WorkspaceLoadResult,
+};
 
 #[tauri::command]
-fn load_workspace(app: tauri::AppHandle) -> Result<Option<Workspace>, String> {
+fn load_workspace(app: tauri::AppHandle) -> Result<WorkspaceLoadResult, String> {
     load_workspace_from_disk(&app)
 }
 

@@ -58,7 +58,7 @@ test("Ctrl+r still redoes from normal mode", () => {
   });
 
   assert.equal(resolution.preventDefault, true);
-  assert.deepEqual(resolution.command, { type: "dispatch", action: { type: "redo" } });
+  assert.deepEqual(resolution.command, { type: "appCommand", commandId: "redo" });
 });
 
 
@@ -307,6 +307,21 @@ test("Command+Z and Command+Shift+Z resolve undo and redo", () => {
   const redo = resolveKeyboardCommand(baseContext(), {
     key: "z", code: "KeyZ", ctrlKey: false, metaKey: true, altKey: false, shiftKey: true,
   });
-  assert.deepEqual(undo.command, { type: "dispatch", action: { type: "undo" } });
-  assert.deepEqual(redo.command, { type: "dispatch", action: { type: "redo" } });
+  assert.deepEqual(undo.command, { type: "appCommand", commandId: "undo" });
+  assert.deepEqual(redo.command, { type: "appCommand", commandId: "redo" });
+});
+
+test("Cmd/Ctrl both open search, palette, and document commands", () => {
+  for (const modifier of ["ctrlKey", "metaKey"]) {
+    const input = { key: "f", ctrlKey: false, metaKey: false, altKey: false, shiftKey: false, [modifier]: true };
+    assert.equal(resolveKeyboardCommand(baseContext(), input).command.type, "multi");
+    assert.deepEqual(resolveKeyboardCommand(baseContext(), { ...input, key: "t" }).command, {
+      type: "appCommand",
+      commandId: "newDocument",
+    });
+    assert.deepEqual(resolveKeyboardCommand(baseContext(), { ...input, key: "w" }).command, {
+      type: "appCommand",
+      commandId: "closeDocument",
+    });
+  }
 });

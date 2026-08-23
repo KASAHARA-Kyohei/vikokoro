@@ -16,6 +16,8 @@ vikokoro is a local-first mind map for quickly writing, navigating, and arrangin
 - Parent-child links, folding, focus mode, and Vim-style navigation
 - Explicit auto-layout fans siblings around their branch while keeping the layout root fixed
 - Undo/redo and atomic JSON persistence in Tauri AppData
+- Save retry and close-time flushing, with recovery from the latest valid workspace backup
+- Toolbar actions to center the selected node, center the root, or fit the visible map
 - A replaceable `ThoughtOrganizer` interface with non-destructive mock previews
 
 There is no direct external AI API connection. The current boundary is intended to evolve first into a browser prompt workflow and later into agent-proposed edits.
@@ -23,6 +25,8 @@ There is no direct external AI API connection. The current boundary is intended 
 `Tab` follows the latest child direction, then the selected node's incoming direction, and finally east. `Enter` creates a sibling in the current direction. Dragging a node freely updates its direction to the nearest 45-degree angle; moving a parent and child together preserves the child's direction.
 
 In Normal mode, `h/j/k/l` moves to the nearest visible node on screen left/down/up/right, including nodes outside the current viewport. Arrow keys keep hierarchy navigation: `←/↓/↑/→` move to the parent/next sibling/previous sibling/child. Shift+HJKL and Alt+HJKL keep their existing editing and nudge actions.
+
+The toolbar shows context-sensitive hints for Normal, Insert, direction-picker, and sticky-note placement modes. Viewport changes are persisted per document, and a failed save can be retried from the status bar.
 
 ## Development
 
@@ -32,3 +36,5 @@ npm run dev
 ```
 
 Run checks with `npm run lint`, `npm run typecheck`, `npm run test:offline`, `npm run build`, `cargo test --manifest-path src-tauri/Cargo.toml`, and `cargo check --manifest-path src-tauri/Cargo.toml`.
+
+The project uses Node.js 22.12.0 or newer. Pull requests run the frontend and Rust checks automatically.

@@ -27,10 +27,12 @@ import type {
   NodeId,
   Viewport,
 } from "./types";
+import type { AppLanguage } from "../hooks/useAppPreferences";
 import "./EditorView.scss";
 import {
   computeLayout,
   getEdgeEndpoints,
+  getNodeEditorPaddingY,
   STICKY_NOTE_HEIGHT,
   STICKY_NOTE_WIDTH,
   svgPathForEdge,
@@ -48,6 +50,10 @@ type Props = {
   viewSessionKey: string;
   centerRootOnInitialView: boolean;
   centerCursorRequest: number;
+  canvasLabel: string;
+  emptyRootLabel: string;
+  directionPickerLabel: string;
+  language: AppLanguage;
   highlightedNodeIds: Set<NodeId> | null;
   activeHighlightedNodeId: NodeId | null;
   jumpHints: Record<NodeId, string> | null;
@@ -68,7 +74,6 @@ type Props = {
   onSelectEdge: (edgeKey: string) => void;
   onSelectCustomLink: (linkId: string) => void;
   onSelectStickyNote: (noteId: string) => void;
-  onClearSelection: () => void;
   onBeginStickyEdit: (noteId: string) => void;
   onChangeStickyText: (noteId: string, text: string) => void;
   onCommitStickyEdit: (noteId: string) => void;
@@ -77,7 +82,6 @@ type Props = {
     endpoint: "from" | "to",
     side: AnchorSide,
   ) => void;
-  onResetEdgeAnchors: (edgeKey: string) => void;
   onMoveNodes: (nodeIds: NodeId[], dx: number, dy: number) => void;
   onCreateChildAt: (point: CanvasPoint) => void;
   onCreateChildInDirection: (parentId: NodeId, direction: BranchDirection) => void;
@@ -138,6 +142,10 @@ export function EditorView({
   viewSessionKey,
   centerRootOnInitialView,
   centerCursorRequest,
+  canvasLabel,
+  emptyRootLabel,
+  directionPickerLabel,
+  language,
   highlightedNodeIds,
   activeHighlightedNodeId,
   jumpHints,
@@ -158,12 +166,10 @@ export function EditorView({
   onSelectEdge,
   onSelectCustomLink,
   onSelectStickyNote,
-  onClearSelection,
   onBeginStickyEdit,
   onChangeStickyText,
   onCommitStickyEdit,
   onChangeEdgeAnchor,
-  onResetEdgeAnchors,
   onMoveNodes,
   onCreateChildAt,
   onCreateChildInDirection,
@@ -179,6 +185,7 @@ export function EditorView({
   const [dragPreview, setDragPreview] = useState<DragPreview | null>(null);
   const [stickyDragPreview, setStickyDragPreview] = useState<StickyDragPreview | null>(null);
   const [selectionRect, setSelectionRect] = useState<SelectionRect | null>(null);
+  const [selectionPreview, setSelectionPreview] = useState<Set<NodeId> | null>(null);
   const previewDoc = useMemo<DocumentState>(() => {
     if (!dragPreview) return doc;
     return {
@@ -204,22 +211,29 @@ export function EditorView({
   const [exitingNodes, setExitingNodes] = useState<Record<NodeId, ExitingNode>>({});
   const interactionDisabled = disabled || mode === "insert" || panGestureActive;
 
+  const directionLabels = language === "ja"
+    ? { n: "北", ne: "北東", e: "東", se: "南東", s: "南", sw: "南西", w: "西", nw: "北西" }
+    : { n: "North", ne: "Northeast", e: "East", se: "Southeast", s: "South", sw: "Southwest", w: "West", nw: "Northwest" };
   const directionOptionContent: Record<
     BranchDirection,
     { key: string; arrow: string; label: string }
   > = {
-    n: { key: "W", arrow: "↑", label: "北" },
-    ne: { key: "E", arrow: "↗", label: "北東" },
-    e: { key: "D", arrow: "→", label: "東" },
-    se: { key: "C", arrow: "↘", label: "南東" },
-    s: { key: "X", arrow: "↓", label: "南" },
-    sw: { key: "Z", arrow: "↙", label: "南西" },
-    w: { key: "A", arrow: "←", label: "西" },
-    nw: { key: "Q", arrow: "↖", label: "北西" },
+    n: { key: "W", arrow: "↑", label: directionLabels.n },
+    ne: { key: "E", arrow: "↗", label: directionLabels.ne },
+    e: { key: "D", arrow: "→", label: directionLabels.e },
+    se: { key: "C", arrow: "↘", label: directionLabels.se },
+    s: { key: "X", arrow: "↓", label: directionLabels.s },
+    sw: { key: "Z", arrow: "↙", label: directionLabels.sw },
+    w: { key: "A", arrow: "←", label: directionLabels.w },
+    nw: { key: "Q", arrow: "↖", label: directionLabels.nw },
   };
 
   const cursorPos = layout.positions[doc.cursorId];
   const cursorNode = doc.nodes[doc.cursorId];
+  const cursorSize = cursorNode ? layout.sizes[cursorNode.id] : undefined;
+  const rootEditorPaddingY = cursorNode && cursorSize && cursorNode.id === doc.rootId
+    ? getNodeEditorPaddingY(cursorNode, cursorSize)
+    : undefined;
   const rootPoint = layout.positions[doc.rootId];
   const rootSize = layout.sizes[doc.rootId];
 
@@ -425,25 +439,6 @@ export function EditorView({
     return edges.find((edge) => makeEdgeKey(edge.fromId, edge.toId) === selectedEdgeKey) ?? null;
   }, [edges, selectedEdgeKey]);
 
-  const selectedEdgeToolbar = useMemo(() => {
-    if (!selectedEdge || !selectedEdgeKey) return null;
-    if (!doc.edgeAnchors[selectedEdgeKey]) return null;
-    const from = layout.positions[selectedEdge.fromId];
-    const to = layout.positions[selectedEdge.toId];
-    if (!from || !to) return null;
-    const endpoints = getEdgeEndpoints(
-      from,
-      to,
-      doc.edgeAnchors[selectedEdgeKey],
-      layout.sizes[selectedEdge.fromId],
-      layout.sizes[selectedEdge.toId],
-    );
-    return {
-      x: (endpoints.from.x + endpoints.to.x) / 2,
-      y: (endpoints.from.y + endpoints.to.y) / 2,
-    };
-  }, [doc.edgeAnchors, layout.positions, layout.sizes, selectedEdge, selectedEdgeKey]);
-
   const clientToCanvas = (clientX: number, clientY: number): CanvasPoint | null => {
     const rect = canvasRef.current?.getBoundingClientRect();
     if (!rect) return null;
@@ -572,11 +567,9 @@ export function EditorView({
     if (!start) return;
     event.preventDefault();
     const extendsSelection = event.shiftKey || event.metaKey;
-    if (!extendsSelection) {
-      onSelectionChange(new Set());
-      onClearSelection();
-    }
     const baseSelection = extendsSelection ? new Set(selectedNodeIds) : new Set<NodeId>();
+    let latestSelection = baseSelection;
+    setSelectionPreview(baseSelection);
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
       const current = clientToCanvas(moveEvent.clientX, moveEvent.clientY);
@@ -601,10 +594,13 @@ export function EditorView({
           next.add(id);
         }
       }
-      onSelectionChange(next);
+      latestSelection = next;
+      setSelectionPreview(next);
     };
     const handleMouseUp = () => {
       setSelectionRect(null);
+      setSelectionPreview(null);
+      onSelectionChange(latestSelection);
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("mouseup", handleMouseUp);
     };
@@ -622,6 +618,7 @@ export function EditorView({
         className={
           "editorCanvas" + (stickyPlacementActive ? " editorCanvasStickyPlacement" : "")
         }
+        aria-label={canvasLabel}
         onMouseDown={beginMarqueeSelection}
         onDoubleClick={(event) => {
           if (event.target !== event.currentTarget || interactionDisabled) return;
@@ -685,6 +682,7 @@ export function EditorView({
                 <path
                   d={path}
                   className="edgeHitPath"
+                  data-edge-key={key}
                   onMouseDown={(event) => {
                     if (interactionDisabled || event.button !== 0) return;
                     event.preventDefault();
@@ -722,6 +720,7 @@ export function EditorView({
                 <path
                   d={path}
                   className="edgeHitPath"
+                  data-custom-link-id={link.id}
                   onMouseDown={(event) => {
                     if (interactionDisabled || event.button !== 0) return;
                     event.preventDefault();
@@ -754,23 +753,6 @@ export function EditorView({
             ),
           )}
         </svg>
-        {selectedEdgeKey && selectedEdgeToolbar ? (
-          <button
-            type="button"
-            className="connectorAutoButton"
-            style={{ left: selectedEdgeToolbar.x, top: selectedEdgeToolbar.y }}
-            title="Reset connector anchors to auto"
-            onMouseDown={(event) => {
-              if (interactionDisabled) return;
-              event.preventDefault();
-              event.stopPropagation();
-              onResetEdgeAnchors(selectedEdgeKey);
-            }}
-          >
-            Auto
-          </button>
-        ) : null}
-
         {nodeEntries.map(({ node, pos }) => {
           const size = layout.sizes[node.id];
           if (!size) return null;
@@ -782,7 +764,7 @@ export function EditorView({
           const isCollapsible = collapsibleNodeIds.has(node.id);
           const isCollapsed = collapsedNodeIds.has(node.id);
           const hiddenCount = hiddenDescendantCounts[node.id] ?? 0;
-          const isMultiSelected = selectedNodeIds.has(node.id);
+          const isMultiSelected = (selectionPreview ?? selectedNodeIds).has(node.id);
           const branchTone = branchToneForNode(sourceDoc, node.id);
           const pickerOpen = directionPickerNodeId === node.id;
           const selectedEdgeEndpoint =
@@ -795,7 +777,12 @@ export function EditorView({
             <div
               key={node.id}
               data-node-id={node.id}
+              id={`mindmap-node-${node.id}`}
               title={node.text}
+              role="treeitem"
+              aria-level={pos.depth + 1}
+              aria-selected={isMultiSelected}
+              aria-expanded={isCollapsible ? !isCollapsed : undefined}
               className={
                 "node" +
                 (node.id === doc.rootId ? " nodeRoot" : " nodeBranch") +
@@ -829,7 +816,7 @@ export function EditorView({
                 <div
                   className="directionPicker"
                   role="menu"
-                  aria-label="子ノードを作成する方向"
+                  aria-label={directionPickerLabel}
                   onMouseDown={(event) => {
                     event.preventDefault();
                     event.stopPropagation();
@@ -845,9 +832,13 @@ export function EditorView({
                         role="menuitem"
                         className={`directionOption directionOption-${direction}`}
                         title={`${option.label} (${option.key})`}
-                        aria-label={`${option.label}方向に子ノードを作成`}
+                        aria-label={language === "ja"
+                          ? `${option.label}方向に子ノードを作成`
+                          : `Add child to the ${option.label.toLowerCase()}`}
                         onMouseDown={(event) => {
-                          event.preventDefault();
+                          event.stopPropagation();
+                        }}
+                        onClick={(event) => {
                           event.stopPropagation();
                           onCreateChildInDirection(node.id, direction);
                         }}
@@ -860,10 +851,12 @@ export function EditorView({
                   <button
                     type="button"
                     className="directionPickerCenter"
-                    title="キャンセル (Esc)"
-                    aria-label="方向選択をキャンセル"
+                    title={language === "ja" ? "キャンセル (Esc)" : "Cancel (Esc)"}
+                    aria-label={language === "ja" ? "方向選択をキャンセル" : "Cancel direction selection"}
                     onMouseDown={(event) => {
-                      event.preventDefault();
+                      event.stopPropagation();
+                    }}
+                    onClick={(event) => {
                       event.stopPropagation();
                       onCloseDirectionPicker();
                     }}
@@ -878,10 +871,16 @@ export function EditorView({
                   className={
                     "nodeFoldButton" + (isCollapsed ? " nodeFoldButtonCollapsed" : "")
                   }
-                  aria-label={isCollapsed ? "Expand branch" : "Collapse branch"}
-                  title={isCollapsed ? "Expand branch (zo)" : "Collapse branch (zc)"}
+                  aria-label={isCollapsed
+                    ? language === "ja" ? "枝を展開" : "Expand branch"
+                    : language === "ja" ? "枝を折りたたむ" : "Collapse branch"}
+                  title={isCollapsed
+                    ? language === "ja" ? "枝を展開 (zo)" : "Expand branch (zo)"
+                    : language === "ja" ? "枝を折りたたむ (zc)" : "Collapse branch (zc)"}
                   onMouseDown={(e) => {
-                    e.preventDefault();
+                    e.stopPropagation();
+                  }}
+                  onClick={(e) => {
                     e.stopPropagation();
                     if (disabled || mode === "insert" || panGestureActive) return;
                     onToggleCollapse(node.id);
@@ -891,7 +890,7 @@ export function EditorView({
                 </button>
               ) : null}
               {selectedEdgeKey && selectedEdgeEndpoint ? (
-                <div className="connectorHandles" aria-hidden="true">
+                <div className="connectorHandles">
                   {ANCHOR_SIDES.map((side) => {
                     const isActive =
                       doc.edgeAnchors[selectedEdgeKey]?.[selectedEdgeEndpoint] === side;
@@ -904,9 +903,14 @@ export function EditorView({
                           (isActive ? " connectorHandleActive" : "")
                         }
                         title={`${selectedEdgeEndpoint === "from" ? "Parent" : "Child"} ${side}`}
+                        aria-label={language === "ja"
+                          ? `${selectedEdgeEndpoint === "from" ? "親" : "子"}側の接続位置を${side}へ変更`
+                          : `Set the ${selectedEdgeEndpoint === "from" ? "parent" : "child"} anchor to ${side}`}
                         onMouseDown={(event) => {
+                          event.stopPropagation();
+                        }}
+                        onClick={(event) => {
                           if (interactionDisabled) return;
-                          event.preventDefault();
                           event.stopPropagation();
                           onChangeEdgeAnchor(selectedEdgeKey, selectedEdgeEndpoint, side);
                         }}
@@ -957,7 +961,7 @@ export function EditorView({
                   </svg>
                 </div>
               ) : null}
-              <div className="nodeText">{node.text || " "}</div>
+              <div className="nodeText">{node.text || (node.id === doc.rootId ? emptyRootLabel : " ")}</div>
             </div>
           );
         })}
@@ -972,6 +976,7 @@ export function EditorView({
           return (
             <div
               key={note.id}
+              data-sticky-note-id={note.id}
               className={
                 "stickyNote" +
                 (isSelected ? " stickyNoteSelected" : "") +
@@ -1095,6 +1100,7 @@ export function EditorView({
             ref={inputRef}
             className="nodeInput"
             rows={1}
+            placeholder={cursorNode.id === doc.rootId ? emptyRootLabel : undefined}
             value={cursorNode.text}
             onChange={(e) => onChangeText(e.currentTarget.value)}
             onCompositionStart={() => {
@@ -1165,6 +1171,8 @@ export function EditorView({
               top: cursorPos.y,
               width: layout.sizes[cursorNode.id]?.width,
               height: layout.sizes[cursorNode.id]?.height,
+              paddingTop: rootEditorPaddingY,
+              paddingBottom: rootEditorPaddingY,
             }}
           />
         ) : null}
