@@ -472,6 +472,14 @@ export function getEdgeEndpoints(
     y: from.y + fromSize.height / 2,
   };
   const toCenter = { x: to.x + toSize.width / 2, y: to.y + toSize.height / 2 };
+  const dx = Math.abs(toCenter.x - fromCenter.x);
+  const dy = Math.abs(toCenter.y - fromCenter.y);
+  const horizontalGap = dx - (fromSize.width + toSize.width) / 2;
+  const verticalGap = dy - (fromSize.height + toSize.height) / 2;
+  // Favor the corridor between columns for fanned-out branches, even on wide cards.
+  const useHorizontal = horizontalGap > 0
+    ? verticalGap <= 0 || (horizontalGap >= Math.min(16, verticalGap) && dx * 2 >= dy)
+    : verticalGap > 0 ? false : undefined;
   const automaticBoundaryPoint = (
     center: CanvasPoint,
     size: NodeSize,
@@ -484,12 +492,16 @@ export function getEdgeEndpoints(
     }
     const xRatio = Math.abs(dx) / (size.width / 2);
     const yRatio = Math.abs(dy) / (size.height / 2);
-    const scale = 1 / Math.max(xRatio, yRatio);
-    const side: AnchorSide = xRatio >= yRatio
+    const horizontal = useHorizontal ?? xRatio >= yRatio;
+    const scale = 1 / (horizontal ? xRatio : yRatio);
+    const side: AnchorSide = horizontal
       ? dx >= 0 ? "right" : "left"
       : dy >= 0 ? "bottom" : "top";
     return {
-      point: { x: center.x + dx * scale, y: center.y + dy * scale },
+      point: {
+        x: center.x + Math.max(-size.width / 2, Math.min(size.width / 2, dx * scale)),
+        y: center.y + Math.max(-size.height / 2, Math.min(size.height / 2, dy * scale)),
+      },
       side,
     };
   };
@@ -535,27 +547,6 @@ function anchorVector(side: AnchorSide): CanvasPoint {
   }
 }
 
-function getCurveControlDistance(
-  from: CanvasPoint,
-  to: CanvasPoint,
-  fromSide: AnchorSide,
-  toSide: AnchorSide,
-): number {
-  const horizontal =
-    (fromSide === "left" || fromSide === "right") &&
-    (toSide === "left" || toSide === "right");
-  const vertical =
-    (fromSide === "top" || fromSide === "bottom") &&
-    (toSide === "top" || toSide === "bottom");
-  const span = horizontal
-    ? Math.abs(to.x - from.x)
-    : vertical
-      ? Math.abs(to.y - from.y)
-      : Math.hypot(to.x - from.x, to.y - from.y);
-  const maxDistance = horizontal || vertical ? 120 : 96;
-  return Math.min(maxDistance, Math.max(32, span * 0.24));
-}
-
 export function svgPathForEdge(
   from: CanvasPoint,
   to: CanvasPoint,
@@ -564,14 +555,111 @@ export function svgPathForEdge(
 ): string {
   const fromVector = anchorVector(fromSide);
   const toVector = anchorVector(toSide);
-  const distance = getCurveControlDistance(from, to, fromSide, toSide);
-  const c1 = {
-    x: from.x + fromVector.x * distance,
-    y: from.y + fromVector.y * distance,
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const length = Math.hypot(dx, dy);
+  const fromGap = dx * fromVector.x + dy * fromVector.y;
+  const toGap = -dx * toVector.x - dy * toVector.y;
+  if (length === 0 || (fromGap === length && toGap === length)) {
+    return `M ${from.x} ${from.y} L ${to.x} ${to.y}`;
+  }
+
+  const bend = Math.min(10, length / 5);
+  const fromLead = fromGap > 0 ? Math.min(bend, fromGap / 3) : bend;
+  const toLead = toGap > 0 ? Math.min(bend, toGap / 3) : bend;
+  const startBend = {
+    x: from.x + fromVector.x * fromLead,
+    y: from.y + fromVector.y * fromLead,
   };
-  const c2 = {
-    x: to.x + toVector.x * distance,
-    y: to.y + toVector.y * distance,
+  const endBend = {
+    x: to.x + toVector.x * toLead,
+    y: to.y + toVector.y * toLead,
   };
-  return `M ${from.x} ${from.y} C ${c1.x} ${c1.y}, ${c2.x} ${c2.y}, ${to.x} ${to.y}`;
+  const lineX = endBend.x - startBend.x;
+  const lineY = endBend.y - startBend.y;
+  const trim = Math.min(0.25, bend / Math.hypot(lineX, lineY));
+  const start = { x: startBend.x + lineX * trim, y: startBend.y + lineY * trim };
+  const end = { x: endBend.x - lineX * trim, y: endBend.y - lineY * trim };
+  return [
+    `M ${from.x} ${from.y}`,
+    `Q ${startBend.x} ${startBend.y}, ${start.x} ${start.y}`,
+    `L ${end.x} ${end.y}`,
+    `Q ${endBend.x} ${endBend.y}, ${to.x} ${to.y}`,
+  ].join(" ");
+}
+
+type EdgeConnection = { fromId: NodeId; toId: NodeId; anchor?: EdgeAnchor };
+type EdgePort = {
+  point: CanvasPoint;
+  side: AnchorSide;
+  fixed: boolean;
+  target: CanvasPoint;
+};
+
+export function computeEdgePaths(
+  layout: Pick<LayoutResult, "positions" | "sizes">,
+  connections: readonly EdgeConnection[],
+): Array<string | null> {
+  const portsByNode = new Map<NodeId, Map<AnchorSide, EdgePort[]>>();
+  const addPort = (id: NodeId, port: EdgePort) => {
+    const sides = portsByNode.get(id) ?? new Map<AnchorSide, EdgePort[]>();
+    const ports = sides.get(port.side) ?? [];
+    ports.push(port);
+    sides.set(port.side, ports);
+    portsByNode.set(id, sides);
+    return port;
+  };
+  const routes = connections.map(({ fromId, toId, anchor }) => {
+    const from = layout.positions[fromId];
+    const to = layout.positions[toId];
+    if (!from || !to) return null;
+    const fromSize = layout.sizes[fromId] ?? DEFAULT_NODE_SIZE;
+    const toSize = layout.sizes[toId] ?? DEFAULT_NODE_SIZE;
+    const endpoints = getEdgeEndpoints(from, to, anchor, fromSize, toSize);
+    return {
+      from: addPort(fromId, {
+        point: endpoints.from,
+        side: endpoints.fromSide,
+        fixed: Boolean(anchor?.from),
+        target: { x: to.x + toSize.width / 2, y: to.y + toSize.height / 2 },
+      }),
+      to: addPort(toId, {
+        point: endpoints.to,
+        side: endpoints.toSide,
+        fixed: Boolean(anchor?.to),
+        target: { x: from.x + fromSize.width / 2, y: from.y + fromSize.height / 2 },
+      }),
+    };
+  });
+
+  for (const [id, sides] of portsByNode) {
+    const node = layout.positions[id];
+    const size = layout.sizes[id] ?? DEFAULT_NODE_SIZE;
+    const radius = Math.min(size.width, size.height) / 2;
+    for (const [side, ports] of sides) {
+      const normal = anchorVector(side);
+      const axis = normal.x === 0 ? "x" : "y";
+      const length = axis === "x" ? size.width : size.height;
+      const center = getAnchorPoint(node, side, size)[axis];
+      ports.sort((a, b) => a.target[axis] - b.target[axis]);
+      const step = Math.min(16, length * 0.72 / Math.max(1, ports.length - 1));
+
+      for (const [index, port] of ports.entries()) {
+        if (port.fixed) continue;
+        const offset = ports.length > 1
+          ? (index - (ports.length - 1) / 2) * step
+          : Math.max(-length * 0.36, Math.min(length * 0.36, port.point[axis] - center));
+        // Move the port onto the corner arc of the rounded node.
+        const cap = Math.max(0, Math.abs(offset) - (length / 2 - radius));
+        const inset = radius - Math.sqrt(Math.max(0, radius ** 2 - cap ** 2));
+        port.point[axis] = center + offset;
+        port.point.x -= normal.x * inset;
+        port.point.y -= normal.y * inset;
+      }
+    }
+  }
+
+  return routes.map((route) => route && svgPathForEdge(
+    route.from.point, route.to.point, route.from.side, route.to.side,
+  ));
 }

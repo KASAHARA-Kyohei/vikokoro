@@ -30,12 +30,11 @@ import type {
 import type { AppLanguage } from "../hooks/useAppPreferences";
 import "./EditorView.scss";
 import {
+  computeEdgePaths,
   computeLayout,
-  getEdgeEndpoints,
   getNodeEditorPaddingY,
   STICKY_NOTE_HEIGHT,
   STICKY_NOTE_WIDTH,
-  svgPathForEdge,
 } from "./layout";
 import type { NodePosition, NodeSize } from "./layout";
 
@@ -409,7 +408,14 @@ export function EditorView({
     return list;
   }, [doc.nodes]);
 
-  const customLinkEdges = useMemo(() => Object.values(doc.customLinks), [doc.customLinks]);
+  const connections = useMemo(() => [
+    ...edges.map((edge) => {
+      const id = makeEdgeKey(edge.fromId, edge.toId);
+      return { ...edge, id, anchor: doc.edgeAnchors[id], custom: false };
+    }),
+    ...Object.values(doc.customLinks).map((link) => ({ ...link, custom: true })),
+  ], [edges, doc.edgeAnchors, doc.customLinks]);
+  const edgePaths = useMemo(() => computeEdgePaths(layout, connections), [layout, connections]);
 
   const highlightedEdgeKeys = useMemo(() => {
     const set = new Set<string>();
@@ -608,6 +614,48 @@ export function EditorView({
     window.addEventListener("mouseup", handleMouseUp);
   };
 
+  const selectedConnectionIndex = connections.findIndex(({ custom, id }) =>
+    id === (custom ? selectedCustomLinkId : selectedEdgeKey),
+  );
+  const edgeElements = connections.map(({ id, toId, custom }, index) => {
+    const path = edgePaths[index];
+    if (!path) return null;
+    const isSelected = index === selectedConnectionIndex;
+    const isHighlighted = !custom && highlightedEdgeKeys.has(id);
+    const branchTone = custom ? undefined : branchToneForNode(sourceDoc, toId);
+    const depth = Math.min(4, layout.positions[toId].depth);
+    return (
+      <g key={id} className={branchTone ? `branchTone-${branchTone}` : undefined}>
+        {isSelected && <path d={path} className="edgeSelectionOutline" />}
+        <path
+          d={path}
+          className={
+            "edgePath " + (custom ? "edgePathCustom" : `edgeDepth-${depth}`) +
+            (isHighlighted ? " edgePathHighlighted" : "") +
+            (isSelected ? " edgePathSelected" : "")
+          }
+        />
+        <path
+          d={path}
+          className="edgeHitPath"
+          data-edge-key={custom ? undefined : id}
+          data-custom-link-id={custom ? id : undefined}
+          onMouseDown={(event) => {
+            if (interactionDisabled || event.button !== 0) return;
+            event.preventDefault();
+            event.stopPropagation();
+            if (custom) onSelectCustomLink(id);
+            else onSelectEdge(id);
+          }}
+        />
+      </g>
+    );
+  });
+  if (selectedConnectionIndex >= 0) {
+    const [selectedElement] = edgeElements.splice(selectedConnectionIndex, 1);
+    edgeElements.push(selectedElement);
+  }
+
   return (
     <div
       className="editorCanvasOuter"
@@ -647,90 +695,7 @@ export function EditorView({
           width={layout.contentWidth}
           height={layout.contentHeight}
         >
-          {edges.map((edge) => {
-            const from = layout.positions[edge.fromId];
-            const to = layout.positions[edge.toId];
-            if (!from || !to) return null;
-            const key = makeEdgeKey(edge.fromId, edge.toId);
-            const endpoints = getEdgeEndpoints(
-              from,
-              to,
-              doc.edgeAnchors[key],
-              layout.sizes[edge.fromId],
-              layout.sizes[edge.toId],
-            );
-            const isHighlighted = highlightedEdgeKeys.has(key);
-            const isSelected = selectedEdgeKey === key;
-            const branchTone = branchToneForNode(sourceDoc, edge.toId);
-            const depth = Math.min(4, to.depth);
-            const path = svgPathForEdge(
-              endpoints.from,
-              endpoints.to,
-              endpoints.fromSide,
-              endpoints.toSide,
-            );
-            return (
-              <g key={key} className={branchTone ? `branchTone-${branchTone}` : undefined}>
-                <path
-                  d={path}
-                  className={
-                    `edgePath edgeDepth-${depth}` +
-                    (isHighlighted ? " edgePathHighlighted" : "") +
-                    (isSelected ? " edgePathSelected" : "")
-                  }
-                />
-                <path
-                  d={path}
-                  className="edgeHitPath"
-                  data-edge-key={key}
-                  onMouseDown={(event) => {
-                    if (interactionDisabled || event.button !== 0) return;
-                    event.preventDefault();
-                    event.stopPropagation();
-                    onSelectEdge(key);
-                  }}
-                />
-              </g>
-            );
-          })}
-          {customLinkEdges.map((link) => {
-            const from = layout.positions[link.fromId];
-            const to = layout.positions[link.toId];
-            if (!from || !to) return null;
-            const endpoints = getEdgeEndpoints(
-              from,
-              to,
-              undefined,
-              layout.sizes[link.fromId],
-              layout.sizes[link.toId],
-            );
-            const isSelected = selectedCustomLinkId === link.id;
-            const path = svgPathForEdge(
-              endpoints.from,
-              endpoints.to,
-              endpoints.fromSide,
-              endpoints.toSide,
-            );
-            return (
-              <g key={link.id}>
-                <path
-                  d={path}
-                  className={"edgePath edgePathCustom" + (isSelected ? " edgePathSelected" : "")}
-                />
-                <path
-                  d={path}
-                  className="edgeHitPath"
-                  data-custom-link-id={link.id}
-                  onMouseDown={(event) => {
-                    if (interactionDisabled || event.button !== 0) return;
-                    event.preventDefault();
-                    event.stopPropagation();
-                    onSelectCustomLink(link.id);
-                  }}
-                />
-              </g>
-            );
-          })}
+          {edgeElements}
           {dragPreview?.guides.map((guide, index) =>
             guide.axis === "x" ? (
               <line
