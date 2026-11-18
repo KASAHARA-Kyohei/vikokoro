@@ -55,6 +55,7 @@ import { SearchModal } from "./ui/modals/SearchModal";
 import { SettingsModal } from "./ui/modals/SettingsModal";
 import { OnboardingGuide, type OnboardingStage } from "./ui/OnboardingGuide";
 import { SelectionToolbar } from "./ui/SelectionToolbar";
+import { Dialog } from "./ui/Dialog";
 import { clamp } from "./utils/number";
 
 function App() {
@@ -63,6 +64,7 @@ function App() {
   const text = APP_TEXT[language];
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const closingWindowRef = useRef(false);
+  const [windowCloseError, setWindowCloseError] = useState<string | null>(null);
   const { reset: resetDeleteChord, consumeD: consumeDeleteChord } = useDeleteChord();
   const { reset: resetFoldChord, consume: consumeFoldChord } = useFoldChord();
   const [centerCursorRequest, setCenterCursorRequest] = useState(0);
@@ -749,23 +751,32 @@ function App() {
     repository: workspaceRepository,
   });
 
+  const closeWindow = useCallback(async (saveBeforeClosing: boolean) => {
+    if (closingWindowRef.current) return;
+    closingWindowRef.current = true;
+    setWindowCloseError(null);
+    try {
+      if (saveBeforeClosing && !await flushPendingSave()) {
+        setWindowCloseError(language === "ja" ? "保存に失敗しました。" : "Failed to save.");
+        return;
+      }
+      await getCurrentWindow().destroy();
+    } catch (error) {
+      setWindowCloseError(error instanceof Error ? error.message : String(error));
+    } finally {
+      closingWindowRef.current = false;
+    }
+  }, [flushPendingSave, language]);
+
   useEffect(() => {
     if (!tauriAvailable || !isTauri()) return;
     const currentWindow = getCurrentWindow();
     let cancelled = false;
     let unlisten: (() => void) | null = null;
     void currentWindow
-      .onCloseRequested(async (event) => {
-        if (closingWindowRef.current) return;
+      .onCloseRequested((event) => {
         event.preventDefault();
-        closingWindowRef.current = true;
-        const saved = await flushPendingSave();
-        if (cancelled) return;
-        if (saved) {
-          await currentWindow.destroy();
-          return;
-        }
-        closingWindowRef.current = false;
+        void closeWindow(true);
       })
       .then((remove) => {
         if (cancelled) {
@@ -779,7 +790,7 @@ function App() {
       cancelled = true;
       unlisten?.();
     };
-  }, [flushPendingSave, tauriAvailable]);
+  }, [closeWindow, tauriAvailable]);
 
   const moveSearch = (delta: number) => {
     if (searchResults.length === 0) return;
@@ -1423,6 +1434,7 @@ function App() {
           sourceDoc={activeDoc}
           mode={state.mode}
           disabled={
+            windowCloseError !== null ||
             closeConfirmOpen ||
             jumpActive ||
             nodeMemoOpen ||
@@ -1538,6 +1550,31 @@ function App() {
             onComplete={completeOnboarding}
           />
         ) : null}
+        <Dialog
+          open={windowCloseError !== null}
+          title={language === "ja" ? "アプリを終了できませんでした" : "Could not close the app"}
+          closeOnBackdrop={false}
+          isolateKeyboard
+          onClose={() => setWindowCloseError(null)}
+        >
+          <div className="modalBody">
+            <p>{language === "ja"
+              ? "保存して終了するか、編集に戻れます。「保存せず終了」では未保存の変更が失われます。"
+              : "Retry saving or return to editing. Closing without saving will discard unsaved changes."}</p>
+            <p>{saveError?.message ?? windowCloseError}</p>
+          </div>
+          <div className="modalActions">
+            <button type="button" className="modalButton" onClick={() => setWindowCloseError(null)}>
+              {language === "ja" ? "編集に戻る" : "Return to editing"}
+            </button>
+            <button type="button" className="modalButton" onClick={() => void closeWindow(true)}>
+              {language === "ja" ? "保存して終了を再試行" : "Retry saving and close"}
+            </button>
+            <button type="button" className="modalButton modalButtonDanger" onClick={() => void closeWindow(false)}>
+              {language === "ja" ? "保存せず終了" : "Close without saving"}
+            </button>
+          </div>
+        </Dialog>
         <CloseConfirmModal
           open={closeConfirmOpen}
           language={language}
