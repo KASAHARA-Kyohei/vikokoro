@@ -29,21 +29,16 @@
   opacity: 0.82;
 }
 
+.edgeDepth-1 { stroke-width: 2.8; }
+.edgeDepth-2 { stroke-width: 2.25; }
+.edgeDepth-3 { stroke-width: 1.85; }
+.edgeDepth-4 { stroke-width: 1.55; }
+
 .edgePathHighlighted {
   stroke: var(--edgeSelected);
   stroke-width: 2.4;
   opacity: 1;
 }
-
-.edgePathSelected {
-  stroke: var(--accent);
-  stroke-width: 2.4;
-}
-
-.edgeDepth-1 { stroke-width: 2.8; }
-.edgeDepth-2 { stroke-width: 2.25; }
-.edgeDepth-3 { stroke-width: 1.85; }
-.edgeDepth-4 { stroke-width: 1.55; }
 
 .edgePathCustom {
   stroke: color-mix(in srgb, var(--edgeSelected), transparent 28%);
@@ -51,9 +46,17 @@
   stroke-dasharray: 6 5;
 }
 
-.edgePathCustom.edgePathSelected {
+.edgePathSelected {
   stroke: var(--accent);
-  stroke-width: 2.4;
+  stroke-width: 3;
+  opacity: 1;
+}
+
+.edgeSelectionOutline {
+  fill: none;
+  stroke: var(--canvas-background);
+  stroke-width: 7;
+  stroke-linecap: round;
 }
 
 .edgeHitPath {

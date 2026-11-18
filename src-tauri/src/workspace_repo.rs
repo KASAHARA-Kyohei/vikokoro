@@ -11,7 +11,7 @@ use tauri::Manager;
 pub type Workspace = Value;
 
 #[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(tag = "kind", rename_all = "camelCase")]
 pub enum WorkspaceLoadResult {
     Loaded {
         workspace: Workspace,
@@ -202,6 +202,30 @@ mod tests {
             "ideas"
         );
         assert_eq!(round_trip["documents"]["doc"]["viewport"]["zoom"], 1.25);
+    }
+
+    #[test]
+    fn load_result_uses_the_kind_field_expected_by_the_frontend() {
+        use serde_json::json;
+
+        let workspace = json!({"tabs": [], "documents": {}});
+        let loaded = WorkspaceLoadResult::Loaded {
+            workspace: workspace.clone(),
+            source: WorkspaceLoadSource::Primary,
+            warning: None,
+        };
+        assert_eq!(
+            serde_json::to_value(loaded).unwrap(),
+            json!({"kind": "loaded", "workspace": workspace, "source": "primary", "warning": null})
+        );
+
+        let empty = WorkspaceLoadResult::Empty {
+            warning: Some(WorkspaceLoadWarning::Corrupt),
+        };
+        assert_eq!(
+            serde_json::to_value(empty).unwrap(),
+            json!({"kind": "empty", "warning": "corrupt"})
+        );
     }
 
     #[test]

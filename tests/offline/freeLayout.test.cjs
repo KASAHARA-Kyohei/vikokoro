@@ -8,6 +8,7 @@ const {
   moveNodePositions,
 } = require("../../.tmp-tests/src/editor/domain/freeLayout.js");
 const {
+  computeEdgePaths,
   computeLayout,
   computeTreePositions,
   getEdgeEndpoints,
@@ -19,6 +20,11 @@ const {
   STICKY_NOTE_HEIGHT,
   STICKY_NOTE_WIDTH,
 } = require("../../.tmp-tests/src/editor/layout.js");
+
+function edgePathPoints(path) {
+  return [...path.matchAll(/(-?[\d.]+(?:e[+-]?\d+)?) (-?[\d.]+(?:e[+-]?\d+)?)/gi)]
+    .map(([, x, y]) => [Number(x), Number(y)]);
+}
 
 function makeDoc() {
   return {
@@ -165,6 +171,10 @@ test("edge endpoints only use vertical sides for clearly stacked nodes", () => {
   assert.equal(diagonal.toSide, "top");
   assert.deepEqual(diagonal.from, { x: 96.95454545454545, y: 34 });
   assert.deepEqual(diagonal.to, { x: 173.04545454545453, y: 220 });
+
+  const narrowHorizontalGap = getEdgeEndpoints({ x: 0, y: 0 }, { x: 184, y: 275 });
+  assert.equal(narrowHorizontalGap.fromSide, "bottom");
+  assert.equal(narrowHorizontalGap.toSide, "top");
 });
 
 test("manual edge anchors override automatic endpoint sides independently", () => {
@@ -193,7 +203,72 @@ test("edge endpoints use each node's variable dimensions", () => {
   assert.deepEqual(endpoints.to, { x: 500, y: 44.55555555555556 });
 });
 
-test("long connector curves cap their control distance", () => {
+test("connections fan out in target order on the same side of a node", () => {
+  const paths = computeEdgePaths({
+    positions: {
+      root: { x: 0, y: 0, depth: 0 },
+      upper: { x: 260, y: -80, depth: 1 },
+      middle: { x: 260, y: 10, depth: 1 },
+      lower: { x: 260, y: 440, depth: 1 },
+    },
+    sizes: { root: { width: 220, height: 46 } },
+  }, [
+    { fromId: "root", toId: "lower" },
+    { fromId: "root", toId: "upper" },
+    { fromId: "middle", toId: "root" },
+  ]);
+  const [lower, upper, incoming] = paths.map(edgePathPoints);
+  const [lowerEndX] = lower.at(-1);
+  const [upperEndX] = upper.at(-1);
+  const [incomingEndX, incomingEndY] = incoming.at(-1);
+
+  assert.ok(lowerEndX >= 260 && lowerEndX < 266);
+  assert.ok(upperEndX >= 260 && upperEndX < 266);
+  assert.ok(upper[0][1] < incomingEndY && incomingEndY < lower[0][1]);
+  assert.equal(incomingEndX, 220);
+});
+
+test("manually anchored connections keep their shared anchor and branch apart", () => {
+  const paths = computeEdgePaths({
+    positions: {
+      root: { x: 0, y: 0, depth: 0 },
+      upper: { x: 260, y: -50, depth: 1 },
+      lower: { x: 260, y: 50, depth: 1 },
+    },
+    sizes: {},
+  }, [
+    { fromId: "root", toId: "upper", anchor: { from: "right", to: "left" } },
+    { fromId: "root", toId: "lower", anchor: { from: "right", to: "left" } },
+  ]);
+  const [upper, lower] = paths.map(edgePathPoints);
+
+  assert.deepEqual(upper[0], [180, 17]);
+  assert.deepEqual(lower[0], upper[0]);
+  assert.ok(upper[2][1] < 17 && lower[2][1] > 17);
+  assert.deepEqual(upper.at(-1), [260, -33]);
+  assert.deepEqual(lower.at(-1), [260, 67]);
+});
+
+test("short connectors progress forward between facing anchors", () => {
+  const path = svgPathForEdge({ x: 180, y: 17 }, { x: 190, y: 38 }, "right", "left");
+  const points = edgePathPoints(path);
+
+  assert.match(path, / L /);
+  assert.ok(points.every(([x], index) => index === 0 || x >= points[index - 1][0]));
+});
+
+test("long connectors bend only near their anchors", () => {
+  const path = svgPathForEdge({ x: 180, y: 17 }, { x: 1180, y: 517 });
+  const [from, startControl, start, end, endControl, to] = edgePathPoints(path);
+  const straightLength = Math.hypot(end[0] - start[0], end[1] - start[1]);
+
+  assert.match(path, / Q .+ L .+ Q /);
+  assert.deepEqual(startControl, [190, 17]);
+  assert.deepEqual(endControl, [1170, 517]);
+  assert.ok(straightLength > Math.hypot(to[0] - from[0], to[1] - from[1]) * 0.95);
+});
+
+test("aligned anchors are joined by a straight line", () => {
   const path = svgPathForEdge(
     { x: 180, y: 17 },
     { x: 1180, y: 17 },
@@ -201,7 +276,7 @@ test("long connector curves cap their control distance", () => {
     "left",
   );
 
-  assert.equal(path, "M 180 17 C 300 17, 1060 17, 1180 17");
+  assert.equal(path, "M 180 17 L 1180 17");
 });
 
 test("moving, collision avoidance, and alignment snapping are deterministic", () => {
