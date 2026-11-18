@@ -1,14 +1,6 @@
-export type EditorEnterPhase =
-  | "idle"
-  | "composing"
-  | "imeEnterPressed"
-  | "awaitingCushion"
-  | "awaitingCommit";
-
-export type EditorEnterState = {
-  phase: EditorEnterPhase;
-  compositionEndedAt: number | null;
-};
+export type EditorEnterState =
+  | { phase: "idle" | "composing" | "imeEnterPressed" }
+  | { phase: "compositionEnded"; timeStamp: number };
 
 export type EditorEnterDecision =
   | "passToIme"
@@ -25,7 +17,6 @@ export type EditorEnterEvent =
       shiftKey: boolean;
       repeat: boolean;
       nativeIsComposing: boolean;
-      keyCode: number;
     }
   | { type: "enterKeyUp" }
   | { type: "reset" };
@@ -38,7 +29,7 @@ export type EditorEnterTransition = {
 export const IME_ENTER_GRACE_MS = 100;
 
 export function createEditorEnterState(): EditorEnterState {
-  return { phase: "idle", compositionEndedAt: null };
+  return { phase: "idle" };
 }
 
 function transition(
@@ -49,10 +40,9 @@ function transition(
 }
 
 function isRecentCompositionEnd(
-  compositionEndedAt: number | null,
+  compositionEndedAt: number,
   enterKeyDownAt: number,
 ): boolean {
-  if (compositionEndedAt === null) return false;
   const elapsed = enterKeyDownAt - compositionEndedAt;
   return elapsed >= 0 && elapsed <= IME_ENTER_GRACE_MS;
 }
@@ -62,22 +52,19 @@ export function transitionEditorEnter(
   event: EditorEnterEvent,
 ): EditorEnterTransition {
   if (event.type === "compositionStart") {
-    return transition({ phase: "composing", compositionEndedAt: null });
+    return transition({ phase: "composing" });
   }
 
   if (event.type === "compositionEnd") {
-    return transition({
-      phase:
-        current.phase === "imeEnterPressed"
-          ? "awaitingCommit"
-          : "awaitingCushion",
-      compositionEndedAt:
-        current.phase === "imeEnterPressed" ? null : event.timeStamp,
-    });
+    return transition(
+      current.phase === "imeEnterPressed"
+        ? createEditorEnterState()
+        : { phase: "compositionEnded", timeStamp: event.timeStamp },
+    );
   }
 
   if (event.type === "enterKeyUp") {
-    return transition(current);
+    return transition(current.phase === "compositionEnded" ? createEditorEnterState() : current);
   }
 
   if (event.type === "reset") {
@@ -88,45 +75,18 @@ export function transitionEditorEnter(
     return transition(current, "ignoreEnter");
   }
 
+  // Some IMEs send compositionend before the keydown for the same confirmation.
+  if (current.phase === "compositionEnded" && isRecentCompositionEnd(current.timeStamp, event.timeStamp)) {
+    return transition(createEditorEnterState(), "ignoreEnter");
+  }
+
   if (current.phase === "composing" || event.nativeIsComposing) {
-    return transition(
-      { phase: "imeEnterPressed", compositionEndedAt: null },
-      "passToIme",
-    );
+    return transition({ phase: "imeEnterPressed" }, "passToIme");
   }
 
   if (current.phase === "imeEnterPressed") {
     return transition(current, "ignoreEnter");
   }
 
-  if (current.phase === "awaitingCushion") {
-    if (isRecentCompositionEnd(current.compositionEndedAt, event.timeStamp)) {
-      return transition(
-        { phase: "awaitingCommit", compositionEndedAt: null },
-        "ignoreEnter",
-      );
-    }
-    if (event.shiftKey) {
-      return transition(current, "lineBreak");
-    }
-    return transition(
-      { phase: "awaitingCommit", compositionEndedAt: null },
-      "ignoreEnter",
-    );
-  }
-
-  if (current.phase === "awaitingCommit") {
-    if (event.shiftKey) {
-      return transition(current, "lineBreak");
-    }
-    return transition(createEditorEnterState(), "commit");
-  }
-
-  if (event.shiftKey) {
-    return transition(current, "lineBreak");
-  }
-
-  // keyCode 229 can remain after composition on Windows. The edit-session
-  // phase, rather than keyCode alone, determines whether Enter is consumed.
-  return transition(createEditorEnterState(), "commit");
+  return transition(createEditorEnterState(), event.shiftKey ? "lineBreak" : "commit");
 }

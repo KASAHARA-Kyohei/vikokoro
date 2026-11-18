@@ -1082,8 +1082,9 @@ export function EditorView({
               applyEditorEnterEvent({ type: "reset" });
             }}
             onKeyUp={(e) => {
-              if (e.key !== "Enter") return;
-              applyEditorEnterEvent({ type: "enterKeyUp" });
+              if (e.key === "Enter" || e.code === "Enter" || e.code === "NumpadEnter") {
+                applyEditorEnterEvent({ type: "enterKeyUp" });
+              }
             }}
             onKeyDown={(e) => {
               if (e.key === "Escape") {
@@ -1095,13 +1096,11 @@ export function EditorView({
               }
 
               if (e.key === "Enter") {
-                const native = e.nativeEvent;
                 const decision = applyEditorEnterEvent({
                   type: "enterKeyDown",
                   timeStamp: e.timeStamp,
                   shiftKey: e.shiftKey,
-                  nativeIsComposing: native.isComposing,
-                  keyCode: native.keyCode,
+                  nativeIsComposing: e.nativeEvent.isComposing,
                   repeat: e.repeat,
                 });
                 if (decision === "passToIme") {

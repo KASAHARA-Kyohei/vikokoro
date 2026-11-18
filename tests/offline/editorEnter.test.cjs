@@ -17,12 +17,11 @@ function enterKeyDown(overrides = {}) {
     shiftKey: false,
     repeat: false,
     nativeIsComposing: false,
-    keyCode: 13,
     ...overrides,
   };
 }
 
-test("IME use requires one cushion Enter before commit", () => {
+test("the next Enter commits when the IME sends only compositionend", () => {
   let result = transition(createEditorEnterState(), {
     type: "compositionStart",
   });
@@ -32,21 +31,23 @@ test("IME use requires one cushion Enter before commit", () => {
   });
 
   result = transition(result.state, enterKeyDown({ timeStamp: 1200 }));
-  assert.equal(result.decision, "ignoreEnter");
-  assert.equal(result.state.phase, "awaitingCommit");
-
-  result = transition(result.state, { type: "enterKeyUp" });
-  result = transition(result.state, enterKeyDown({ timeStamp: 1400 }));
   assert.equal(result.decision, "commit");
 });
 
-test("IME confirmation Enter is the cushion and the next Enter commits", () => {
+test("releasing the IME confirmation key allows a quick next Enter", () => {
+  let result = transition(createEditorEnterState(), { type: "compositionStart" });
+  result = transition(result.state, { type: "compositionEnd", timeStamp: 1000 });
+  result = transition(result.state, { type: "enterKeyUp" });
+  result = transition(result.state, enterKeyDown({ timeStamp: 1020 }));
+  assert.equal(result.decision, "commit");
+});
+
+test("IME confirmation Enter stays with the IME and the next Enter commits", () => {
   let result = transition(createEditorEnterState(), {
     type: "compositionStart",
   });
   result = transition(result.state, enterKeyDown({
     nativeIsComposing: true,
-    keyCode: 229,
   }));
   assert.equal(result.decision, "passToIme");
 
@@ -54,14 +55,13 @@ test("IME confirmation Enter is the cushion and the next Enter commits", () => {
     type: "compositionEnd",
     timeStamp: 1001,
   });
-  assert.equal(result.state.phase, "awaitingCommit");
   result = transition(result.state, { type: "enterKeyUp" });
 
-  result = transition(result.state, enterKeyDown({ timeStamp: 1200 }));
+  result = transition(result.state, enterKeyDown({ timeStamp: 1020 }));
   assert.equal(result.decision, "commit");
 });
 
-test("compositionend before its keydown treats that Enter as the cushion", () => {
+test("compositionend before its keydown does not let the same Enter commit", () => {
   let result = transition(createEditorEnterState(), {
     type: "compositionStart",
   });
@@ -71,35 +71,25 @@ test("compositionend before its keydown treats that Enter as the cushion", () =>
   });
   result = transition(result.state, enterKeyDown({
     timeStamp: 1000 + IME_ENTER_GRACE_MS,
-    keyCode: 13,
   }));
   assert.equal(result.decision, "ignoreEnter");
-  assert.equal(result.state.phase, "awaitingCommit");
 
   result = transition(result.state, { type: "enterKeyUp" });
   result = transition(result.state, enterKeyDown({ timeStamp: 1200 }));
   assert.equal(result.decision, "commit");
 });
 
-test("Windows keyCode 229 does not require an extra Enter after cushion", () => {
-  let result = transition(createEditorEnterState(), {
-    type: "compositionStart",
-  });
-  result = transition(result.state, {
-    type: "compositionEnd",
-    timeStamp: 1000,
-  });
+test("a delayed confirmation keydown cannot reopen an ended composition", () => {
+  let result = transition(createEditorEnterState(), { type: "compositionStart" });
+  result = transition(result.state, { type: "compositionEnd", timeStamp: 1000 });
   result = transition(result.state, enterKeyDown({
-    timeStamp: 1200,
-    keyCode: 229,
+    timeStamp: 1001,
+    nativeIsComposing: true,
   }));
   assert.equal(result.decision, "ignoreEnter");
 
   result = transition(result.state, { type: "enterKeyUp" });
-  result = transition(result.state, enterKeyDown({
-    timeStamp: 1400,
-    keyCode: 229,
-  }));
+  result = transition(result.state, enterKeyDown({ timeStamp: 1200 }));
   assert.equal(result.decision, "commit");
 });
 
@@ -119,7 +109,7 @@ test("repeated Enter keydown never commits", () => {
   assert.equal(result.decision, "ignoreEnter");
 });
 
-test("Shift+Enter inserts a line break without consuming pending commit", () => {
+test("Shift+Enter after composition inserts a line break and the next Enter commits", () => {
   let result = transition(createEditorEnterState(), {
     type: "compositionStart",
   });
@@ -132,7 +122,8 @@ test("Shift+Enter inserts a line break without consuming pending commit", () => 
     shiftKey: true,
   }));
   assert.equal(result.decision, "lineBreak");
-  assert.equal(result.state.phase, "awaitingCushion");
+  result = transition(result.state, enterKeyDown({ timeStamp: 1400 }));
+  assert.equal(result.decision, "commit");
 });
 
 test("reset clears IME use for the edit session", () => {
