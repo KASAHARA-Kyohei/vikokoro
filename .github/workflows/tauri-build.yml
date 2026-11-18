@@ -32,6 +32,9 @@ jobs:
       - name: Install npm dependencies
         run: npm ci
 
+      - name: Test workspace persistence
+        run: cargo test --manifest-path src-tauri/Cargo.toml workspace_repo::tests
+
       - name: Build (Tauri)
         run: npm run tauri build
 

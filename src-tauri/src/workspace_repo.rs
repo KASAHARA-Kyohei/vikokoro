@@ -3,6 +3,7 @@ use serde_json::Value;
 use std::{
     fs,
     fs::File,
+    io::Write,
     path::{Path, PathBuf},
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -107,9 +108,11 @@ fn write_workspace_json_atomic(path: &Path, text: &str) -> Result<(), String> {
         .parent()
         .ok_or_else(|| "workspace.json path has no parent".to_string())?;
     let tmp_path = parent.join(format!("workspace.json.tmp-{}", timestamp_millis()));
-    fs::write(&tmp_path, text).map_err(|error| error.to_string())?;
-    File::open(&tmp_path)
-        .and_then(|file| file.sync_all())
+    File::create(&tmp_path)
+        .and_then(|mut file| {
+            file.write_all(text.as_bytes())?;
+            file.sync_all()
+        })
         .map_err(|error| error.to_string())?;
 
     let backup_path = workspace_backup_path(path);
